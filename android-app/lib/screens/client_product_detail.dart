@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/product.dart';
 import '../models/review.dart';
 import '../services/api_service.dart';
+import '../services/tab_navigator.dart';
 import '../widgets/app_button.dart';
 import '../widgets/product_gallery_modal.dart';
 import '../widgets/write_review_modal.dart';
@@ -231,6 +232,26 @@ class _ClientProductDetailState extends State<ClientProductDetail>
                 ),
               ),
             ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: GestureDetector(
+                  onTap: () {
+                    TabNavigator.goToCart();
+                    Navigator.of(context).popUntil((r) => r.isFirst);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.shopping_cart_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: p.images.isNotEmpty
                   ? Stack(children: [
