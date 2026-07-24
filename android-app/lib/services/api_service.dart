@@ -485,6 +485,19 @@ class ApiService {
   }
 
   // ── Products ─────────────────────────────────────────────
+  // Catálogo público (sin sesión) -- lo usa el modo invitado del sitio
+  // web para poder navegar y armar el carrito antes de iniciar sesión.
+  static Future<List<Product>> getPublicProducts() async {
+    final res = await _client
+        .get(Uri.parse('$_serverUrl/api/products/public'))
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200)
+      return (jsonDecode(res.body) as List)
+          .map((j) => Product.fromJson(j))
+          .toList();
+    throw Exception('Error productos');
+  }
+
   static Future<List<Product>> getProducts() async {
     final res = _handleResponse(await _client
         .get(Uri.parse('$_serverUrl/api/products'), headers: _headers)
