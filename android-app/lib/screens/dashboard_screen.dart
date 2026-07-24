@@ -181,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           builder: (_) => const AdminAnalyticsScreen()));
                 }),
             ListTile(
-                leading: const Icon(Icons.bar_chart_rounded),
+                leading: const Icon(Icons.inventory_rounded),
                 title: const Text('Inventario'),
                 onTap: () {
                   Navigator.pop(context);
