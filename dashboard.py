@@ -705,7 +705,7 @@ def _map_fetch_tile(z, x, y):
         return None
     req = urllib.request.Request(
         _MAP_TILE_URL.format(z=z, x=x, y=y),
-        headers={'User-Agent': 'MonserrathDashboard/1.0 (panel interno, uso propio)'})
+        headers={'User-Agent': 'SupermercadoGODashboard/1.0 (panel interno, uso propio)'})
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = resp.read()
@@ -5017,7 +5017,7 @@ class DashboardWindow(Gtk.ApplicationWindow):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    app = Gtk.Application(application_id='com.concentrados.monserrath.dashboard',
+    app = Gtk.Application(application_id='com.supermercadogo.dashboard',
                           flags=0)
     app.connect('activate', lambda a: DashboardWindow(a).show_all())
     app.run(None)

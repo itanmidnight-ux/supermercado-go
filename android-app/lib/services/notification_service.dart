@@ -12,8 +12,8 @@ class NotificationService {
   static int _lastProductId = 0;
 
   static const _channel = AndroidNotificationChannel(
-    'monserrath_alerts',
-    'Novedades Monserrath',
+    'supermercado_go_alerts',
+    'Novedades Supermercado GO',
     description: 'Nuevos estados y productos disponibles',
     importance: Importance.high,
     enableVibration: true,
@@ -60,7 +60,7 @@ class NotificationService {
           await _notify(
             id: 1,
             title: count == 1
-                ? '¡Nueva promoción en Monserrath!'
+                ? '¡Nueva promoción en Supermercado GO!'
                 : '¡$count nuevas promociones!',
             body: count == 1
                 ? 'Hay una nueva oferta disponible — ¡míralo ahora!'

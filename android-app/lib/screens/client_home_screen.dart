@@ -182,12 +182,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
                     child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Concentrados',
+                    Text('Supermercado',
                         style: TextStyle(
                             color: Colors.white70,
                             fontSize: 11,
                             letterSpacing: 1)),
-                    Text('Monserrath',
+                    Text('GO',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 17,

@@ -199,7 +199,7 @@ class _ClientTrackOrderScreenState extends State<ClientTrackOrderScreen> {
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.monserrath.pedidos_app',
+            userAgentPackageName: 'com.supermercadogo.pedidos_app',
           ),
           MarkerLayer(markers: [
             Marker(

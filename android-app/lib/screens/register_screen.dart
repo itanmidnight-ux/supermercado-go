@@ -165,7 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         Icon(Icons.storefront_rounded,
                             size: 36, color: scheme.secondary),
                         const SizedBox(height: 8),
-                        Text('Concentrados Monserrath',
+                        Text('Supermercado GO',
                             style: TextStyle(
                                 color: scheme.secondary,
                                 fontSize: 13,
