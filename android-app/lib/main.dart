@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/client_home_screen.dart';
+import 'screens/guest_shell_screen.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
 
@@ -26,7 +28,8 @@ void main() async {
   await NotificationService.init();
   await NotificationService.requestPermission();
 
-  const oneSignalAppId = String.fromEnvironment('ONESIGNAL_APP_ID', defaultValue: '');
+  const oneSignalAppId =
+      String.fromEnvironment('ONESIGNAL_APP_ID', defaultValue: '');
   if (oneSignalAppId.isNotEmpty) {
     OneSignal.initialize(oneSignalAppId);
     await OneSignal.Notifications.requestPermission(true);
@@ -83,7 +86,14 @@ class PedidosApp extends StatelessWidget {
       },
       home: Consumer<AppProvider>(
         builder: (_, provider, __) {
-          if (!provider.isLoggedIn) return const LoginScreen();
+          if (!provider.isLoggedIn) {
+            // Solo el sitio web permite navegar y armar carrito como
+            // invitado -- el login se pide recién al pagar (ver
+            // GuestShellScreen). La app nativa (Android/iOS) sigue
+            // exigiendo iniciar sesión desde el arranque, sin cambios.
+            if (kIsWeb) return const GuestShellScreen();
+            return const LoginScreen();
+          }
           if (provider.currentRole == 'client') return const ClientHomeScreen();
           return const DashboardScreen();
         },

@@ -77,6 +77,31 @@ router.get('/', clientAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// GET /api/products/public — catálogo sin autenticar, para que el sitio
+// web permita navegar y armar el carrito como invitado (el login solo se
+// pide al momento de pagar). Solo campos de catálogo -- nada de stock/sku
+// (detalle interno de inventario, sin motivo para exponerlo a anónimos).
+router.get('/public', async (req, res, next) => {
+  try {
+    const { rows } = await getDB().query(`
+      SELECT p.id, p.name, p.price, p.aliases, p.available, p.favorite,
+             p.no_fiado, p.category, p.description,
+             string_agg(pi.filename, ',') AS image_filenames
+      FROM products p
+      LEFT JOIN product_images pi ON pi.product_id = p.id
+      WHERE p.available = 1
+      GROUP BY p.id
+      ORDER BY p.favorite DESC, p.name ASC
+    `);
+    res.json(rows.map(p => ({
+      ...p,
+      aliases: JSON.parse(p.aliases || '[]'),
+      images: p.image_filenames ? p.image_filenames.split(',') : [],
+      image_filenames: undefined,
+    })));
+  } catch (e) { next(e); }
+});
+
 router.post('/', adminAuth, async (req, res, next) => {
   try {
     const { name, price, aliases, category, description, sku, stock } = req.body;
@@ -180,7 +205,11 @@ router.delete('/:id/images/:filename', adminAuth, async (req, res, next) => {
 });
 
 // Serve product images (authenticated)
-router.get('/images/:filename', clientAuth, async (req, res, next) => {
+// Sin auth a propósito: son fotos de producto (marketing, no datos de
+// negocio), y el catálogo público (/public) las necesita para el modo
+// invitado del sitio web. filename siempre pasa por path.basename, así
+// que no hay traversal ni forma de listar archivos ajenos al store.
+router.get('/images/:filename', async (req, res, next) => {
   try {
     const filename = require('path').basename(req.params.filename);
     if (!(await productImages.exists(filename))) return res.status(404).json({ error: 'No encontrado' });

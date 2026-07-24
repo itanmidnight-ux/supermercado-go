@@ -2,38 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
+import '../services/guest_cart_service.dart';
 import '../widgets/app_button.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
-  @override State<RegisterScreen> createState() => _RegisterScreenState();
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _formKey       = GlobalKey<FormState>();
-  final _nameCtrl      = TextEditingController();
-  final _phoneCtrl     = TextEditingController();
-  final _emailCtrl     = TextEditingController();
-  final _pwCtrl        = TextEditingController();
-  final _pw2Ctrl       = TextEditingController();
-  final _addressCtrl   = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _pwCtrl = TextEditingController();
+  final _pw2Ctrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
 
-  bool    _loading = false;
-  bool    _obscure1 = true;
-  bool    _obscure2 = true;
+  bool _loading = false;
+  bool _obscure1 = true;
+  bool _obscure2 = true;
   String? _error;
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _phoneCtrl.dispose(); _emailCtrl.dispose();
-    _pwCtrl.dispose(); _pw2Ctrl.dispose(); _addressCtrl.dispose();
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _pwCtrl.dispose();
+    _pw2Ctrl.dispose();
+    _addressCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
-    final phone    = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final phone = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
     final password = _pwCtrl.text;
     try {
       // La cuenta queda activa de inmediato (sin aprobación de un admin) --
@@ -42,17 +51,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // usuario para el login no lo elige el cliente -- el backend lo
       // deriva del celular (queda "57$phone").
       await ApiService.register(
-        phone:       phone,
-        password:    password,
+        phone: phone,
+        password: password,
         displayName: _nameCtrl.text.trim(),
-        email:       _emailCtrl.text.trim(),
-        address:     _addressCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        address: _addressCtrl.text.trim(),
       );
       if (!mounted) return;
       await context.read<AppProvider>().login('57$phone', password);
+      // Fusiona el carrito de invitado (armado antes de registrarse en el
+      // sitio web) con el carrito real del servidor recién creado.
+      await GuestCartService.mergeIntoServerCart();
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      if (mounted)
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -87,28 +100,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
         prefixIcon: Icon(icon, color: scheme.primary, size: 20),
         suffixIcon: onToggle != null
             ? IconButton(
-                icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  size: 20, color: Colors.grey.shade400),
+                icon: Icon(
+                    obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: Colors.grey.shade400),
                 onPressed: onToggle)
             : null,
         filled: true,
         fillColor: const Color(0xFFF8FAF8),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.grey.shade200)),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: Colors.grey.shade200)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.grey.shade200)),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: Colors.grey.shade200)),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: scheme.primary, width: 1.8)),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: scheme.primary, width: 1.8)),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.red)),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Colors.red)),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.red, width: 1.8)),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Colors.red, width: 1.8)),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         alignLabelWithHint: maxLines > 1,
       ),
     );
@@ -124,7 +142,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         backgroundColor: greenDark,
         foregroundColor: Colors.white,
         title: const Text('Crear cuenta',
-          style: TextStyle(fontWeight: FontWeight.w700)),
+            style: TextStyle(fontWeight: FontWeight.w700)),
         elevation: 0,
       ),
       body: SafeArea(
@@ -137,154 +155,183 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Column(children: [
-            // Header strip
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.storefront_rounded, size: 36, color: scheme.secondary),
-                const SizedBox(height: 8),
-                Text('Concentrados Monserrath',
-                  style: TextStyle(color: scheme.secondary, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                const SizedBox(height: 4),
-                Text('Regístrate para hacer pedidos',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
-              ]),
-            ),
-
-            // Form card
-            Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFF5F5F0),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const Text('Información personal',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: Colors.black54, letterSpacing: 0.5)),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _nameCtrl,
-                    label: 'Nombre completo *',
-                    icon: Icons.badge_outlined,
-                    capitalize: TextCapitalization.words,
-                    validator: (v) => (v == null || v.trim().length < 2) ? 'Mínimo 2 caracteres' : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _phoneCtrl,
-                    label: 'Celular *',
-                    hint: 'Ej: 3138207044',
-                    icon: Icons.phone_android_rounded,
-                    capitalize: TextCapitalization.none,
-                    keyboard: TextInputType.phone,
-                    validator: (v) {
-                      final d = (v ?? '').replaceAll(RegExp(r'\D'), '');
-                      if (d.length != 10 || !d.startsWith('3')) {
-                        return 'Celular colombiano de 10 dígitos (ej: 3138207044)';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _emailCtrl,
-                    label: 'Correo electrónico *',
-                    icon: Icons.email_outlined,
-                    keyboard: TextInputType.emailAddress,
-                    capitalize: TextCapitalization.none,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Campo requerido';
-                      if (!RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-z]{2,}$').hasMatch(v.trim())) {
-                        return 'Correo inválido';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  const Text('Contraseña',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: Colors.black54, letterSpacing: 0.5)),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _pwCtrl,
-                    label: 'Contraseña *',
-                    icon: Icons.lock_outline_rounded,
-                    obscure: _obscure1,
-                    onToggle: () => setState(() => _obscure1 = !_obscure1),
-                    validator: (v) => (v == null || v.length < 8) ? 'Mínimo 8 caracteres' : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _pw2Ctrl,
-                    label: 'Confirmar contraseña *',
-                    icon: Icons.lock_outline_rounded,
-                    obscure: _obscure2,
-                    onToggle: () => setState(() => _obscure2 = !_obscure2),
-                    action: TextInputAction.next,
-                    validator: (v) => v != _pwCtrl.text ? 'Las contraseñas no coinciden' : null,
-                  ),
-                  const SizedBox(height: 20),
-
-                  const Text('Dirección de entrega',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: Colors.black54, letterSpacing: 0.5)),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _addressCtrl,
-                    label: 'Dirección *',
-                    hint: 'Ej: Calle 10 #5-30, Barrio El Prado',
-                    icon: Icons.location_on_outlined,
-                    maxLines: 2,
-                    validator: (v) => (v == null || v.trim().length < 5) ? 'Mínimo 5 caracteres' : null,
-                  ),
-                  const SizedBox(height: 20),
-
-                  if (_error != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF0F0),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFFCDD2)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline_rounded, color: Color(0xFFD32F2F), size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(_error!,
-                          style: const TextStyle(color: Color(0xFFD32F2F), fontSize: 13))),
+                // Header strip
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.storefront_rounded,
+                            size: 36, color: scheme.secondary),
+                        const SizedBox(height: 8),
+                        Text('Concentrados Monserrath',
+                            style: TextStyle(
+                                color: scheme.secondary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1)),
+                        const SizedBox(height: 4),
+                        Text('Regístrate para hacer pedidos',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 13)),
                       ]),
-                    ),
+                ),
 
-                  AppButton(
-                    label: 'Crear mi cuenta',
-                    onPressed: _loading ? null : _register,
-                    loading: _loading,
-                    icon: Icons.person_add_rounded,
+                // Form card
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF5F5F0),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(28)),
                   ),
-                  const SizedBox(height: 16),
-
-                  Center(child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text('¿Ya tienes cuenta? Inicia sesión',
-                      style: TextStyle(color: scheme.primary)),
-                  )),
-                  const SizedBox(height: 8),
-                ]),
-              ),
-            ),
-          ]),
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('Información personal',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black54,
+                                  letterSpacing: 0.5)),
+                          const SizedBox(height: 12),
+                          _field(
+                            controller: _nameCtrl,
+                            label: 'Nombre completo *',
+                            icon: Icons.badge_outlined,
+                            capitalize: TextCapitalization.words,
+                            validator: (v) => (v == null || v.trim().length < 2)
+                                ? 'Mínimo 2 caracteres'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          _field(
+                            controller: _phoneCtrl,
+                            label: 'Celular *',
+                            hint: 'Ej: 3138207044',
+                            icon: Icons.phone_android_rounded,
+                            capitalize: TextCapitalization.none,
+                            keyboard: TextInputType.phone,
+                            validator: (v) {
+                              final d = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                              if (d.length != 10 || !d.startsWith('3')) {
+                                return 'Celular colombiano de 10 dígitos (ej: 3138207044)';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _field(
+                            controller: _emailCtrl,
+                            label: 'Correo electrónico *',
+                            icon: Icons.email_outlined,
+                            keyboard: TextInputType.emailAddress,
+                            capitalize: TextCapitalization.none,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty)
+                                return 'Campo requerido';
+                              if (!RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-z]{2,}$')
+                                  .hasMatch(v.trim())) {
+                                return 'Correo inválido';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          const Text('Contraseña',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black54,
+                                  letterSpacing: 0.5)),
+                          const SizedBox(height: 12),
+                          _field(
+                            controller: _pwCtrl,
+                            label: 'Contraseña *',
+                            icon: Icons.lock_outline_rounded,
+                            obscure: _obscure1,
+                            onToggle: () =>
+                                setState(() => _obscure1 = !_obscure1),
+                            validator: (v) => (v == null || v.length < 8)
+                                ? 'Mínimo 8 caracteres'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          _field(
+                            controller: _pw2Ctrl,
+                            label: 'Confirmar contraseña *',
+                            icon: Icons.lock_outline_rounded,
+                            obscure: _obscure2,
+                            onToggle: () =>
+                                setState(() => _obscure2 = !_obscure2),
+                            action: TextInputAction.next,
+                            validator: (v) => v != _pwCtrl.text
+                                ? 'Las contraseñas no coinciden'
+                                : null,
+                          ),
+                          const SizedBox(height: 20),
+                          const Text('Dirección de entrega',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black54,
+                                  letterSpacing: 0.5)),
+                          const SizedBox(height: 12),
+                          _field(
+                            controller: _addressCtrl,
+                            label: 'Dirección *',
+                            hint: 'Ej: Calle 10 #5-30, Barrio El Prado',
+                            icon: Icons.location_on_outlined,
+                            maxLines: 2,
+                            validator: (v) => (v == null || v.trim().length < 5)
+                                ? 'Mínimo 5 caracteres'
+                                : null,
+                          ),
+                          const SizedBox(height: 20),
+                          if (_error != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF0F0),
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: const Color(0xFFFFCDD2)),
+                              ),
+                              child: Row(children: [
+                                const Icon(Icons.info_outline_rounded,
+                                    color: Color(0xFFD32F2F), size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                    child: Text(_error!,
+                                        style: const TextStyle(
+                                            color: Color(0xFFD32F2F),
+                                            fontSize: 13))),
+                              ]),
+                            ),
+                          AppButton(
+                            label: 'Crear mi cuenta',
+                            onPressed: _loading ? null : _register,
+                            loading: _loading,
+                            icon: Icons.person_add_rounded,
+                          ),
+                          const SizedBox(height: 16),
+                          Center(
+                              child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text('¿Ya tienes cuenta? Inicia sesión',
+                                style: TextStyle(color: scheme.primary)),
+                          )),
+                          const SizedBox(height: 8),
+                        ]),
+                  ),
+                ),
+              ]),
             ),
           ),
         ),
