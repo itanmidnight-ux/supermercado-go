@@ -164,6 +164,22 @@ class ApiService {
   static bool get isConfigured => _token.isNotEmpty;
   static String get serverUrl => _serverUrl;
   static String get currentUser => _username;
+
+  // Id numerico del usuario logueado -- viene del JWT (no del login response,
+  // que no lo incluye). Se usa para saber si ESTE trabajador es quien
+  // reclamó un pedido (acceso a teléfono/chat del cliente).
+  static int? get currentUserId {
+    try {
+      final parts = _token.split('.');
+      if (parts.length != 3) return null;
+      final payload = json
+          .decode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      return payload['id'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static String get currentRole => _role;
   static String get displayName => _displayName;
   static bool get isAdmin => _role == 'admin';
