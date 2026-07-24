@@ -75,6 +75,21 @@ CREATE TABLE IF NOT EXISTS product_images (
   created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
 );
 
+-- Reseñas de producto. Solo se muestran públicamente rating >= 3 (ver
+-- GET /api/products/:id/reviews) -- las de 1-2 estrellas quedan guardadas
+-- pero jamás salen en la respuesta pública. Un cliente solo puede tener
+-- una reseña por producto (UNIQUE), volver a enviar la reemplaza.
+CREATE TABLE IF NOT EXISTS product_reviews (
+  id         SERIAL PRIMARY KEY,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rating     INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment    TEXT,
+  created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+  UNIQUE (product_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_reviews_product ON product_reviews(product_id, rating);
+
 CREATE TABLE IF NOT EXISTS messages (
   id            SERIAL PRIMARY KEY,
   phone         TEXT NOT NULL,
