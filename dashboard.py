@@ -3,13 +3,14 @@
 #  dashboard.py — Panel nativo de escritorio GTK3 para Supermercado GO
 #  Versión 3.0 — Reescritura completa del panel de administración del servidor.
 #
-#  9 módulos: Monitoreo · Ventas · Pedidos Activos · Bot WhatsApp · Empleados
-#             · Marca · Configuración · Seguridad · Logs
+#  15 módulos: Monitoreo · Pedidos Activos · Bot WhatsApp · Ventas · Empleados
+#              · Ubicaciones · Conexiones · Datos · Dominio · Marca
+#              · Métodos de pago · Correo · Configuración · Seguridad · Logs
 #
 #  Arquitectura:
 #   - Sidebar lateral colapsable + área principal responsive (1200x800 min 900x600)
-#   - Estilo claro empresarial con acentos de marca (olivo/ámbar), crossfade
-#     nativo al cambiar de módulo
+#   - Estilo oscuro (fondo negro, texto blanco, bordes visibles en cards) con
+#     acentos de marca (olivo/ámbar), crossfade nativo al cambiar de módulo
 #   - Gráficos Cairo dibujados a mano (barras, líneas, dona, sparklines)
 #   - Acceso híbrido: Postgres directo (stats) + systemd (control servicio)
 #                      + API HTTP (estado del bot WhatsApp, QR)
@@ -59,29 +60,29 @@ PRESETS = [
     ('Carbon & Lima',     '#22302B', '#8AB833'),
 ]
 
-# ─── Paleta "admin console" — claro empresarial + acentos de marca ──────────────
-# Fondo blanco/gris claro, texto casi-negro (no negro puro), acentos
-# puntuales (verde olivo / ámbar) para highlights de marca sin romper
-# contraste. WARNING se oscurece respecto al amarillo original -- como
-# texto sobre blanco el amarillo puro es ilegible.
-BG          = '#ffffff'   # window background
-SURFACE     = '#ffffff'   # cards, contenido
-SURFACE_2   = '#f4f5f6'   # sidebar, hover, elevated
-SURFACE_3   = '#e9ebed'   # active, pressed
-BORDER      = '#dde0e3'   # 1px borders — visible pero no duro
-BORDER_SOFT = '#eef0f2'   # subtle dividers
-FG          = '#1a1d21'   # primary text
-FG_MUTED    = '#52585f'   # secondary text
+# ─── Paleta "admin console" — oscuro + acentos de marca ─────────────────────────
+# Fondo negro, texto blanco, bordes de card/box siempre visibles (BORDER
+# claro sobre SURFACE oscuro). Acentos aclarados respecto al tema claro
+# original para mantener contraste legible sobre negro.
+BG          = '#000000'   # window background
+SURFACE     = '#121212'   # cards, contenido
+SURFACE_2   = '#1a1b1e'   # sidebar, hover, elevated
+SURFACE_3   = '#27292d'   # active, pressed
+BORDER      = '#3d4046'   # 1px borders — visible sobre negro/superficie
+BORDER_SOFT = '#26282c'   # subtle dividers
+FG          = '#ffffff'   # primary text
+FG_MUTED    = '#c2c6cc'   # secondary text
 FG_DIM      = '#8a9099'   # tertiary / labels
-ACCENT      = '#1B3A6B'   # azul corporativo (acciones primarias)
+ON_BRAND    = '#1a1408'   # texto sobre fondos color BRAND (ámbar) — contraste
+ACCENT      = '#3D8BFD'   # azul corporativo aclarado (acciones primarias)
 BRAND       = '#D4800A'   # acento de marca (highlights, indicadores activos)
 BRAND_DARK  = '#2D5016'   # primario de marca (presets, preview)
-SUCCESS     = '#1e8e5a'   # estados activos / OK
-WARNING     = '#b8860b'   # advertencias / acciones sensibles
-DANGER      = '#c62828'   # errores / cancelados / crítico
-INFO        = '#1B3A6B'   # info / charts secundarios
+SUCCESS     = '#2fbf71'   # estados activos / OK
+WARNING     = '#f0b429'   # advertencias / acciones sensibles
+DANGER      = '#e5484d'   # errores / cancelados / crítico
+INFO        = '#3D8BFD'   # info / charts secundarios
 
-# ─── CSS (claro empresarial + acentos de marca) ─────────────────────────────────
+# ─── CSS (oscuro + acentos de marca) ────────────────────────────────────────────
 # Esquinas 6-10px, padding generoso, transiciones 150-200ms, sombras suaves
 # de elevación en cards (soportadas en GTK3 3.22+), jerarquía tipográfica clara.
 CSS = f"""
@@ -173,7 +174,7 @@ headerbar button:active {{ background: {SURFACE_3}; }}
 }}
 .sidebar-btn .badge {{
     background: {BRAND};
-    color: {FG};
+    color: {ON_BRAND};
     border-radius: 10px;
     padding: 1px 7px;
     font-size: 10px;
@@ -290,7 +291,7 @@ button.action-btn:disabled {{
 .btn-primary:active {{ background-color: #142c50; }}
 .btn-brand {{
     background-color: {BRAND};
-    color: {FG};
+    color: {ON_BRAND};
     border: 1px solid {BRAND};
 }}
 .btn-brand:hover {{ background-color: #e8901f; }}
@@ -4618,6 +4619,14 @@ class DashboardWindow(Gtk.ApplicationWindow):
         super().__init__(application=app, title='Supermercado GO — Panel del Servidor')
         self.set_default_size(1200, 800)
         self.set_size_request(900, 600)
+
+        # Tema oscuro: además del CSS propio (que ya fija todos los colores),
+        # esto evita que widgets sin clase propia (menús contextuales,
+        # tooltips, checkboxes nativos) hereden el chrome claro del tema
+        # del sistema.
+        settings = Gtk.Settings.get_default()
+        if settings:
+            settings.set_property('gtk-application-prefer-dark-theme', True)
 
         # CSS provider global
         provider = Gtk.CssProvider()
