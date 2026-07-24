@@ -397,6 +397,19 @@ class ApiService {
     throw Exception('Error mis pedidos: ${res.statusCode}');
   }
 
+  // Ubicación del trabajador solo llega cuando el pedido está en camino
+  // (ver server/src/routes/orders.js) -- antes de eso el servidor responde
+  // tracking_available:false sin lat/lng, por diseño (privacidad del
+  // trabajador mientras va camino a recoger el pedido).
+  static Future<Map<String, dynamic>> trackOrder(int id) async {
+    final res = await _client
+        .get(Uri.parse('$_serverUrl/api/orders/$id/track'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200)
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    throw Exception('Error rastreando el pedido');
+  }
+
   static Future<Order> claimOrder(int id) async {
     final res = await _client
         .put(Uri.parse('$_serverUrl/api/orders/$id/claim'), headers: _headers)
