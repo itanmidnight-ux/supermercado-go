@@ -6,7 +6,7 @@
 -keep class com.it_nomads.fluttersecurestorage.** { *; }
 
 # Keep model classes
--keep class com.concentrados.monserrath.** { *; }
+-keep class com.supermercadogo.app.** { *; }
 
 # Play Core (deferred components) — not used, suppress R8 warnings
 -dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication

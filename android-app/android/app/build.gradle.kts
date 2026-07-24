@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.concentrados.monserrath"
+    namespace = "com.supermercadogo.app"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.concentrados.monserrath"
+        applicationId = "com.supermercadogo.app"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = 1
