@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/app_button.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/futuristic_modal.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -11,12 +13,13 @@ class UsersScreen extends StatefulWidget {
   State<UsersScreen> createState() => _UsersScreenState();
 }
 
-class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStateMixin {
+class _UsersScreenState extends State<UsersScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = false;
   late final TabController _tabs;
-  final _staffSearchCtrl  = TextEditingController();
+  final _staffSearchCtrl = TextEditingController();
   final _clientSearchCtrl = TextEditingController();
-  String _staffQuery  = '';
+  String _staffQuery = '';
   String _clientQuery = '';
   List<Map<String, dynamic>> _clients = [];
   bool _loadingClients = false;
@@ -25,15 +28,17 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
-    _staffSearchCtrl.addListener(
-      () => setState(() => _staffQuery = _staffSearchCtrl.text.toLowerCase()));
-    _clientSearchCtrl.addListener(
-      () => setState(() => _clientQuery = _clientSearchCtrl.text.toLowerCase()));
+    _staffSearchCtrl.addListener(() =>
+        setState(() => _staffQuery = _staffSearchCtrl.text.toLowerCase()));
+    _clientSearchCtrl.addListener(() =>
+        setState(() => _clientQuery = _clientSearchCtrl.text.toLowerCase()));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppProvider>().refreshUsers();
       _loadClients();
     });
-    _tabs.addListener(() { if (_tabs.indexIsChanging && _tabs.index == 1) _loadClients(); });
+    _tabs.addListener(() {
+      if (_tabs.indexIsChanging && _tabs.index == 1) _loadClients();
+    });
   }
 
   @override
@@ -56,13 +61,17 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
   // ── Dialogo crear / editar personal (admin/worker) ─────────
   Future<void> _showStaffDialog({Map<String, dynamic>? user}) async {
     final isEdit = user != null;
-    final displayCtrl  = TextEditingController(text: isEdit ? user['display_name'] ?? '' : '');
-    final usernameCtrl = TextEditingController(text: isEdit ? user['username'] ?? '' : '');
-    final pwCtrl       = TextEditingController();
-    final addressCtrl  = TextEditingController(text: isEdit ? user['address'] ?? '' : '');
-    bool  pwObscure    = true;
+    final displayCtrl =
+        TextEditingController(text: isEdit ? user['display_name'] ?? '' : '');
+    final usernameCtrl =
+        TextEditingController(text: isEdit ? user['username'] ?? '' : '');
+    final pwCtrl = TextEditingController();
+    final addressCtrl =
+        TextEditingController(text: isEdit ? user['address'] ?? '' : '');
+    bool pwObscure = true;
     String role = isEdit ? (user['role'] ?? 'worker') : 'worker';
-    bool   active = isEdit ? (user['active'] == 1 || user['active'] == true) : true;
+    bool active =
+        isEdit ? (user['active'] == 1 || user['active'] == true) : true;
     final formKey = GlobalKey<FormState>();
     final scheme = Theme.of(context).colorScheme;
 
@@ -75,7 +84,9 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          left: 20, right: 20, top: 20,
+          left: 20,
+          right: 20,
+          top: 20,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
         ),
         child: StatefulBuilder(
@@ -85,70 +96,102 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(
-                  width: 40, height: 4,
+                Center(
+                    child: Container(
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2)),
                 )),
                 const SizedBox(height: 16),
                 Text(
                   isEdit ? 'Editar usuario' : 'Nuevo usuario',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: scheme.primary),
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: scheme.primary),
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: displayCtrl,
-                  decoration: _inputDeco('Nombre visible', Icons.badge_outlined),
+                  decoration:
+                      _inputDeco('Nombre visible', Icons.badge_outlined),
                   textCapitalization: TextCapitalization.words,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Campo requerido'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: usernameCtrl,
-                  decoration: _inputDeco('Usuario (login)', Icons.person_outline),
+                  decoration:
+                      _inputDeco('Usuario (login)', Icons.person_outline),
                   readOnly: isEdit,
                   style: isEdit ? TextStyle(color: Colors.grey.shade500) : null,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Campo requerido'
+                      : null,
                 ),
                 const SizedBox(height: 12),
-                StatefulBuilder(builder: (_, setPw) => TextFormField(
-                  controller: pwCtrl,
-                  obscureText: pwObscure,
-                  keyboardType: TextInputType.visiblePassword,
-                  decoration: InputDecoration(
-                    labelText: isEdit ? 'Contraseña (vacío = sin cambio)' : 'Contraseña',
-                    prefixIcon: Icon(Icons.lock_outline, size: 20, color: scheme.primary),
-                    suffixIcon: IconButton(
-                      icon: Icon(pwObscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
-                      onPressed: () => setPw(() => pwObscure = !pwObscure),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: scheme.primary, width: 1.5)),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.red)),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.red, width: 1.5)),
-                  ),
-                  validator: (v) {
-                    if (!isEdit && (v == null || v.trim().isEmpty)) return 'Contraseña requerida';
-                    return null;
-                  },
-                )),
+                StatefulBuilder(
+                    builder: (_, setPw) => TextFormField(
+                          controller: pwCtrl,
+                          obscureText: pwObscure,
+                          keyboardType: TextInputType.visiblePassword,
+                          decoration: InputDecoration(
+                            labelText: isEdit
+                                ? 'Contraseña (vacío = sin cambio)'
+                                : 'Contraseña',
+                            prefixIcon: Icon(Icons.lock_outline,
+                                size: 20, color: scheme.primary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                  pwObscure
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20),
+                              onPressed: () =>
+                                  setPw(() => pwObscure = !pwObscure),
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF5F5F5),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                    color: scheme.primary, width: 1.5)),
+                            errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    const BorderSide(color: Colors.red)),
+                            focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: Colors.red, width: 1.5)),
+                          ),
+                          validator: (v) {
+                            if (!isEdit && (v == null || v.trim().isEmpty))
+                              return 'Contraseña requerida';
+                            return null;
+                          },
+                        )),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: role == 'client' ? 'worker' : role,
-                  decoration: _inputDeco('Rol', Icons.admin_panel_settings_outlined),
+                  decoration:
+                      _inputDeco('Rol', Icons.admin_panel_settings_outlined),
                   items: const [
-                    DropdownMenuItem(value: 'worker', child: Text('Trabajador')),
-                    DropdownMenuItem(value: 'admin',  child: Text('Administrador')),
+                    DropdownMenuItem(
+                        value: 'worker', child: Text('Trabajador')),
+                    DropdownMenuItem(
+                        value: 'admin', child: Text('Administrador')),
                   ],
-                  onChanged: (v) { if (v != null) setS(() => role = v); },
+                  onChanged: (v) {
+                    if (v != null) setS(() => role = v);
+                  },
                 ),
                 const SizedBox(height: 12),
                 if (isEdit)
@@ -161,12 +204,14 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
                   ),
                 const SizedBox(height: 20),
                 Row(children: [
-                  Expanded(child: OutlinedButton(
+                  Expanded(
+                      child: OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
                     child: const Text('Cancelar'),
                   )),
                   const SizedBox(width: 12),
-                  Expanded(child: AppButton(
+                  Expanded(
+                      child: AppButton(
                     label: isEdit ? 'Guardar' : 'Crear',
                     onPressed: () async {
                       if (!formKey.currentState!.validate()) return;
@@ -177,11 +222,12 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
                         if (isEdit) {
                           final data = <String, dynamic>{
                             'display_name': displayCtrl.text.trim(),
-                            'role':         role,
-                            'active':       active ? 1 : 0,
-                            'address':      addressCtrl.text.trim(),
+                            'role': role,
+                            'active': active ? 1 : 0,
+                            'address': addressCtrl.text.trim(),
                           };
-                          if (pwCtrl.text.trim().isNotEmpty) data['password'] = pwCtrl.text.trim();
+                          if (pwCtrl.text.trim().isNotEmpty)
+                            data['password'] = pwCtrl.text.trim();
                           await prov.updateUser(user['id'] as int, data);
                         } else {
                           await prov.createUser(
@@ -191,9 +237,13 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
                             role: role,
                           );
                         }
-                        if (mounted) _snack(isEdit ? 'Usuario actualizado' : 'Usuario creado', success: true);
+                        if (mounted)
+                          _snack(
+                              isEdit ? 'Usuario actualizado' : 'Usuario creado',
+                              success: true);
                       } catch (e) {
-                        if (mounted) _snack(e.toString().replaceAll('Exception: ', ''));
+                        if (mounted)
+                          _snack(e.toString().replaceAll('Exception: ', ''));
                       } finally {
                         if (mounted) setState(() => _loading = false);
                       }
@@ -218,12 +268,15 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
       builder: (_) => AlertDialog(
         title: Text(newActive ? 'Activar usuario' : 'Desactivar usuario'),
         content: Text(newActive
-          ? '¿Activar acceso para $name?'
-          : '¿Desactivar acceso para $name? No podrá iniciar sesión.'),
+            ? '¿Activar acceso para $name?'
+            : '¿Desactivar acceso para $name? No podrá iniciar sesión.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: newActive ? scheme.primary : Colors.red),
+            style: FilledButton.styleFrom(
+                backgroundColor: newActive ? scheme.primary : Colors.red),
             onPressed: () => Navigator.pop(context, true),
             child: Text(newActive ? 'Activar' : 'Desactivar'),
           ),
@@ -233,9 +286,12 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
     if (confirm != true || !mounted) return;
     setState(() => _loading = true);
     try {
-      await context.read<AppProvider>().updateUser(
-        user['id'] as int, {'active': newActive ? 1 : 0});
-      if (mounted) _snack(newActive ? '$name activado' : '$name desactivado', success: true);
+      await context
+          .read<AppProvider>()
+          .updateUser(user['id'] as int, {'active': newActive ? 1 : 0});
+      if (mounted)
+        _snack(newActive ? '$name activado' : '$name desactivado',
+            success: true);
     } catch (e) {
       if (mounted) _snack(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -243,7 +299,8 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
     }
   }
 
-  Future<void> _deleteUser(Map<String, dynamic> user, {bool isClient = false}) async {
+  Future<void> _deleteUser(Map<String, dynamic> user,
+      {bool isClient = false}) async {
     final name = user['display_name'] ?? user['username'];
     final confirm = await showDialog<bool>(
       context: context,
@@ -251,7 +308,9 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
         title: const Text('Eliminar usuario'),
         content: Text('¿Eliminar permanentemente a $name?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -277,6 +336,120 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
     }
   }
 
+  // Ficha de detalle de un cliente -- solo lo esencial (correo, teléfono,
+  // nombre, pedidos), por seguridad no se exponen credenciales ni datos
+  // de otros usuarios desde aquí.
+  Future<void> _showClientDetail(Map<String, dynamic> u) async {
+    final name = (u['display_name'] ?? u['username'] ?? '?') as String;
+    final createdAt = DateTime.tryParse(u['created_at'] as String? ?? '');
+    await showFuturisticModal(context,
+        builder: (_) => FuturisticModalCard(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const ModalCloseButton(),
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: Colors.blue.withValues(alpha: 0.12),
+                      child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                              color: Colors.blue,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                        child: Text(name,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 17, fontWeight: FontWeight.w800))),
+                    const SizedBox(height: 4),
+                    Center(
+                        child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: (u['active'] == 1 || u['active'] == true)
+                              ? Colors.green.withValues(alpha: 0.12)
+                              : Colors.red.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(
+                          (u['active'] == 1 || u['active'] == true)
+                              ? 'ACTIVO'
+                              : 'INACTIVO',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: (u['active'] == 1 || u['active'] == true)
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700)),
+                    )),
+                    const SizedBox(height: 16),
+                    _detailRow(
+                        Icons.email_outlined,
+                        'Correo',
+                        (u['email'] as String?)?.isNotEmpty == true
+                            ? u['email'] as String
+                            : '—'),
+                    _detailRow(
+                        Icons.phone_outlined,
+                        'Teléfono',
+                        (u['phone'] as String?)?.isNotEmpty == true
+                            ? u['phone'] as String
+                            : (u['username'] as String? ?? '—')),
+                    _detailRow(
+                        Icons.location_on_outlined,
+                        'Dirección',
+                        (u['address'] as String?)?.isNotEmpty == true
+                            ? u['address'] as String
+                            : 'Sin registrar'),
+                    _detailRow(Icons.shopping_bag_outlined,
+                        'Pedidos entregados', '${u['order_count'] ?? 0}'),
+                    _detailRow(
+                        Icons.calendar_today_outlined,
+                        'Registrado',
+                        createdAt != null
+                            ? DateFormat("d 'de' MMMM, yyyy", 'es')
+                                .format(createdAt)
+                            : '—'),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                        height: 46,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _deleteUser(u, isClient: true);
+                          },
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              size: 18),
+                          label: const Text('Eliminar cliente'),
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14))),
+                        )),
+                  ]),
+            ));
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(children: [
+          Icon(icon, size: 18, color: Colors.grey.shade500),
+          const SizedBox(width: 10),
+          Text(label,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+          const Spacer(),
+          Flexible(
+              child: Text(value,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700))),
+        ]),
+      );
+
   void _snack(String msg, {bool success = false}) {
     final scheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -293,7 +466,8 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
       prefixIcon: Icon(icon, size: 20, color: scheme.primary),
       filled: true,
       fillColor: const Color(0xFFF5F5F5),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
@@ -320,34 +494,47 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          prefixIcon: Icon(Icons.search_rounded, color: scheme.primary, size: 20),
+          prefixIcon:
+              Icon(Icons.search_rounded, color: scheme.primary, size: 20),
           suffixIcon: query.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.close_rounded, color: Colors.grey.shade400, size: 18),
-                  onPressed: () { ctrl.clear(); })
+                  icon: Icon(Icons.close_rounded,
+                      color: Colors.grey.shade400, size: 18),
+                  onPressed: () {
+                    ctrl.clear();
+                  })
               : null,
           filled: true,
           fillColor: const Color(0xFFF5F5F5),
           contentPadding: const EdgeInsets.symmetric(vertical: 10),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: scheme.primary, width: 1.5)),
         ),
       ),
     );
   }
 
   Widget _userTile(Map<String, dynamic> u, {bool isClient = false}) {
-    final scheme  = Theme.of(context).colorScheme;
-    final name    = u['display_name'] ?? u['username'] ?? '?';
-    final uname   = u['username'] ?? '';
-    final role    = u['role'] ?? 'worker';
-    final active  = u['active'] == 1 || u['active'] == true;
+    final scheme = Theme.of(context).colorScheme;
+    final name = u['display_name'] ?? u['username'] ?? '?';
+    final uname = u['username'] ?? '';
+    final role = u['role'] ?? 'worker';
+    final active = u['active'] == 1 || u['active'] == true;
     final isAdmin = role == 'admin';
-    final badgeColor  = isAdmin ? scheme.secondary : isClient ? Colors.blue : scheme.primary;
-    final badgeText   = isAdmin ? 'Admin' : isClient ? 'Cliente' : 'Trabajador';
+    final badgeColor = isAdmin
+        ? scheme.secondary
+        : isClient
+            ? Colors.blue
+            : scheme.primary;
+    final badgeText = isAdmin
+        ? 'Admin'
+        : isClient
+            ? 'Cliente'
+            : 'Trabajador';
     final avatarColor = isAdmin
         ? scheme.secondary.withValues(alpha: active ? 1 : 0.4)
         : isClient
@@ -360,50 +547,65 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: active ? Colors.transparent : Colors.grey.shade200),
+        side: BorderSide(
+            color: active ? Colors.transparent : Colors.grey.shade200),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: ListTile(
+          onTap: isClient ? () => _showClientDetail(u) : null,
           leading: CircleAvatar(
             backgroundColor: avatarColor,
             child: Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ),
           title: Row(children: [
-            Expanded(child: Text(
+            Expanded(
+                child: Text(
               name,
-              maxLines: 1, overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600,
-                color: active ? Colors.black87 : Colors.grey),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: active ? Colors.black87 : Colors.grey),
             )),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20)),
+                  color: badgeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20)),
               child: Text(badgeText,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: badgeColor)),
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: badgeColor)),
             ),
           ]),
-          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('@$uname', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+          subtitle:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('@$uname',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
             if (u['email'] != null && (u['email'] as String).isNotEmpty)
               Text(u['email'] as String,
-                style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
             if (!active)
               const Text('INACTIVO',
-                style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold)),
           ]),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             if (!isClient)
               IconButton(
                 icon: Icon(
-                  active ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
-                  color: active ? scheme.primary : Colors.grey, size: 28),
+                    active ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
+                    color: active ? scheme.primary : Colors.grey,
+                    size: 28),
                 tooltip: active ? 'Desactivar' : 'Activar',
                 onPressed: () => _toggleActive(u),
               ),
@@ -413,7 +615,8 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
                 onPressed: () => _showStaffDialog(user: u),
               ),
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.red),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  size: 20, color: Colors.red),
               onPressed: () => _deleteUser(u, isClient: isClient),
             ),
           ]),
@@ -429,17 +632,21 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
     final allUsers = context.watch<AppProvider>().users;
     final staff = allUsers.where((u) => u['role'] != 'client').where((u) {
       if (_staffQuery.isEmpty) return true;
-      final n  = (u['display_name'] ?? '').toString().toLowerCase();
+      final n = (u['display_name'] ?? '').toString().toLowerCase();
       final un = (u['username'] ?? '').toString().toLowerCase();
       return n.contains(_staffQuery) || un.contains(_staffQuery);
     }).toList();
 
-    final clients = _clientQuery.isEmpty ? _clients : _clients.where((u) {
-      final n  = (u['display_name'] ?? '').toString().toLowerCase();
-      final un = (u['username'] ?? '').toString().toLowerCase();
-      final e  = (u['email'] ?? '').toString().toLowerCase();
-      return n.contains(_clientQuery) || un.contains(_clientQuery) || e.contains(_clientQuery);
-    }).toList();
+    final clients = _clientQuery.isEmpty
+        ? _clients
+        : _clients.where((u) {
+            final n = (u['display_name'] ?? '').toString().toLowerCase();
+            final un = (u['username'] ?? '').toString().toLowerCase();
+            final e = (u['email'] ?? '').toString().toLowerCase();
+            return n.contains(_clientQuery) ||
+                un.contains(_clientQuery) ||
+                e.contains(_clientQuery);
+          }).toList();
 
     return Column(children: [
       Container(
@@ -455,22 +662,28 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
           ],
         ),
       ),
-      Expanded(child: Stack(children: [
+      Expanded(
+          child: Stack(children: [
         TabBarView(
           controller: _tabs,
           children: [
             // ── Tab 1: Admins + Workers ──────────────────────
             Column(children: [
               _searchBar(_staffSearchCtrl, _staffQuery, 'Buscar personal...'),
-              Expanded(child: RefreshIndicator(
+              Expanded(
+                  child: RefreshIndicator(
                 onRefresh: () => context.read<AppProvider>().refreshUsers(),
                 color: scheme.primary,
                 child: staff.isEmpty
                     ? ListView(children: [
                         const SizedBox(height: 100),
                         EmptyState(
-                          icon: _staffQuery.isNotEmpty ? Icons.search_off_rounded : Icons.people_outline_rounded,
-                          title: _staffQuery.isNotEmpty ? 'Sin resultados' : 'No hay personal',
+                          icon: _staffQuery.isNotEmpty
+                              ? Icons.search_off_rounded
+                              : Icons.people_outline_rounded,
+                          title: _staffQuery.isNotEmpty
+                              ? 'Sin resultados'
+                              : 'No hay personal',
                         ),
                       ])
                     : ListView(
@@ -483,23 +696,33 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
             // ── Tab 2: Clients ───────────────────────────────
             Column(children: [
               _searchBar(_clientSearchCtrl, _clientQuery, 'Buscar clientes...'),
-              Expanded(child: RefreshIndicator(
+              Expanded(
+                  child: RefreshIndicator(
                 onRefresh: _loadClients,
                 color: scheme.primary,
                 child: _loadingClients
-                    ? Center(child: CircularProgressIndicator(color: scheme.primary))
+                    ? Center(
+                        child: CircularProgressIndicator(color: scheme.primary))
                     : clients.isEmpty
                         ? ListView(children: [
                             const SizedBox(height: 100),
                             EmptyState(
-                              icon: _clientQuery.isNotEmpty ? Icons.search_off_rounded : Icons.shopping_cart_outlined,
-                              title: _clientQuery.isNotEmpty ? 'Sin resultados' : 'No hay clientes registrados',
-                              subtitle: _clientQuery.isEmpty ? 'Los clientes se registran desde la app' : null,
+                              icon: _clientQuery.isNotEmpty
+                                  ? Icons.search_off_rounded
+                                  : Icons.shopping_cart_outlined,
+                              title: _clientQuery.isNotEmpty
+                                  ? 'Sin resultados'
+                                  : 'No hay clientes registrados',
+                              subtitle: _clientQuery.isEmpty
+                                  ? 'Los clientes se registran desde la app'
+                                  : null,
                             ),
                           ])
                         : ListView(
                             padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-                            children: clients.map((u) => _userTile(u, isClient: true)).toList(),
+                            children: clients
+                                .map((u) => _userTile(u, isClient: true))
+                                .toList(),
                           ),
               )),
             ]),
@@ -508,9 +731,11 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
 
         // Loading overlay
         if (_loading)
-          Positioned.fill(child: ColoredBox(
+          Positioned.fill(
+              child: ColoredBox(
             color: Colors.black12,
-            child: Center(child: CircularProgressIndicator(color: scheme.primary)),
+            child:
+                Center(child: CircularProgressIndicator(color: scheme.primary)),
           )),
 
         // FAB only on Tab 0 (staff)
@@ -518,13 +743,16 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
           animation: _tabs,
           builder: (_, __) => _tabs.index == 0
               ? Positioned(
-                  bottom: 20, right: 16,
+                  bottom: 20,
+                  right: 16,
                   child: FloatingActionButton.extended(
                     onPressed: () => _showStaffDialog(),
                     backgroundColor: scheme.primary,
-                    icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+                    icon: const Icon(Icons.person_add_rounded,
+                        color: Colors.white),
                     label: const Text('Nuevo usuario',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w600)),
                   ),
                 )
               : const SizedBox.shrink(),
