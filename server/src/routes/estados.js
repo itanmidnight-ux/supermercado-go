@@ -50,20 +50,37 @@ router.get('/', clientAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/estados — create (admin only, 36h TTL)
+// POST /api/estados — create (admin only). discount_type/discount_value son
+// opcionales -- sin ellos es una publicación normal (como antes). Con
+// discount_type='percent' se exige discount_value (1-90); con '2x1' no
+// hace falta valor. Las promociones se mantienen visibles 7 días (antes
+// 36h, pensado para contenido efímero tipo "estado", no para ofertas).
 router.post('/', adminAuth, upload.single('media'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió archivo de media' });
     const caption      = req.body.caption ? String(req.body.caption).trim().slice(0, 500) : null;
     const product_id   = req.body.product_id   ? parseInt(req.body.product_id, 10) || null : null;
     const product_name = req.body.product_name ? String(req.body.product_name).trim().slice(0, 200) : null;
-    const media_type = req.file.mimetype.startsWith('video') ? 'video' : 'image';
+    const media_type   = req.file.mimetype.startsWith('video') ? 'video' : 'image';
+
+    let discountType  = req.body.discount_type || null;
+    let discountValue = null;
+    if (discountType !== null) {
+      if (!['percent', '2x1'].includes(discountType))
+        return res.status(400).json({ error: 'discount_type debe ser percent o 2x1' });
+      if (discountType === 'percent') {
+        discountValue = Number(req.body.discount_value);
+        if (!Number.isFinite(discountValue) || discountValue <= 0 || discountValue > 90)
+          return res.status(400).json({ error: 'discount_value debe ser un porcentaje entre 1 y 90' });
+      }
+    }
+
     const db = getDB();
     const { rows } = await db.query(`
-      INSERT INTO estados (admin_username, filename, media_type, caption, product_id, product_name, expires_at)
-      VALUES ($1, $2, $3, $4, $5, $6, to_char((now() AT TIME ZONE 'UTC') + INTERVAL '36 hours', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+      INSERT INTO estados (admin_username, filename, media_type, caption, product_id, product_name, discount_type, discount_value, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, to_char((now() AT TIME ZONE 'UTC') + INTERVAL '7 days', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
       RETURNING *
-    `, [req.user.username, req.file.filename, media_type, caption, product_id, product_name]);
+    `, [req.user.username, req.file.filename, media_type, caption, product_id, product_name, discountType, discountValue]);
     const estado = rows[0];
     res.status(201).json({ estado: await enrichEstado(db, estado, req.user.username) });
   } catch (e) { next(e); }

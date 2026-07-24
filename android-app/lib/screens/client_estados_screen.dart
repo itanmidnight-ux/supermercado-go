@@ -6,10 +6,12 @@ import '../widgets/empty_state.dart';
 import 'client_estados_viewer.dart';
 
 class ClientEstadosScreen extends StatefulWidget {
-  final List<Estado>  estados;
+  final List<Estado> estados;
   final Future<void> Function() onRefresh;
-  const ClientEstadosScreen({super.key, required this.estados, required this.onRefresh});
-  @override State<ClientEstadosScreen> createState() => _ClientEstadosScreenState();
+  const ClientEstadosScreen(
+      {super.key, required this.estados, required this.onRefresh});
+  @override
+  State<ClientEstadosScreen> createState() => _ClientEstadosScreenState();
 }
 
 class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
@@ -17,20 +19,22 @@ class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
 
   void _open(int index) async {
     if (_estados.isEmpty) return;
-    await Navigator.push(context, PageRouteBuilder(
-      pageBuilder: (_, a, __) => FadeTransition(
-        opacity: a,
-        child: ClientEstadosViewer(estados: _estados, initialIndex: index),
-      ),
-      transitionDuration: const Duration(milliseconds: 250),
-    ));
+    await Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, a, __) => FadeTransition(
+            opacity: a,
+            child: ClientEstadosViewer(estados: _estados, initialIndex: index),
+          ),
+          transitionDuration: const Duration(milliseconds: 250),
+        ));
     await widget.onRefresh();
   }
 
   String _formatTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60)  return 'hace ${diff.inMinutes} min';
-    if (diff.inHours < 24)    return 'hace ${diff.inHours} h';
+    if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'hace ${diff.inHours} h';
     return 'hace ${diff.inDays} d';
   }
 
@@ -45,9 +49,10 @@ class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.6,
             child: EmptyState(
-              icon: Icons.auto_stories_outlined,
-              title: 'No hay estados disponibles',
-              subtitle: 'Aquí aparecerán las novedades del negocio',
+              icon: Icons.local_offer_outlined,
+              title: 'No hay promociones disponibles',
+              subtitle:
+                  'Aquí aparecerán los descuentos y novedades del negocio',
               action: FilledButton.icon(
                 onPressed: widget.onRefresh,
                 icon: const Icon(Icons.refresh_rounded),
@@ -70,13 +75,13 @@ class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
 
           // Grid of estados
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(12, 0, 12,
-              MediaQuery.of(context).padding.bottom + 16),
+            padding: EdgeInsets.fromLTRB(
+                12, 0, 12, MediaQuery.of(context).padding.bottom + 16),
             sliver: SliverGrid(
               delegate: SliverChildBuilderDelegate(
                 (_, i) => _EstadoCard(
                   estado: _estados[i],
-                  onTap:  () => _open(i),
+                  onTap: () => _open(i),
                 ),
                 childCount: _estados.length,
               ),
@@ -99,10 +104,13 @@ class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
         child: Row(children: [
-          Icon(Icons.auto_stories_rounded, color: scheme.secondary, size: 18),
+          Icon(Icons.local_offer_rounded, color: scheme.secondary, size: 18),
           const SizedBox(width: 8),
-          Text('Estados recientes',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: scheme.primary)),
+          Text('Promociones recientes',
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: scheme.primary)),
         ]),
       ),
       SizedBox(
@@ -119,32 +127,41 @@ class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
                 margin: const EdgeInsets.only(right: 12),
                 child: Column(children: [
                   Container(
-                    width: 58, height: 58,
+                    width: 58,
+                    height: 58,
                     padding: const EdgeInsets.all(2.5),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [scheme.secondary, Color.lerp(scheme.secondary, Colors.white, 0.3)!]),
+                      gradient: LinearGradient(colors: [
+                        scheme.secondary,
+                        Color.lerp(scheme.secondary, Colors.white, 0.3)!
+                      ]),
                     ),
                     child: ClipOval(
                       child: e.mediaType == 'image'
-                        ? CachedNetworkImage(
-                            imageUrl: ApiService.estadoMediaUrl(e.filename),
-                            httpHeaders: const {'ngrok-skip-browser-warning': 'true'},
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(color: scheme.primary),
-                            errorWidget: (_, __, ___) => Container(
+                          ? CachedNetworkImage(
+                              imageUrl: ApiService.estadoMediaUrl(e.filename),
+                              httpHeaders: const {
+                                'ngrok-skip-browser-warning': 'true'
+                              },
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) =>
+                                  Container(color: scheme.primary),
+                              errorWidget: (_, __, ___) => Container(
+                                  color: scheme.primary,
+                                  child: const Icon(Icons.image,
+                                      color: Colors.white30, size: 24)),
+                            )
+                          : Container(
                               color: scheme.primary,
-                              child: const Icon(Icons.image, color: Colors.white30, size: 24)),
-                          )
-                        : Container(
-                            color: scheme.primary,
-                            child: const Icon(Icons.videocam, color: Colors.white, size: 24)),
+                              child: const Icon(Icons.videocam,
+                                  color: Colors.white, size: 24)),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(_formatTime(e.createdAt),
-                    style: const TextStyle(color: Colors.grey, fontSize: 9.5)),
+                      style:
+                          const TextStyle(color: Colors.grey, fontSize: 9.5)),
                 ]),
               ),
             );
@@ -155,14 +172,17 @@ class _ClientEstadosScreenState extends State<ClientEstadosScreen> {
       const Padding(
         padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: Text('Publicaciones',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black87)),
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: Colors.black87)),
       ),
     ]);
   }
 }
 
 class _EstadoCard extends StatelessWidget {
-  final Estado       estado;
+  final Estado estado;
   final VoidCallback onTap;
   const _EstadoCard({required this.estado, required this.onTap});
 
@@ -175,69 +195,124 @@ class _EstadoCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+          boxShadow: const [
+            BoxShadow(
+                color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Media
-          Expanded(child: Stack(fit: StackFit.expand, children: [
+          Expanded(
+              child: Stack(fit: StackFit.expand, children: [
             estado.mediaType == 'image'
-              ? CachedNetworkImage(
-                  imageUrl: ApiService.estadoMediaUrl(estado.filename),
-                  httpHeaders: const {'ngrok-skip-browser-warning': 'true'},
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(
-                    color: scheme.primary.withValues(alpha: 0.1),
-                    child: Center(child: CircularProgressIndicator(
-                      color: scheme.primary, strokeWidth: 2))),
-                  errorWidget: (_, __, ___) => Container(
-                    color: scheme.primary.withValues(alpha: 0.1),
-                    child: Icon(Icons.image_not_supported_rounded,
-                      color: scheme.primary, size: 40)),
-                )
-              : Container(
-                  color: Colors.black87,
-                  child: const Center(child: Icon(Icons.play_circle_fill_rounded,
-                    color: Colors.white, size: 50))),
+                ? CachedNetworkImage(
+                    imageUrl: ApiService.estadoMediaUrl(estado.filename),
+                    httpHeaders: const {'ngrok-skip-browser-warning': 'true'},
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                        color: scheme.primary.withValues(alpha: 0.1),
+                        child: Center(
+                            child: CircularProgressIndicator(
+                                color: scheme.primary, strokeWidth: 2))),
+                    errorWidget: (_, __, ___) => Container(
+                        color: scheme.primary.withValues(alpha: 0.1),
+                        child: Icon(Icons.image_not_supported_rounded,
+                            color: scheme.primary, size: 40)),
+                  )
+                : Container(
+                    color: Colors.black87,
+                    child: const Center(
+                        child: Icon(Icons.play_circle_fill_rounded,
+                            color: Colors.white, size: 50))),
             // Gradient
-            Positioned.fill(child: Container(
+            Positioned.fill(
+                child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.5)],
-                  stops: const [0.5, 1.0]),
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.5)
+                    ],
+                    stops: const [
+                      0.5,
+                      1.0
+                    ]),
               ),
             )),
+            // Insignia de descuento -- esquina superior, siempre visible
+            if (estado.isPromo)
+              Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade600,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.red.withValues(alpha: 0.4),
+                            blurRadius: 8)
+                      ],
+                    ),
+                    child: Text(estado.promoLabel,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800)),
+                  )),
             // Time badge
-            Positioned(top: 8, right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(10)),
-                child: Text(estado.timeAgo,
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)),
-              )),
+            Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text(estado.timeAgo,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600)),
+                )),
             // Stats at bottom
-            Positioned(bottom: 8, left: 8, right: 8,
-              child: Row(children: [
-                _StatBadge(icon: Icons.favorite_rounded, value: estado.heartCount, color: Colors.red.shade400),
-                const SizedBox(width: 6),
-                _StatBadge(icon: Icons.chat_bubble_rounded, value: estado.commentCount, color: Colors.blue.shade300),
-              ])),
+            Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Row(children: [
+                  _StatBadge(
+                      icon: Icons.favorite_rounded,
+                      value: estado.heartCount,
+                      color: Colors.red.shade400),
+                  const SizedBox(width: 6),
+                  _StatBadge(
+                      icon: Icons.chat_bubble_rounded,
+                      value: estado.commentCount,
+                      color: Colors.blue.shade300),
+                ])),
           ])),
           // Caption
           if (estado.caption != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Text(estado.caption!,
-                maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 1.4)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w500, height: 1.4)),
             )
           else
             const Padding(
               padding: EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Text('Ver estado', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              child: Text('Ver estado',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
             ),
         ]),
       ),
@@ -247,20 +322,24 @@ class _EstadoCard extends StatelessWidget {
 
 class _StatBadge extends StatelessWidget {
   final IconData icon;
-  final int      value;
-  final Color    color;
-  const _StatBadge({required this.icon, required this.value, required this.color});
+  final int value;
+  final Color color;
+  const _StatBadge(
+      {required this.icon, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-    decoration: BoxDecoration(
-      color: Colors.black45,
-      borderRadius: BorderRadius.circular(10)),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 11, color: color),
-      const SizedBox(width: 3),
-      Text('$value', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+            color: Colors.black45, borderRadius: BorderRadius.circular(10)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text('$value',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700)),
+        ]),
+      );
 }
