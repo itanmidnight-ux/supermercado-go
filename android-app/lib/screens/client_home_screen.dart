@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/estado.dart';
-import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/local_db.dart';
@@ -219,20 +217,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
                             fontWeight: FontWeight.w600)),
                   ]),
                 ),
-                const SizedBox(width: 8),
-                // Logout
-                GestureDetector(
-                  onTap: () => _confirmLogout(),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.logout_rounded,
-                        color: Colors.white70, size: 18),
-                  ),
-                ),
               ]),
             ),
             const SizedBox(height: 4),
@@ -353,28 +337,5 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
         ),
       ],
     );
-  }
-
-  Future<void> _confirmLogout() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cerrar sesión'),
-        content: const Text('¿Deseas salir de tu cuenta?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Salir')),
-        ],
-      ),
-    );
-    if (ok == true && mounted) {
-      NotificationService.stopPolling();
-      context.read<AppProvider>().logout();
-    }
   }
 }

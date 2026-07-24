@@ -667,16 +667,43 @@ class ApiService {
     throw Exception('Error clientes: ${res.statusCode}');
   }
 
-  static Future<Map<String, dynamic>> updateProfile(
-      Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> getMyProfile() async {
     final res = await _client
-        .put(Uri.parse('$_serverUrl/api/users/me'),
-            headers: _headers, body: jsonEncode(data))
+        .get(Uri.parse('$_serverUrl/api/users/me'), headers: _headers)
         .timeout(const Duration(seconds: 10));
     if (res.statusCode == 200)
       return jsonDecode(res.body)['user'] as Map<String, dynamic>;
-    throw Exception(
-        jsonDecode(res.body)['error'] ?? 'Error actualizando perfil');
+    throw Exception('Error cargando perfil');
+  }
+
+  // Cambiar correo/celular exige la contraseña actual -- evita que un
+  // token robado baste para secuestrar la cuenta (ver users.js).
+  static Future<void> updateEmail(
+      String newEmail, String currentPassword) async {
+    final res = await _client
+        .put(Uri.parse('$_serverUrl/api/users/me'),
+            headers: _headers,
+            body: jsonEncode(
+                {'email': newEmail, 'current_password': currentPassword}))
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) {
+      throw Exception(_tryDecodeBody(res.body)['error'] as String? ??
+          'Error actualizando correo');
+    }
+  }
+
+  static Future<void> updatePhone(
+      String newPhone, String currentPassword) async {
+    final res = await _client
+        .put(Uri.parse('$_serverUrl/api/users/me/phone'),
+            headers: _headers,
+            body: jsonEncode(
+                {'phone': newPhone, 'current_password': currentPassword}))
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) {
+      throw Exception(_tryDecodeBody(res.body)['error'] as String? ??
+          'Error actualizando número');
+    }
   }
 
   static Future<void> changePassword(String currentPw, String newPw) async {
