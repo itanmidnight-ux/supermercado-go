@@ -208,8 +208,6 @@ class ApiService {
     required String displayName,
     required String email,
     required String address,
-    String? nickname,
-    String? bio,
   }) async {
     http.Response res;
     try {
@@ -222,8 +220,6 @@ class ApiService {
           'display_name': displayName.trim(),
           'email':        email.trim(),
           'address':      address.trim(),
-          if (nickname != null && nickname.isNotEmpty) 'nickname': nickname.trim(),
-          if (bio      != null && bio.isNotEmpty)      'bio':      bio.trim(),
         }),
       ).timeout(const Duration(seconds: 12));
     } on TimeoutException {
@@ -237,6 +233,51 @@ class ApiService {
     }
     final body = _tryDecodeBody(res.body);
     throw Exception(body['error'] as String? ?? 'Error al registrarse');
+  }
+
+  // ── Recuperación de contraseña (OTP 6 dígitos, vence en 5 min) ──
+  static Future<String> forgotPassword(String email) async {
+    http.Response res;
+    try {
+      res = await _client.post(
+        Uri.parse('$_serverUrl/api/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+        body: jsonEncode({'email': email.trim()}),
+      ).timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      throw Exception('Servidor no responde. Verifica tu conexión.');
+    } catch (_) {
+      throw Exception('No se pudo conectar al servidor.');
+    }
+    final body = _tryDecodeBody(res.body);
+    if (res.statusCode == 200) return body['message'] as String? ?? 'Código enviado.';
+    if (res.statusCode == 429) {
+      final secs = body['retry_in'] as int? ?? 60;
+      throw Exception('Demasiados intentos. Espera ${(secs / 60).ceil()} minutos.');
+    }
+    throw Exception(body['error'] as String? ?? 'No se pudo enviar el código');
+  }
+
+  static Future<void> resetPassword(String email, String code, String newPassword) async {
+    http.Response res;
+    try {
+      res = await _client.post(
+        Uri.parse('$_serverUrl/api/auth/reset-password'),
+        headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+        body: jsonEncode({'email': email.trim(), 'code': code.trim(), 'new_password': newPassword}),
+      ).timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      throw Exception('Servidor no responde. Verifica tu conexión.');
+    } catch (_) {
+      throw Exception('No se pudo conectar al servidor.');
+    }
+    if (res.statusCode == 200) return;
+    final body = _tryDecodeBody(res.body);
+    if (res.statusCode == 429) {
+      final secs = body['retry_in'] as int? ?? 60;
+      throw Exception('Demasiados intentos. Espera ${(secs / 60).ceil()} minutos.');
+    }
+    throw Exception(body['error'] as String? ?? 'Código inválido o vencido');
   }
 
   static Future<Map<String, String>> login(String username, String pin) async {

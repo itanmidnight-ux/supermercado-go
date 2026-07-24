@@ -6,6 +6,7 @@ const crypto  = require('crypto');
 const { getDB } = require('../db/database');
 const { getIP } = require('../utils/ip');
 const { raiseAlert } = require('../utils/securityAlert');
+const logger = require('../utils/logger');
 
 // ── Brute-force protection ────────────────────────────────────
 // key = username (independiente de la IP -- un atacante que rota de IP no
@@ -266,6 +267,119 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'Ese celular o correo ya está registrado' });
     }
     res.status(500).json({ error: 'Error al crear cuenta' });
+  }
+});
+
+// ── Recuperación de contraseña por correo (OTP 6 dígitos) ──────
+// Un solo código activo por usuario, vence a los 5 minutos, se guarda
+// hasheado (nunca en claro), máximo 5 intentos de verificación por código.
+const RESET_CODE_TTL_MS         = 5 * 60 * 1000;
+const RESET_MAX_VERIFY_ATTEMPTS = 5;
+
+function generateResetCode() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+}
+function hashResetCode(code) {
+  return crypto.createHash('sha256').update(code).digest('hex');
+}
+
+// POST /api/auth/forgot-password — { email } → envía código si la cuenta existe
+router.post('/forgot-password', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  // Respuesta genérica siempre igual -- no revela si el correo está o no
+  // registrado (evita enumeración de cuentas).
+  const generic = { message: 'Si el correo está registrado, recibirás un código de verificación.' };
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return res.status(400).json({ error: 'Correo inválido' });
+
+  const ip      = getIP(req);
+  const lockKey = `reset-req:${ip}`;
+  const secs    = checkLock(lockKey);
+  if (secs !== null)
+    return res.status(429).json({ error: `Demasiados intentos. Espera ${secs} segundos.`, retry_in: secs });
+
+  try {
+    const db = getDB();
+    const { rows } = await db.query(
+      `SELECT id, display_name FROM users WHERE email = $1 AND role = 'client' AND active = 1`, [email]
+    );
+    const user = rows[0];
+    if (user) {
+      const code = generateResetCode();
+      await db.query('DELETE FROM password_resets WHERE user_id = $1', [user.id]);
+      const expiresAt = new Date(Date.now() + RESET_CODE_TTL_MS).toISOString();
+      await db.query(
+        'INSERT INTO password_resets (user_id, code_hash, expires_at) VALUES ($1, $2, $3)',
+        [user.id, hashResetCode(code), expiresAt]
+      );
+      const { sendMail } = require('../services/emailService');
+      sendMail({
+        to: email,
+        subject: 'Código de recuperación — Supermercado GO',
+        html: `<div style="font-family:sans-serif">
+          <p>Hola${user.display_name ? ' ' + user.display_name : ''},</p>
+          <p>Tu código de recuperación de contraseña es:</p>
+          <h2 style="letter-spacing:6px">${code}</h2>
+          <p>Vence en 5 minutos. Si no solicitaste esto, ignora este correo.</p>
+        </div>`,
+      }).catch(e => logger.error({ err: e.message }, '[auth] no se pudo enviar código de recuperación'));
+    }
+    recordFail(lockKey); // limita peticiones por IP igual exista o no el correo
+    res.json(generic);
+  } catch (e) {
+    res.status(500).json({ error: 'Error al procesar la solicitud' });
+  }
+});
+
+// POST /api/auth/reset-password — { email, code, new_password }
+router.post('/reset-password', async (req, res) => {
+  const email       = String(req.body?.email || '').trim().toLowerCase();
+  const code        = String(req.body?.code || '').trim();
+  const newPassword = req.body?.new_password;
+
+  if (!email || !/^\d{6}$/.test(code))
+    return res.status(400).json({ error: 'Datos inválidos' });
+  if (!newPassword || String(newPassword).length < 8)
+    return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres' });
+
+  const ip      = getIP(req);
+  const lockKey = `reset-verify:${ip}`;
+  const secs    = checkLock(lockKey);
+  if (secs !== null)
+    return res.status(429).json({ error: `Demasiados intentos. Espera ${secs} segundos.`, retry_in: secs });
+
+  try {
+    const db = getDB();
+    const { rows } = await db.query(
+      `SELECT id FROM users WHERE email = $1 AND role = 'client' AND active = 1`, [email]
+    );
+    const user = rows[0];
+    if (!user) { recordFail(lockKey); return res.status(400).json({ error: 'Código inválido o vencido' }); }
+
+    const { rows: resetRows } = await db.query(
+      `SELECT * FROM password_resets WHERE user_id = $1 AND used = 0 ORDER BY id DESC LIMIT 1`, [user.id]
+    );
+    const reset = resetRows[0];
+    if (!reset || new Date(reset.expires_at).getTime() < Date.now()) {
+      recordFail(lockKey);
+      return res.status(400).json({ error: 'Código inválido o vencido' });
+    }
+    if (reset.attempts >= RESET_MAX_VERIFY_ATTEMPTS)
+      return res.status(429).json({ error: 'Demasiados intentos con este código. Solicita uno nuevo.' });
+
+    if (hashResetCode(code) !== reset.code_hash) {
+      await db.query('UPDATE password_resets SET attempts = attempts + 1 WHERE id = $1', [reset.id]);
+      recordFail(lockKey);
+      return res.status(400).json({ error: 'Código inválido o vencido' });
+    }
+
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    await db.query('UPDATE users SET password_hash = $1, pin = $1 WHERE id = $2', [hash, user.id]);
+    await db.query('UPDATE password_resets SET used = 1 WHERE id = $1', [reset.id]);
+    clearAttempts(lockKey);
+    res.json({ ok: true, message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al restablecer la contraseña' });
   }
 });
 
