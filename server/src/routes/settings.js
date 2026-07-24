@@ -4,6 +4,21 @@ const router  = express.Router();
 const { adminAuth, clientAuth } = require('../middleware/auth');
 const { getDB } = require('../db/database');
 
+// GET /api/settings/public — nombre/logo/colores de marca, sin auth. Lo
+// necesita la pantalla de login (todavía no hay sesión ahí) para mostrar
+// la marca real configurada en vez de quedarse con el fallback fijo del
+// código -- nada de esto es sensible (a diferencia de nequi_phone, emails,
+// dominios, etc. que solo se devuelven autenticado).
+router.get('/public', async (req, res, next) => {
+  try {
+    const keys = ['theme_name', 'theme_primary', 'theme_accent', 'theme_logo_url'];
+    const { rows } = await getDB().query('SELECT key, value FROM settings WHERE key = ANY($1)', [keys]);
+    const settings = {};
+    rows.forEach(r => { settings[r.key] = r.value; });
+    res.json({ settings });
+  } catch (e) { next(e); }
+});
+
 // GET /api/settings — get all settings (admin) or public subset (client)
 router.get('/', clientAuth, async (req, res, next) => {
   try {

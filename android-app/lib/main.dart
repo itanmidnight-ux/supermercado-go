@@ -36,7 +36,15 @@ void main() async {
   }
 
   final themeProvider = ThemeProvider();
-  if (ApiService.isConfigured) await themeProvider.load();
+  // Con sesión: settings completos (incluye cosas no públicas). Sin sesión
+  // (login/registro/modo invitado): solo la marca pública -- así el login
+  // ya muestra el nombre/logo/colores reales configurados por el admin
+  // en vez del fallback fijo del código.
+  if (ApiService.isConfigured) {
+    await themeProvider.load();
+  } else {
+    await themeProvider.loadPublic();
+  }
 
   runApp(
     MultiProvider(

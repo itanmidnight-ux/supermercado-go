@@ -32,6 +32,7 @@ class _LongPressPreviewDetectorState extends State<LongPressPreviewDetector>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   bool _triggered = false;
+  double _scale = 1.0;
 
   @override
   void initState() {
@@ -55,11 +56,13 @@ class _LongPressPreviewDetectorState extends State<LongPressPreviewDetector>
   void _start() {
     _triggered = false;
     _ctrl.forward(from: 0);
+    setState(() => _scale = 0.96);
   }
 
   void _cancelHold() {
     if (!_triggered) _ctrl.stop();
     _ctrl.value = 0;
+    setState(() => _scale = 1.0);
   }
 
   void _handleTap() {
@@ -80,45 +83,53 @@ class _LongPressPreviewDetectorState extends State<LongPressPreviewDetector>
       onTapDown: (_) => _start(),
       onTapUp: (_) => _cancelHold(),
       onTapCancel: _cancelHold,
-      child: Stack(children: [
-        widget.child,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: ClipRRect(
-              borderRadius: widget.borderRadius,
-              child: AnimatedBuilder(
-                animation: _ctrl,
-                builder: (_, __) {
-                  if (_ctrl.value <= 0) return const SizedBox.shrink();
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        radius: 1.1,
-                        colors: [
-                          scheme.primary.withValues(alpha: 0.05 * _ctrl.value),
-                          scheme.primary.withValues(alpha: 0.38 * _ctrl.value),
-                        ],
-                      ),
-                    ),
-                    child: Center(
-                      child: SizedBox(
-                        width: 34,
-                        height: 34,
-                        child: CircularProgressIndicator(
-                          value: _ctrl.value,
-                          strokeWidth: 3,
-                          color: Colors.white,
-                          backgroundColor: Colors.white.withValues(alpha: 0.35),
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Stack(children: [
+          widget.child,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRRect(
+                borderRadius: widget.borderRadius,
+                child: AnimatedBuilder(
+                  animation: _ctrl,
+                  builder: (_, __) {
+                    if (_ctrl.value <= 0) return const SizedBox.shrink();
+                    return Container(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          radius: 1.1,
+                          colors: [
+                            scheme.primary
+                                .withValues(alpha: 0.05 * _ctrl.value),
+                            scheme.primary
+                                .withValues(alpha: 0.38 * _ctrl.value),
+                          ],
                         ),
                       ),
-                    ),
-                  );
-                },
+                      child: Center(
+                        child: SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: CircularProgressIndicator(
+                            value: _ctrl.value,
+                            strokeWidth: 3,
+                            color: Colors.white,
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.35),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 }

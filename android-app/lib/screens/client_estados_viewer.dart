@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/estado.dart';
 import '../services/api_service.dart';
+import '../widgets/app_logo.dart';
 import 'client_product_detail.dart';
 
 class ClientEstadosViewer extends StatefulWidget {
@@ -347,12 +348,7 @@ class _ClientEstadosViewerState extends State<ClientEstadosViewer>
             left: 12,
             right: 12,
             child: Row(children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: scheme.primary,
-                child: const Icon(Icons.storefront_rounded,
-                    size: 18, color: Colors.white),
-              ),
+              const AppLogo(size: 40, animate: false),
               const SizedBox(width: 10),
               Expanded(
                   child: Column(

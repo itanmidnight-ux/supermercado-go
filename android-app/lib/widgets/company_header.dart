@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
-import '../services/api_service.dart';
+import 'app_logo.dart';
 
 class CompanyHeader extends StatelessWidget implements PreferredSizeWidget {
   final String pageTitle;
@@ -47,26 +47,10 @@ class CompanyHeader extends StatelessWidget implements PreferredSizeWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (theme.logoFilename != null)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(5),
-                          child: Image.network(
-                            ApiService.logoUrl(theme.logoFilename!),
-                            width: 18,
-                            height: 18,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(
-                                Icons.storefront_rounded,
-                                size: 16,
-                                color: theme.accent),
-                          ),
-                        ),
-                      )
-                    else
-                      Icon(Icons.storefront_rounded,
-                          size: 16, color: theme.accent),
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: AppLogo(size: 20, animate: false),
+                    ),
                     const SizedBox(width: 8),
                     Flexible(
                       child: FittedBox(
