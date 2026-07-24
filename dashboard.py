@@ -2551,6 +2551,154 @@ class PaymentsModule:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# MÓDULO: CORREO (NUEVO) — cuenta emisora para recuperación de contraseña
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EmailModule:
+    """Conecta la cuenta de correo que la app usa para enviar los códigos de
+    recuperación de contraseña (y notificaciones a futuro). Mismo patrón que
+    Bot WhatsApp / Nequi: se guarda cifrada (AES-256-GCM) en la base de
+    datos, se verifica contra el SMTP real antes de guardar nada."""
+
+    def __init__(self, parent):
+        self.parent = parent
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        self._connected = False
+
+        header = SectionHeader('Correo de la empresa',
+                               'Cuenta emisora de los códigos de recuperación de contraseña',
+                               make_btn('↻ Actualizar', 'btn-flat', small=True, on_click=lambda *_: self.refresh()))
+        self.box.pack_start(header, False, False, 0)
+
+        cards = Gtk.Box(spacing=12)
+        self.box.pack_start(cards, False, False, 0)
+        self.card_status = StatCard('Estado', sub='Conexión de correo')
+        self.card_email  = StatCard('Cuenta', sub='Cifrada en la base de datos')
+        self.card_since  = StatCard('Conectado desde', sub='Última conexión')
+        for c in (self.card_status, self.card_email, self.card_since):
+            cards.pack_start(c, True, True, 0)
+
+        frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        frame.get_style_context().add_class('bot-frame')
+        self.box.pack_start(frame, True, True, 0)
+
+        notice = Gtk.Label(
+            label='Usa una "contraseña de aplicación" (no la contraseña normal de la cuenta) -- '
+                  'en Gmail se genera desde Cuenta de Google → Seguridad → Contraseñas de aplicaciones. '
+                  'La conexión se prueba en el momento: si las credenciales no funcionan, no se guarda nada.',
+            xalign=0)
+        notice.set_line_wrap(True)
+        notice.get_style_context().add_class('label-dim')
+        frame.pack_start(notice, False, False, 0)
+
+        actions_title = Gtk.Label(label='ACCIONES', xalign=0)
+        actions_title.get_style_context().add_class('section-title')
+        frame.pack_start(actions_title, False, False, 8)
+
+        actions = Gtk.Box(spacing=8)
+        frame.pack_start(actions, False, False, 0)
+        self.btn_connect    = make_btn('Conectar correo', 'btn-primary', on_click=lambda *_: self._open_connect_dialog())
+        self.btn_test       = make_btn('Enviar prueba', 'btn-flat', on_click=lambda *_: self._send_test())
+        self.btn_disconnect = make_btn('Desconectar', 'btn-danger', on_click=lambda *_: self._disconnect())
+        for b in (self.btn_connect, self.btn_test, self.btn_disconnect):
+            actions.pack_start(b, False, False, 0)
+
+        self.status_label = Gtk.Label(label='')
+        self.status_label.get_style_context().add_class('label-dim')
+        frame.pack_start(self.status_label, False, False, 8)
+
+    def refresh(self):
+        run_in_background(lambda: http_get('/api/email/status'), self._apply_refresh)
+
+    def _apply_refresh(self, data):
+        if data is None:
+            self.card_status.set_value('API no disponible')
+            self.card_email.set_value('—')
+            self.card_since.set_value('—')
+            self.status_label.set_text('No se pudo conectar al servidor. ¿Está corriendo?')
+            return
+
+        self._connected = bool(data.get('connected'))
+        self.card_status.set_value('CONECTADO' if self._connected else 'SIN CONECTAR')
+        self.card_email.set_value(data.get('email') or 'No configurado')
+        self.card_since.set_value(fmt_relative(data.get('connected_at')) if data.get('connected_at') else '—')
+
+        self.btn_connect.set_label('Cambiar cuenta' if self._connected else 'Conectar correo')
+        self.btn_test.set_sensitive(self._connected)
+        self.btn_disconnect.set_sensitive(self._connected)
+
+    def _open_connect_dialog(self):
+        is_change = self._connected
+        dialog = Gtk.Dialog(title='Cambiar cuenta de correo' if is_change else 'Conectar correo',
+                            transient_for=self.parent, modal=True, destroy_with_parent=True)
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Guardar', Gtk.ResponseType.OK)
+        dialog.set_default_size(400, 220)
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(14)
+        box.pack_start(Gtk.Label(label='Correo electrónico emisor:'), False, False, 0)
+        email_entry = Gtk.Entry()
+        email_entry.set_placeholder_text('Ej: contacto@supermercadogo.com.co')
+        box.pack_start(email_entry, False, False, 0)
+        box.pack_start(Gtk.Label(label='Contraseña de aplicación:'), False, False, 0)
+        pass_entry = Gtk.Entry()
+        pass_entry.set_visibility(False)
+        pass_entry.set_placeholder_text('Contraseña de aplicación (no la contraseña normal)')
+        box.pack_start(pass_entry, False, False, 0)
+        if is_change:
+            warn = Gtk.Label(label='Esto reemplaza la cuenta de correo conectada actualmente.')
+            warn.get_style_context().add_class('label-dim')
+            warn.set_line_wrap(True)
+            box.pack_start(warn, False, False, 0)
+        box.show_all()
+        if dialog.run() == Gtk.ResponseType.OK:
+            email = email_entry.get_text().strip()
+            app_password = pass_entry.get_text().strip()
+            if email and app_password:
+                self.status_label.set_text('Verificando credenciales…')
+                run_in_background(
+                    lambda: http_post('/api/email/configure', {'email': email, 'app_password': app_password}),
+                    self._on_connect_done)
+        dialog.destroy()
+
+    def _on_connect_done(self, result):
+        if result and result.get('ok'):
+            self.status_label.set_text('Correo conectado y verificado.')
+        else:
+            err = (result or {}).get('error', 'error desconocido')
+            self.status_label.set_text(f'Error: {err}')
+        GLib.timeout_add(800, lambda: (self.refresh(), False)[1])
+
+    def _send_test(self):
+        self.status_label.set_text('Enviando correo de prueba…')
+        run_in_background(lambda: http_post('/api/email/test', {}), self._on_test_done)
+
+    def _on_test_done(self, result):
+        if result and result.get('ok'):
+            self.status_label.set_text('Correo de prueba enviado — revisa la bandeja de entrada.')
+        else:
+            err = (result or {}).get('error', 'error desconocido')
+            self.status_label.set_text(f'Error: {err}')
+
+    def _disconnect(self):
+        dialog = Gtk.MessageDialog(
+            transient_for=self.parent, flags=0,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text='Esto desconecta la cuenta de correo -- la recuperación de contraseña de los '
+                 'clientes dejará de funcionar hasta que conectes una cuenta de nuevo. ¿Continuar?')
+        resp = dialog.run()
+        dialog.destroy()
+        if resp == Gtk.ResponseType.YES:
+            run_in_background(lambda: http_post('/api/email/disconnect', {}), self._on_disconnect_done)
+
+    def _on_disconnect_done(self, result):
+        self.status_label.set_text('Desconectado.' if result and result.get('ok')
+                                   else 'Error al desconectar')
+        GLib.timeout_add(600, lambda: (self.refresh(), False)[1])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MÓDULO: EMPLEADOS (NUEVO)
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -4649,6 +4797,7 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self._add_module('domain', 'Dominio', DomainModule)
         self._add_module('brand',  'Marca', BrandModule)
         self._add_module('payments', 'Métodos de pago', PaymentsModule)
+        self._add_module('email',   'Correo', EmailModule)
         self._add_module('config', 'Configuración', ConfigModule)
         self._add_module('security', 'Seguridad', SecurityModule)
         self._add_module('logs',   'Logs', LogsModule)

@@ -251,6 +251,35 @@ CREATE TABLE IF NOT EXISTS nequi_config (
 );
 INSERT INTO nequi_config (id, status) VALUES (1, 'disconnected') ON CONFLICT (id) DO NOTHING;
 
+-- Cuenta de correo emisora (recuperación de contraseña, notificaciones) --
+-- mismo patrón que bot_config/nequi_config: se conecta/desconecta desde el
+-- dashboard, credenciales cifradas AES-256-GCM (ver botCrypto.js).
+CREATE TABLE IF NOT EXISTS email_config (
+  id                      INTEGER PRIMARY KEY CHECK (id = 1),
+  email                   TEXT,
+  app_password_encrypted  TEXT,
+  smtp_host               TEXT,
+  smtp_port               INTEGER,
+  status                  TEXT NOT NULL DEFAULT 'disconnected',
+  connected_at            TEXT,
+  updated_at              TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+);
+INSERT INTO email_config (id, status) VALUES (1, 'disconnected') ON CONFLICT (id) DO NOTHING;
+
+-- Códigos de recuperación de contraseña (OTP 6 dígitos, 5 min de vigencia).
+-- Se guarda el hash del código, nunca el código en claro. Un solo código
+-- activo por usuario -- pedir uno nuevo invalida el anterior.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash   TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  used        INTEGER NOT NULL DEFAULT 0,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+
 CREATE TABLE IF NOT EXISTS login_events (
   id            SERIAL PRIMARY KEY,
   user_id       INTEGER NOT NULL REFERENCES users(id),

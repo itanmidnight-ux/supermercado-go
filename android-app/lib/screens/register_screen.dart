@@ -17,8 +17,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _pwCtrl        = TextEditingController();
   final _pw2Ctrl       = TextEditingController();
   final _addressCtrl   = TextEditingController();
-  final _nicknameCtrl  = TextEditingController();
-  final _bioCtrl       = TextEditingController();
 
   bool    _loading = false;
   bool    _obscure1 = true;
@@ -29,7 +27,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _nameCtrl.dispose(); _phoneCtrl.dispose(); _emailCtrl.dispose();
     _pwCtrl.dispose(); _pw2Ctrl.dispose(); _addressCtrl.dispose();
-    _nicknameCtrl.dispose(); _bioCtrl.dispose();
     super.dispose();
   }
 
@@ -50,8 +47,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         displayName: _nameCtrl.text.trim(),
         email:       _emailCtrl.text.trim(),
         address:     _addressCtrl.text.trim(),
-        nickname:    _nicknameCtrl.text.trim().isEmpty ? null : _nicknameCtrl.text.trim(),
-        bio:         _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
       );
       if (!mounted) return;
       await context.read<AppProvider>().login('57$phone', password);
@@ -252,29 +247,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     icon: Icons.location_on_outlined,
                     maxLines: 2,
                     validator: (v) => (v == null || v.trim().length < 5) ? 'Mínimo 5 caracteres' : null,
-                  ),
-                  const SizedBox(height: 20),
-
-                  const Text('Opcional',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: Colors.black54, letterSpacing: 0.5)),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _nicknameCtrl,
-                    label: 'Apodo',
-                    hint: 'Como quieres que te llamen',
-                    icon: Icons.tag_rounded,
-                    validator: null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  _field(
-                    controller: _bioCtrl,
-                    label: 'Descripción corta',
-                    icon: Icons.notes_rounded,
-                    maxLines: 2,
-                    validator: null,
                   ),
                   const SizedBox(height: 20),
 

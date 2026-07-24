@@ -1,11 +1,76 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/app_button.dart';
+import '../widgets/forgot_password_flow.dart';
+import '../widgets/futuristic_modal.dart';
 import 'register_screen.dart';
+
+// Canales de contacto de la empresa -- mismos datos que server/src/public-site/app.js (BRAND).
+const _supportPhone    = '+57 300 123 4567';
+const _supportWhatsapp = '573001234567';
+const _supportEmail    = 'contacto@supermercadogo.com.co';
+
+Future<void> _showSupportModal(BuildContext context) {
+  return showFuturisticModal(context, builder: (_) => FuturisticModalCard(
+    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const ModalCloseButton(),
+      const Icon(Icons.support_agent_rounded, size: 40, color: Color(0xFF2E7D32)),
+      const SizedBox(height: 8),
+      const Text('¿Necesitas ayuda?', textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+      const SizedBox(height: 4),
+      const Text('Si olvidaste tus credenciales o tienes un problema, contáctanos:',
+        textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.black54)),
+      const SizedBox(height: 18),
+      _SupportTile(icon: Icons.chat_rounded, color: const Color(0xFF25D366), label: 'WhatsApp', value: _supportPhone,
+        onTap: () => launchUrl(Uri.parse('https://wa.me/$_supportWhatsapp'), mode: LaunchMode.externalApplication)),
+      const SizedBox(height: 10),
+      _SupportTile(icon: Icons.call_rounded, color: const Color(0xFF1565C0), label: 'Teléfono', value: _supportPhone,
+        onTap: () => launchUrl(Uri(scheme: 'tel', path: _supportPhone.replaceAll(' ', '')))),
+      const SizedBox(height: 10),
+      _SupportTile(icon: Icons.email_rounded, color: const Color(0xFF6A1B9A), label: 'Correo', value: _supportEmail,
+        onTap: () => launchUrl(Uri(scheme: 'mailto', path: _supportEmail))),
+    ]),
+  ));
+}
+
+class _SupportTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  const _SupportTile({required this.icon, required this.color, required this.label, required this.value, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: color.withValues(alpha: 0.08),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(children: [
+          Container(width: 38, height: 38,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: Colors.white, size: 19)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w600)),
+            Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
+          ])),
+          Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+        ]),
+      ),
+    ),
+  );
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -350,6 +415,15 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(width: 8),
                               const Text('Recordar mis datos',
                                 style: TextStyle(fontSize: 13, color: Colors.black54)),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () => showForgotPasswordFlow(context),
+                                style: TextButton.styleFrom(padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 32),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                child: Text('¿Olvidaste tu contraseña?',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.primary)),
+                              ),
                             ]),
 
                             // Error message
@@ -423,14 +497,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ]),
                             const SizedBox(height: 4),
                             Center(child: TextButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Contacta a Concentrados Monserrath para recuperar tu acceso'),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
+                              onPressed: () => _showSupportModal(context),
                               icon: const Icon(Icons.support_agent_rounded, size: 16, color: Colors.grey),
                               label: const Text('Contactar soporte',
                                 style: TextStyle(color: Colors.grey, fontSize: 12)),

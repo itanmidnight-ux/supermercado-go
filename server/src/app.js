@@ -142,6 +142,7 @@ app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/users',    require('./routes/users'));
 app.use('/api/bot',      require('./routes/bot'));
+app.use('/api/email',    require('./routes/emailConfig'));
 app.use('/api/estados',  require('./routes/estados'));
 app.use('/api/cart',     require('./routes/cart'));
 app.use('/api/chat',     require('./routes/chat'));
