@@ -9,29 +9,30 @@ import '../widgets/app_card.dart';
 
 class AdminSettingsScreen extends StatefulWidget {
   const AdminSettingsScreen({super.key});
-  @override State<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
+  @override
+  State<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
 }
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   static const _presets = [
-    {'name': 'Olivo & Ámbar',      'primary': '#2D5016', 'accent': '#D4800A'},
-    {'name': 'Bosque & Cuero',      'primary': '#1B4332', 'accent': '#B08968'},
-    {'name': 'Slate & Terracota',   'primary': '#264653', 'accent': '#E76F51'},
-    {'name': 'Vino & Oro',          'primary': '#5C1A28', 'accent': '#C9A227'},
-    {'name': 'Azul Corporativo',    'primary': '#1B3A6B', 'accent': '#3D8BFD'},
-    {'name': 'Carbón & Lima',       'primary': '#22302B', 'accent': '#8AB833'},
+    {'name': 'Olivo & Ámbar', 'primary': '#2D5016', 'accent': '#D4800A'},
+    {'name': 'Bosque & Cuero', 'primary': '#1B4332', 'accent': '#B08968'},
+    {'name': 'Slate & Terracota', 'primary': '#264653', 'accent': '#E76F51'},
+    {'name': 'Vino & Oro', 'primary': '#5C1A28', 'accent': '#C9A227'},
+    {'name': 'Azul Corporativo', 'primary': '#1B3A6B', 'accent': '#3D8BFD'},
+    {'name': 'Carbón & Lima', 'primary': '#22302B', 'accent': '#8AB833'},
   ];
   String _selectedPrimary = '#2D5016';
-  String _selectedAccent  = '#D4800A';
+  String _selectedAccent = '#D4800A';
   bool _savingBrand = false;
 
   bool _loading = true;
-  bool _saving   = false;
+  bool _saving = false;
 
   Map<String, dynamic>? _nequiInfo;
   final _empresaNombreCtrl = TextEditingController();
-  final _empresaDescCtrl   = TextEditingController();
-  final _horarioCtrl       = TextEditingController();
+  final _empresaDescCtrl = TextEditingController();
+  final _horarioCtrl = TextEditingController();
 
   Map<String, dynamic>? _botStatus;
   bool _restartingBot = false;
@@ -43,7 +44,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     _load();
     _loadBotStatus();
     _loadNequi();
-    _botTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadBotStatus());
+    _botTimer =
+        Timer.periodic(const Duration(seconds: 15), (_) => _loadBotStatus());
   }
 
   Future<void> _loadNequi() async {
@@ -88,9 +90,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     try {
       final s = await ApiService.getSettings();
       if (mounted) {
-        _empresaNombreCtrl.text = s['empresa_nombre']     ?? '';
-        _empresaDescCtrl.text   = s['empresa_descripcion'] ?? '';
-        _horarioCtrl.text       = s['horario_atencion']   ?? '';
+        _empresaNombreCtrl.text = s['empresa_nombre'] ?? '';
+        _empresaDescCtrl.text = s['empresa_descripcion'] ?? '';
+        _horarioCtrl.text = s['horario_atencion'] ?? '';
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
@@ -100,9 +102,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _saving = true);
     try {
       await Future.wait([
-        ApiService.updateSetting('empresa_nombre',     _empresaNombreCtrl.text.trim()),
-        ApiService.updateSetting('empresa_descripcion', _empresaDescCtrl.text.trim()),
-        ApiService.updateSetting('horario_atencion',   _horarioCtrl.text.trim()),
+        ApiService.updateSetting(
+            'empresa_nombre', _empresaNombreCtrl.text.trim()),
+        ApiService.updateSetting(
+            'empresa_descripcion', _empresaDescCtrl.text.trim()),
+        ApiService.updateSetting('horario_atencion', _horarioCtrl.text.trim()),
       ]);
       if (mounted) _snack('Configuración guardada', success: true);
     } catch (e) {
@@ -128,7 +132,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
   Future<void> _pickLogo() async {
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512);
+    final file =
+        await picker.pickImage(source: ImageSource.gallery, maxWidth: 512);
     if (file == null) return;
     try {
       final bytes = await file.readAsBytes();
@@ -143,7 +148,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   void _snack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: success ? Theme.of(context).colorScheme.primary : Colors.red.shade700,
+      backgroundColor:
+          success ? Theme.of(context).colorScheme.primary : Colors.red.shade700,
       behavior: SnackBarBehavior.floating,
     ));
   }
@@ -155,7 +161,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       prefixIcon: Icon(icon, color: primary, size: 20),
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: primary, width: 1.5),
@@ -165,88 +172,118 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   }
 
   Widget _sectionTitle(String title) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Text(title, style: TextStyle(
-      fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(title,
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary)),
+      );
 
   String _timeAgo(String? iso) {
     if (iso == null) return 'nunca';
     final t = DateTime.tryParse(iso);
     if (t == null) return 'nunca';
     final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 1)  return 'hace instantes';
+    if (diff.inMinutes < 1) return 'hace instantes';
     if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
-    if (diff.inHours < 24)   return 'hace ${diff.inHours} h';
+    if (diff.inHours < 24) return 'hace ${diff.inHours} h';
     return 'hace ${diff.inDays} días';
   }
 
   Widget _statRow(IconData icon, String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(children: [
-      Icon(icon, size: 18, color: Colors.grey.shade600),
-      const SizedBox(width: 8),
-      Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700))),
-      Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          Icon(icon, size: 18, color: Colors.grey.shade600),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700))),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        ]),
+      );
 
   Widget _botStatusCard() {
     final s = _botStatus;
     final primary = Theme.of(context).colorScheme.primary;
     final ready = s?['ready'] == true;
     final exhausted = s?['reconnectExhausted'] == true;
-    final statusColor  = ready ? primary : (exhausted ? Colors.red.shade700 : Colors.orange.shade700);
-    final statusLabel  = ready ? 'Conectado' : (exhausted ? 'Desconectado — requiere reinicio manual' : 'Reconectando…');
+    final statusColor = ready
+        ? primary
+        : (exhausted ? Colors.red.shade700 : Colors.orange.shade700);
+    final statusLabel = ready
+        ? 'Conectado'
+        : (exhausted
+            ? 'Desconectado — requiere reinicio manual'
+            : 'Reconectando…');
 
     return AppCard(
       child: s == null
-        ? Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Center(child: CircularProgressIndicator(color: primary, strokeWidth: 2)),
-          )
-        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(
-                width: 10, height: 10,
-                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text(statusLabel,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: statusColor))),
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 20),
-                tooltip: 'Actualizar',
-                onPressed: _loadBotStatus,
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                  child: CircularProgressIndicator(
+                      color: primary, strokeWidth: 2)),
+            )
+          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration:
+                      BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(statusLabel,
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor))),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  tooltip: 'Actualizar',
+                  onPressed: _loadBotStatus,
+                ),
+              ]),
+              const Divider(height: 20),
+              _statRow(Icons.pending_actions_outlined, 'Mensajes en cola',
+                  '${s['pendingQueue'] ?? 0}'),
+              _statRow(Icons.send_outlined, 'Enviados última hora',
+                  '${s['sentLastHour'] ?? 0} / ${s['maxMsgsPerHour'] ?? '-'}'),
+              _statRow(Icons.chat_bubble_outline, 'Último mensaje',
+                  _timeAgo(s['lastMessageAt'] as String?)),
+              _statRow(Icons.autorenew, 'Reintentos de reconexión',
+                  '${s['reconnectAttempts'] ?? 0} / ${s['maxReconnectAttempts'] ?? '-'}'),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _restartingBot ? null : _restartBot,
+                  style: OutlinedButton.styleFrom(foregroundColor: primary),
+                  icon: _restartingBot
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              color: primary, strokeWidth: 2))
+                      : const Icon(Icons.restart_alt_rounded),
+                  label:
+                      Text(_restartingBot ? 'Reiniciando...' : 'Reiniciar bot'),
+                ),
               ),
             ]),
-            const Divider(height: 20),
-            _statRow(Icons.pending_actions_outlined, 'Mensajes en cola', '${s['pendingQueue'] ?? 0}'),
-            _statRow(Icons.send_outlined, 'Enviados última hora',
-              '${s['sentLastHour'] ?? 0} / ${s['maxMsgsPerHour'] ?? '-'}'),
-            _statRow(Icons.chat_bubble_outline, 'Último mensaje', _timeAgo(s['lastMessageAt'] as String?)),
-            _statRow(Icons.autorenew, 'Reintentos de reconexión',
-              '${s['reconnectAttempts'] ?? 0} / ${s['maxReconnectAttempts'] ?? '-'}'),
-            const SizedBox(height: 12),
-            SizedBox(width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _restartingBot ? null : _restartBot,
-                style: OutlinedButton.styleFrom(foregroundColor: primary),
-                icon: _restartingBot
-                    ? SizedBox(width: 16, height: 16,
-                        child: CircularProgressIndicator(color: primary, strokeWidth: 2))
-                    : const Icon(Icons.restart_alt_rounded),
-                label: Text(_restartingBot ? 'Reiniciando...' : 'Reiniciar bot'),
-              ),
-            ),
-          ]),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary));
+      return Center(
+          child: CircularProgressIndicator(
+              color: Theme.of(context).colorScheme.primary));
     }
 
     return SingleChildScrollView(
@@ -260,27 +297,43 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
         _sectionTitle('Personalización de marca'),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Wrap(spacing: 10, runSpacing: 10, children: _presets.map((p) {
-              final selected = _selectedPrimary == p['primary'];
-              return GestureDetector(
-                onTap: () => setState(() {
-                  _selectedPrimary = p['primary']!;
-                  _selectedAccent  = p['accent']!;
-                }),
-                child: Container(
-                  width: 64, height: 64,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: selected ? Colors.black87 : Colors.transparent, width: 2),
-                  ),
-                  child: Row(children: [
-                    Expanded(child: Container(color: Color(int.parse('FF${p['primary']!.replaceAll('#', '')}', radix: 16)))),
-                    Expanded(child: Container(color: Color(int.parse('FF${p['accent']!.replaceAll('#', '')}', radix: 16)))),
-                  ]),
-                ),
-              );
-            }).toList()),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _presets.map((p) {
+                  final selected = _selectedPrimary == p['primary'];
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedPrimary = p['primary']!;
+                      _selectedAccent = p['accent']!;
+                    }),
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color:
+                                selected ? Colors.black87 : Colors.transparent,
+                            width: 2),
+                      ),
+                      child: Row(children: [
+                        Expanded(
+                            child: Container(
+                                color: Color(int.parse(
+                                    'FF${p['primary']!.replaceAll('#', '')}',
+                                    radix: 16)))),
+                        Expanded(
+                            child: Container(
+                                color: Color(int.parse(
+                                    'FF${p['accent']!.replaceAll('#', '')}',
+                                    radix: 16)))),
+                      ]),
+                    ),
+                  );
+                }).toList()),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _pickLogo,
@@ -288,8 +341,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               label: const Text('Cambiar logo'),
             ),
             const SizedBox(height: 12),
-            SizedBox(width: double.infinity,
-              child: AppButton(label: 'Guardar marca', onPressed: _saveBranding, loading: _savingBrand, icon: Icons.palette_outlined)),
+            SizedBox(
+                width: double.infinity,
+                child: AppButton(
+                    label: 'Guardar marca',
+                    onPressed: _saveBranding,
+                    loading: _savingBrand,
+                    icon: Icons.palette_outlined)),
           ]),
         ),
         const SizedBox(height: 24),
@@ -300,19 +358,22 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           child: Column(children: [
             TextField(
               controller: _empresaNombreCtrl,
-              decoration: _deco('Nombre de la empresa', Icons.business_outlined),
+              decoration:
+                  _deco('Nombre de la empresa', Icons.business_outlined),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _empresaDescCtrl,
-              decoration: _deco('Descripción', Icons.description_outlined, maxLines: 3),
+              decoration:
+                  _deco('Descripción', Icons.description_outlined, maxLines: 3),
               maxLines: 3,
               minLines: 2,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _horarioCtrl,
-              decoration: _deco('Horario de atención', Icons.access_time_outlined),
+              decoration:
+                  _deco('Horario de atención', Icons.access_time_outlined),
             ),
             const SizedBox(height: 4),
             Padding(
@@ -336,8 +397,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             final n = _nequiInfo;
             if (n == null) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Center(child: CircularProgressIndicator()));
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(child: CircularProgressIndicator()));
             }
             final status = n['status'] as String? ?? 'disconnected';
             if (status == 'disconnected' || n['phone'] == null) {
@@ -348,30 +409,43 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               ]);
             }
             final active = status == 'connected';
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Icon(Icons.phone_outlined, color: Colors.grey.shade600, size: 20),
-                const SizedBox(width: 10),
-                Text(n['phone'] as String, style: const TextStyle(fontWeight: FontWeight.w600)),
-              ]),
-              const SizedBox(height: 8),
-              Row(children: [
-                Icon(Icons.person_outline, color: Colors.grey.shade600, size: 20),
-                const SizedBox(width: 10),
-                Text(n['account_name'] as String? ?? '-'),
-              ]),
-              const SizedBox(height: 8),
-              Row(children: [
-                Icon(active ? Icons.check_circle_rounded : Icons.pause_circle_rounded,
-                  color: active ? Colors.green : Colors.orange, size: 20),
-                const SizedBox(width: 10),
-                Text(active ? 'Activo en el checkout' : 'Pausado',
-                  style: TextStyle(color: active ? Colors.green.shade700 : Colors.orange.shade700)),
-              ]),
-              const SizedBox(height: 8),
-              Text('Se gestiona desde el dashboard del servidor.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-            ]);
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Icon(Icons.phone_outlined,
+                        color: Colors.grey.shade600, size: 20),
+                    const SizedBox(width: 10),
+                    Text(n['phone'] as String,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Icon(Icons.person_outline,
+                        color: Colors.grey.shade600, size: 20),
+                    const SizedBox(width: 10),
+                    Text(n['account_name'] as String? ?? '-'),
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Icon(
+                        active
+                            ? Icons.check_circle_rounded
+                            : Icons.pause_circle_rounded,
+                        color: active ? Colors.green : Colors.orange,
+                        size: 20),
+                    const SizedBox(width: 10),
+                    Text(active ? 'Activo en el checkout' : 'Pausado',
+                        style: TextStyle(
+                            color: active
+                                ? Colors.green.shade700
+                                : Colors.orange.shade700)),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text('Se gestiona desde el dashboard del servidor.',
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                ]);
           }),
         ),
 

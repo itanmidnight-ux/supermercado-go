@@ -7,6 +7,7 @@ import '../theme/breakpoints.dart';
 import '../widgets/order_card.dart';
 import '../widgets/company_header.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/futuristic_modal.dart';
 import 'products_screen.dart';
 import 'messages_screen.dart';
 import 'users_screen.dart';
@@ -60,26 +61,17 @@ class _DashboardScreenState extends State<DashboardScreen>
       return;
     }
     if (!mounted) return;
-    final accepted = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Ubicación por seguridad'),
-        content: const Text(
+    final accepted = await showFuturisticConfirm(context,
+        barrierDismissible: false,
+        title: 'Ubicación por seguridad',
+        icon: Icons.location_on_rounded,
+        message:
             'Concentrados Monserrath registra tu ubicación mientras tienes '
             'sesión iniciada como parte del control de seguridad del equipo -- '
             'incluso si cierras la app, hasta que cierres sesión. Solo el '
-            'administrador puede ver esta información, nunca los clientes.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Ahora no')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Entendido, activar')),
-        ],
-      ),
-    );
+            'administrador puede ver esta información, nunca los clientes.',
+        cancelLabel: 'Ahora no',
+        confirmLabel: 'Entendido, activar');
     if (accepted == true) {
       await LocationTrackerService.setConsentGiven();
       await LocationTrackerService.start();
@@ -267,20 +259,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               title: const Text('Cerrar sesión'),
               onTap: () async {
                 Navigator.pop(context);
-                final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                            title: const Text('Cerrar sesión'),
-                            content: const Text('¿Deseas cerrar sesión?'),
-                            actions: [
-                              TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancelar')),
-                              FilledButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Salir')),
-                            ]));
+                final confirm = await showFuturisticConfirm(context,
+                    title: 'Cerrar sesión',
+                    message: '¿Deseas cerrar sesión?',
+                    icon: Icons.logout_rounded,
+                    confirmLabel: 'Salir');
                 if (confirm == true && context.mounted)
                   context.read<AppProvider>().logout();
               }),

@@ -11,8 +11,10 @@ class SectionHeader extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(
-          fontSize: 13, fontWeight: FontWeight.bold,
-          color: Color(0x8A000000), letterSpacing: 0.5,
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: Color(0x8A000000),
+          letterSpacing: 0.5,
         ),
       ),
     );

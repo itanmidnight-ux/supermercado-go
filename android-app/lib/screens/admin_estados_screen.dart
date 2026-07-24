@@ -7,6 +7,7 @@ import '../models/estado.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/futuristic_modal.dart';
 import 'client_estados_viewer.dart';
 
 class AdminEstadosScreen extends StatefulWidget {
@@ -126,166 +127,192 @@ class _AdminEstadosScreenState extends State<AdminEstadosScreen> {
     String? discountType; // null | 'percent' | '2x1'
     String? error;
 
-    return showDialog<Map<String, dynamic>>(
-      context: context,
+    return showFuturisticModal<Map<String, dynamic>>(
+      context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: const Text('Nueva publicación'),
-          content: SizedBox(
-              width: 340,
-              child: SingleChildScrollView(
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: captionCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Texto (opcional)',
-                          hintText: 'Escribe un texto...',
-                        ),
-                        maxLines: 2,
+        builder: (ctx, setS) => FuturisticModalCard(
+          child: SingleChildScrollView(
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ModalCloseButton(),
+                  const Text('Nueva publicación',
+                      style:
+                          TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: captionCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Texto (opcional)',
+                      hintText: 'Escribe un texto...',
+                    ),
+                    maxLines: 2,
+                  ),
+                  if (_products.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<Product>(
+                      initialValue: selectedProduct,
+                      decoration: const InputDecoration(
+                        labelText: 'Producto vinculado',
+                        prefixIcon: Icon(Icons.shopping_bag_outlined),
                       ),
-                      if (_products.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<Product>(
-                          initialValue: selectedProduct,
-                          decoration: const InputDecoration(
-                            labelText: 'Producto vinculado',
-                            prefixIcon: Icon(Icons.shopping_bag_outlined),
-                          ),
-                          hint: const Text('Sin producto'),
-                          items: [
-                            const DropdownMenuItem<Product>(
-                                value: null, child: Text('Sin producto')),
-                            ..._products.map((p) => DropdownMenuItem<Product>(
-                                  value: p,
-                                  child: Text(p.name,
-                                      overflow: TextOverflow.ellipsis),
-                                )),
-                          ],
-                          onChanged: (v) => setS(() {
-                            selectedProduct = v;
-                            if (v == null) {
-                              useProductImage = false;
-                              discountType = null;
-                            }
-                          }),
-                        ),
-                        if (selectedProduct != null)
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: useProductImage,
-                            onChanged: (v) =>
-                                setS(() => useProductImage = v ?? false),
-                            title: const Text(
-                                'Usar la imagen del producto (sin subir una nueva)',
-                                style: TextStyle(fontSize: 13)),
-                            controlAffinity: ListTileControlAffinity.leading,
-                          ),
+                      hint: const Text('Sin producto'),
+                      items: [
+                        const DropdownMenuItem<Product>(
+                            value: null, child: Text('Sin producto')),
+                        ..._products.map((p) => DropdownMenuItem<Product>(
+                              value: p,
+                              child:
+                                  Text(p.name, overflow: TextOverflow.ellipsis),
+                            )),
                       ],
-                      const SizedBox(height: 8),
-                      const Text('Promoción (opcional)',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black54)),
-                      const SizedBox(height: 4),
-                      _PromoOption(
-                        label: 'Sin promoción',
-                        selected: discountType == null,
-                        onTap: () => setS(() => discountType = null),
+                      onChanged: (v) => setS(() {
+                        selectedProduct = v;
+                        if (v == null) {
+                          useProductImage = false;
+                          discountType = null;
+                        }
+                      }),
+                    ),
+                    if (selectedProduct != null)
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: useProductImage,
+                        onChanged: (v) =>
+                            setS(() => useProductImage = v ?? false),
+                        title: const Text(
+                            'Usar la imagen del producto (sin subir una nueva)',
+                            style: TextStyle(fontSize: 13)),
+                        controlAffinity: ListTileControlAffinity.leading,
                       ),
-                      _PromoOption(
-                        label: 'Descuento por porcentaje',
-                        selected: discountType == 'percent',
-                        onTap: () => setS(() => discountType = 'percent'),
-                        expanded: discountType == 'percent'
-                            ? TextField(
-                                controller: percentCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                    suffixText: '%',
-                                    labelText: 'Porcentaje de descuento'),
-                              )
-                            : null,
-                      ),
-                      _PromoOption(
-                        label: '2x1',
-                        selected: discountType == '2x1',
-                        onTap: () => setS(() => discountType = '2x1'),
-                      ),
-                      if (error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: Text(error!,
-                              style: const TextStyle(
-                                  color: Colors.red, fontSize: 12)),
-                        ),
-                    ]),
-              )),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar')),
-            FilledButton(
-              onPressed: () {
-                if (discountType != null && selectedProduct == null) {
-                  setS(() => error =
-                      'Selecciona un producto para aplicar la promoción');
-                  return;
-                }
-                double? discountValue;
-                if (discountType == 'percent') {
-                  discountValue = double.tryParse(percentCtrl.text.trim());
-                  if (discountValue == null ||
-                      discountValue <= 0 ||
-                      discountValue > 90) {
-                    setS(() => error = 'Ingresa un porcentaje válido (1-90)');
-                    return;
-                  }
-                }
-                Navigator.pop(ctx, {
-                  'caption': captionCtrl.text.trim().isEmpty
-                      ? null
-                      : captionCtrl.text.trim(),
-                  'product': selectedProduct,
-                  'use_product_image': useProductImage,
-                  'discount_type': discountType,
-                  'discount_value': discountValue,
-                });
-              },
-              child: const Text('Publicar'),
-            ),
-          ],
+                  ],
+                  const SizedBox(height: 8),
+                  const Text('Promoción (opcional)',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black54)),
+                  const SizedBox(height: 4),
+                  _PromoOption(
+                    label: 'Sin promoción',
+                    selected: discountType == null,
+                    onTap: () => setS(() => discountType = null),
+                  ),
+                  _PromoOption(
+                    label: 'Descuento por porcentaje',
+                    selected: discountType == 'percent',
+                    onTap: () => setS(() => discountType = 'percent'),
+                    expanded: discountType == 'percent'
+                        ? TextField(
+                            controller: percentCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                suffixText: '%',
+                                labelText: 'Porcentaje de descuento'),
+                          )
+                        : null,
+                  ),
+                  _PromoOption(
+                    label: '2x1',
+                    selected: discountType == '2x1',
+                    onTap: () => setS(() => discountType = '2x1'),
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(error!,
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 12)),
+                    ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        minimumSize: const Size.fromHeight(0)),
+                    onPressed: () {
+                      if (discountType != null && selectedProduct == null) {
+                        setS(() => error =
+                            'Selecciona un producto para aplicar la promoción');
+                        return;
+                      }
+                      double? discountValue;
+                      if (discountType == 'percent') {
+                        discountValue =
+                            double.tryParse(percentCtrl.text.trim());
+                        if (discountValue == null ||
+                            discountValue <= 0 ||
+                            discountValue > 90) {
+                          setS(() =>
+                              error = 'Ingresa un porcentaje válido (1-90)');
+                          return;
+                        }
+                      }
+                      Navigator.pop(ctx, {
+                        'caption': captionCtrl.text.trim().isEmpty
+                            ? null
+                            : captionCtrl.text.trim(),
+                        'product': selectedProduct,
+                        'use_product_image': useProductImage,
+                        'discount_type': discountType,
+                        'discount_value': discountValue,
+                      });
+                    },
+                    child: const Text('Publicar'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancelar')),
+                ]),
+          ),
         ),
       ),
     );
   }
 
   Future<void> _showLikes(Estado e) async {
-    showDialog(
-      context: context,
-      builder: (_) => _LikesDialog(estadoId: e.id, heartCount: e.heartCount),
+    showFuturisticModal(
+      context,
+      builder: (_) => FuturisticModalCard(
+        child: _LikesDialog(estadoId: e.id, heartCount: e.heartCount),
+      ),
     );
   }
 
   Future<void> _delete(Estado e) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Eliminar estado'),
-        content: const Text('¿Eliminar este estado permanentemente?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
+    final ok = await showFuturisticModal<bool>(
+      context,
+      builder: (_) => FuturisticModalCard(
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModalCloseButton(),
+              const Icon(Icons.delete_outline_rounded,
+                  size: 40, color: Colors.red),
+              const SizedBox(height: 8),
+              const Text('Eliminar estado',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              const Text(
+                  '¿Eliminar este estado permanentemente? Esta acción no se puede deshacer.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black54)),
+              const SizedBox(height: 20),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Eliminar'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar')),
+            ]),
       ),
     );
     if (ok != true) return;
@@ -528,56 +555,65 @@ class _LikesDialogState extends State<_LikesDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: Row(children: [
-        const Icon(Icons.favorite, color: Colors.red, size: 20),
-        const SizedBox(width: 8),
-        Text('${widget.heartCount} me gusta'),
-      ]),
-      content: SizedBox(
-        width: 280,
-        child: _loading
-            ? Center(
-                child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: CircularProgressIndicator(color: scheme.primary)))
-            : _reactions.isEmpty
-                ? const Text('Nadie ha reaccionado aún.',
-                    style: TextStyle(color: Colors.grey))
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _reactions.map((r) {
-                      final name = r['display_name'] as String? ??
-                          r['username'] as String? ??
-                          '?';
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor:
-                                scheme.primary.withValues(alpha: 0.12),
-                            child: Text(name[0].toUpperCase(),
-                                style: TextStyle(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(name, style: const TextStyle(fontSize: 14)),
-                          const Spacer(),
-                          const Icon(Icons.favorite,
-                              color: Colors.red, size: 14),
-                        ]),
-                      );
-                    }).toList(),
-                  ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar')),
-      ],
-    );
+    return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const ModalCloseButton(),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.favorite_rounded, color: Colors.red, size: 22),
+            const SizedBox(width: 8),
+            Text('${widget.heartCount} me gusta',
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          ]),
+          const SizedBox(height: 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: _loading
+                ? Center(
+                    child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child:
+                            CircularProgressIndicator(color: scheme.primary)))
+                : _reactions.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Nadie ha reaccionado aún.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey)))
+                    : SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: _reactions.map((r) {
+                            final name = r['display_name'] as String? ??
+                                r['username'] as String? ??
+                                '?';
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor:
+                                      scheme.primary.withValues(alpha: 0.12),
+                                  child: Text(name[0].toUpperCase(),
+                                      style: TextStyle(
+                                          color: scheme.primary,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                    child: Text(name,
+                                        style: const TextStyle(fontSize: 14))),
+                                const Icon(Icons.favorite_rounded,
+                                    color: Colors.red, size: 14),
+                              ]),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+          ),
+        ]);
   }
 }
 

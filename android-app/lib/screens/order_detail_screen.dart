@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/order.dart';
 import '../widgets/app_button.dart';
+import '../widgets/futuristic_modal.dart';
 import 'chat_screen.dart';
 
 const Map<String, String> _payLabels = {
@@ -110,23 +111,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _showCancelDialog() async {
     final ctrl = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Cancelar pedido'),
-        content: TextField(
-            controller: ctrl,
-            decoration:
-                const InputDecoration(hintText: 'Motivo de cancelación...')),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Volver')),
-          FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: const Text('Cancelar pedido')),
-        ],
+    final reason = await showFuturisticModal<String>(
+      context,
+      builder: (_) => FuturisticModalCard(
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModalCloseButton(),
+              const Icon(Icons.cancel_outlined, size: 40, color: Colors.red),
+              const SizedBox(height: 8),
+              const Text('Cancelar pedido',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 14),
+              TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                      hintText: 'Motivo de cancelación...',
+                      border: OutlineInputBorder())),
+              const SizedBox(height: 18),
+              FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 14)),
+                  onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+                  child: const Text('Cancelar pedido')),
+              const SizedBox(height: 8),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Volver')),
+            ]),
       ),
     );
     if (reason != null && reason.isNotEmpty) {

@@ -272,7 +272,7 @@ router.put('/:id/en_camino', staffAuth, async (req, res, next) => {
     const claimed = o.claimed_by || req.user.id;
     await db.query("UPDATE orders SET status='en_camino', claimed_by=$1 WHERE id=$2", [claimed, id]);
     const full = await findOrder(db, id);
-    notifyOrderStatus(full);
+    await notifyOrderStatus(full);
     res.json(full);
   } catch (e) { next(e); }
 });
@@ -288,7 +288,7 @@ router.put('/:id/deliver', staffAuth, async (req, res, next) => {
     // dando tiempos de entrega negativos.
     await db.query(`UPDATE orders SET status='entregado', delivered_at=now_iso() WHERE id=$1`, [id]);
     const full = await findOrder(db, id);
-    notifyOrderStatus(full);
+    await notifyOrderStatus(full);
     res.json(full);
   } catch (e) { next(e); }
 });
@@ -305,7 +305,7 @@ router.put('/:id/cancel', adminAuth, async (req, res, next) => {
     if (!rows[0]) return res.status(404).json({ error: 'Pedido no encontrado' });
     await db.query("UPDATE orders SET status='cancelled', cancel_reason=$1 WHERE id=$2", [reason.trim(), id]);
     const full = await findOrder(db, id);
-    notifyOrderStatus(full);
+    await notifyOrderStatus(full);
     res.json(full);
   } catch (e) { next(e); }
 });

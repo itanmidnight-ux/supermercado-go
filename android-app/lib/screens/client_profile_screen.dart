@@ -80,22 +80,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Future<void> _confirmLogout() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cerrar sesión'),
-        content: const Text('¿Deseas salir de tu cuenta?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Salir')),
-        ],
-      ),
-    );
+    final ok = await showFuturisticConfirm(context,
+        title: 'Cerrar sesión',
+        message: '¿Deseas salir de tu cuenta?',
+        icon: Icons.logout_rounded,
+        confirmLabel: 'Salir');
     if (ok == true && mounted) {
       NotificationService.stopPolling();
       context.read<AppProvider>().logout();

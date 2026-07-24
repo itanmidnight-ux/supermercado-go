@@ -54,14 +54,19 @@ class CompanyHeader extends StatelessWidget implements PreferredSizeWidget {
                           borderRadius: BorderRadius.circular(5),
                           child: Image.network(
                             ApiService.logoUrl(theme.logoFilename!),
-                            width: 18, height: 18, fit: BoxFit.cover,
+                            width: 18,
+                            height: 18,
+                            fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Icon(
-                              Icons.storefront_rounded, size: 16, color: theme.accent),
+                                Icons.storefront_rounded,
+                                size: 16,
+                                color: theme.accent),
                           ),
                         ),
                       )
                     else
-                      Icon(Icons.storefront_rounded, size: 16, color: theme.accent),
+                      Icon(Icons.storefront_rounded,
+                          size: 16, color: theme.accent),
                     const SizedBox(width: 8),
                     Flexible(
                       child: FittedBox(
@@ -86,7 +91,8 @@ class CompanyHeader extends StatelessWidget implements PreferredSizeWidget {
                 foregroundColor: Colors.white,
                 title: Text(
                   pageTitle,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 17),
                 ),
                 elevation: 0,
                 toolbarHeight: 56,

@@ -40,7 +40,8 @@ class LocationTrackerService {
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
     }
-    if (perm == LocationPermission.deniedForever || perm == LocationPermission.denied) return;
+    if (perm == LocationPermission.deniedForever ||
+        perm == LocationPermission.denied) return;
 
     // Segundo plano (Android 10+): pedirlo aparte, tras el de uso normal --
     // es el flujo que exige el propio sistema operativo.
@@ -55,7 +56,8 @@ class LocationTrackerService {
         intervalDuration: const Duration(seconds: 30),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Concentrados Monserrath',
-          notificationText: 'Compartiendo tu ubicación por seguridad mientras trabajas',
+          notificationText:
+              'Compartiendo tu ubicación por seguridad mientras trabajas',
           enableWakeLock: true,
         ),
       ),
@@ -73,7 +75,8 @@ class LocationTrackerService {
   /// hueco real en el recorrido del empleado.
   static Future<void> _reportOrQueue(Position pos) async {
     try {
-      await ApiService.reportLocation(pos.latitude, pos.longitude, pos.accuracy);
+      await ApiService.reportLocation(
+          pos.latitude, pos.longitude, pos.accuracy);
     } catch (_) {
       await LocalDB.queueLocation(pos.latitude, pos.longitude, pos.accuracy);
     }

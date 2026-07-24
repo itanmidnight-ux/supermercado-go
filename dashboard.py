@@ -21,7 +21,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
 import cairo
-import subprocess, os, re, sys, datetime, secrets, json, base64, threading, math
+import subprocess, os, re, sys, datetime, secrets, json, threading, math
 import urllib.request, urllib.error
 import shutil, platform
 import psycopg2

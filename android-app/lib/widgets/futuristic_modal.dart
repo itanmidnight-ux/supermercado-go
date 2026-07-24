@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'animated_tap_scale.dart';
 
 /// Ventana emergente compartida por toda la app: fondo desenfocado y
 /// oscurecido con animación de entrada/salida, tarjeta con bordes curvos.
@@ -23,20 +24,23 @@ Future<T?> showFuturisticModal<T>(
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: barrierDismissible ? () => Navigator.of(ctx).maybePop() : null,
+            onTap:
+                barrierDismissible ? () => Navigator.of(ctx).maybePop() : null,
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
-              child: Container(color: const Color(0xFF040912).withValues(alpha: 0.55 * t)),
+              child: Container(
+                  color: const Color(0xFF040912).withValues(alpha: 0.55 * t)),
             ),
           ),
         ),
         FadeTransition(
           opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
           child: ScaleTransition(
-            scale: Tween(begin: 0.90, end: 1.0)
-                .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+            scale: Tween(begin: 0.90, end: 1.0).animate(
+                CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
             child: GestureDetector(
-              onTap: () {}, // absorbe el tap para que no cierre el modal al tocar la tarjeta
+              onTap:
+                  () {}, // absorbe el tap para que no cierre el modal al tocar la tarjeta
               child: child,
             ),
           ),
@@ -79,10 +83,16 @@ class FuturisticModalCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: borderRadius,
-            border: Border.all(color: scheme.primary.withValues(alpha: 0.14), width: 1.2),
+            border: Border.all(
+                color: scheme.primary.withValues(alpha: 0.14), width: 1.2),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 40, offset: const Offset(0, 20)),
-              BoxShadow(color: scheme.primary.withValues(alpha: 0.18), blurRadius: 60),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 40,
+                  offset: const Offset(0, 20)),
+              BoxShadow(
+                  color: scheme.primary.withValues(alpha: 0.18),
+                  blurRadius: 60),
             ],
           ),
           child: Material(type: MaterialType.transparency, child: child),
@@ -92,20 +102,75 @@ class FuturisticModalCard extends StatelessWidget {
   }
 }
 
+/// Confirmación sí/no reutilizable con el mismo estilo futurista que el
+/// resto de la app -- reemplaza los AlertDialog nativos (planos, sin blur)
+/// que antes se usaban para "¿Eliminar X?", "¿Cerrar sesión?", etc.
+Future<bool> showFuturisticConfirm(
+  BuildContext context, {
+  required String title,
+  required String message,
+  IconData icon = Icons.help_outline_rounded,
+  Color? iconColor,
+  String confirmLabel = 'Confirmar',
+  String cancelLabel = 'Cancelar',
+  Color? confirmColor,
+  bool barrierDismissible = true,
+}) async {
+  final scheme = Theme.of(context).colorScheme;
+  final result = await showFuturisticModal<bool>(
+    context,
+    barrierDismissible: barrierDismissible,
+    builder: (ctx) => FuturisticModalCard(
+      child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const ModalCloseButton(),
+            Icon(icon, size: 40, color: iconColor ?? scheme.primary),
+            const SizedBox(height: 8),
+            Text(title,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 20),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: confirmColor ?? scheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(confirmLabel),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(cancelLabel)),
+          ]),
+    ),
+  );
+  return result ?? false;
+}
+
 /// Botón de cierre circular estándar para la esquina de una tarjeta modal.
 class ModalCloseButton extends StatelessWidget {
   const ModalCloseButton({super.key});
 
   @override
   Widget build(BuildContext context) => Align(
-    alignment: Alignment.topRight,
-    child: IconButton(
-      onPressed: () => Navigator.of(context).maybePop(),
-      icon: const Icon(Icons.close_rounded),
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.black.withValues(alpha: 0.05),
-        shape: const CircleBorder(),
-      ),
-    ),
-  );
+        alignment: Alignment.topRight,
+        child: AnimatedTapScale(
+          onTap: () => Navigator.of(context).maybePop(),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.close_rounded, size: 20),
+          ),
+        ),
+      );
 }

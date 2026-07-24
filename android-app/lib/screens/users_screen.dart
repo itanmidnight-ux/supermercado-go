@@ -180,7 +180,7 @@ class _UsersScreenState extends State<UsersScreen>
                         )),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: role == 'client' ? 'worker' : role,
+                  initialValue: role == 'client' ? 'worker' : role,
                   decoration:
                       _inputDeco('Rol', Icons.admin_panel_settings_outlined),
                   items: const [
@@ -263,26 +263,17 @@ class _UsersScreenState extends State<UsersScreen>
     final newActive = !(user['active'] == 1 || user['active'] == true);
     final name = user['display_name'] ?? user['username'];
     final scheme = Theme.of(context).colorScheme;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(newActive ? 'Activar usuario' : 'Desactivar usuario'),
-        content: Text(newActive
+    final confirm = await showFuturisticConfirm(context,
+        title: newActive ? 'Activar usuario' : 'Desactivar usuario',
+        message: newActive
             ? '¿Activar acceso para $name?'
-            : '¿Desactivar acceso para $name? No podrá iniciar sesión.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: newActive ? scheme.primary : Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(newActive ? 'Activar' : 'Desactivar'),
-          ),
-        ],
-      ),
-    );
+            : '¿Desactivar acceso para $name? No podrá iniciar sesión.',
+        icon: newActive
+            ? Icons.check_circle_outline_rounded
+            : Icons.block_rounded,
+        iconColor: newActive ? scheme.primary : Colors.red,
+        confirmLabel: newActive ? 'Activar' : 'Desactivar',
+        confirmColor: newActive ? scheme.primary : Colors.red);
     if (confirm != true || !mounted) return;
     setState(() => _loading = true);
     try {
@@ -302,23 +293,13 @@ class _UsersScreenState extends State<UsersScreen>
   Future<void> _deleteUser(Map<String, dynamic> user,
       {bool isClient = false}) async {
     final name = user['display_name'] ?? user['username'];
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Eliminar usuario'),
-        content: Text('¿Eliminar permanentemente a $name?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
+    final confirm = await showFuturisticConfirm(context,
+        title: 'Eliminar usuario',
+        message: '¿Eliminar permanentemente a $name?',
+        icon: Icons.delete_outline_rounded,
+        iconColor: Colors.red,
+        confirmLabel: 'Eliminar',
+        confirmColor: Colors.red);
     if (confirm != true || !mounted) return;
     setState(() => _loading = true);
     try {
