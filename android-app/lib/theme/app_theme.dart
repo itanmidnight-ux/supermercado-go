@@ -6,15 +6,15 @@ class AppTheme {
 
   static const successColor = Color(0xFF2E7D32);
   static const warningColor = Color(0xFFB5651D);
-  static const errorColor   = Color(0xFFB3261E);
-  static const infoColor    = Color(0xFF3B5A73);
-  static const borderColor  = Color(0xFFE4E4DC);
+  static const errorColor = Color(0xFFB3261E);
+  static const infoColor = Color(0xFF3B5A73);
+  static const borderColor = Color(0xFFE4E4DC);
 
   // Colores fijos de marcas externas -- no dependen de la paleta del negocio.
-  static const whatsappGreen  = Color(0xFF25D366);
+  static const whatsappGreen = Color(0xFF25D366);
   static const whatsappBubble = Color(0xFFDCF8C6);
-  static const chatBg         = Color(0xFFF0EAD6);
-  static const nequiPurple    = Color(0xFF7B1FA2);
+  static const chatBg = Color(0xFFF0EAD6);
+  static const nequiPurple = Color(0xFF7B1FA2);
 
   static ThemeData build({
     required Color primary,
@@ -54,10 +54,10 @@ class AppTheme {
       textTheme: TextTheme(
         displayMedium: AppTextStyles.display(onSurface),
         headlineSmall: AppTextStyles.h1(onSurface),
-        titleLarge:    AppTextStyles.h2(onSurface),
-        bodyMedium:    AppTextStyles.body(onSurface),
-        bodyLarge:     AppTextStyles.bodyStrong(onSurface),
-        labelSmall:    AppTextStyles.caption(onSurface),
+        titleLarge: AppTextStyles.h2(onSurface),
+        bodyMedium: AppTextStyles.body(onSurface),
+        bodyLarge: AppTextStyles.bodyStrong(onSurface),
+        labelSmall: AppTextStyles.caption(onSurface),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: primary,
@@ -69,7 +69,7 @@ class AppTheme {
         elevation: 0,
         color: scheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(22),
           side: BorderSide(color: primary.withValues(alpha: 0.12)),
         ),
       ),
@@ -77,7 +77,8 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
@@ -85,18 +86,19 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: primary,
           side: BorderSide(color: primary),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surfaceContainerLow,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: primary, width: 1.5),
         ),
       ),
