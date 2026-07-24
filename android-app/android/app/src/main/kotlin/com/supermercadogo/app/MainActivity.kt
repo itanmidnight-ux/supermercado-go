@@ -1,4 +1,4 @@
-package com.concentrados.monserrath
+package com.supermercadogo.app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ================================================================
-#  compilar-apk.sh — Build APK release de Concentrados Monserrath
+#  compilar-apk.sh — Build APK release de Supermercado GO
 #  Sistema : Linux (Kali / Ubuntu / Debian / Arch)
 #  Uso     : bash compilar-apk.sh [--clean]
 #  Req     : conexión a internet en primer uso
@@ -35,7 +35,7 @@ die()  {
 
 echo ""
 echo -e "${GREEN}${BOLD}  +================================================+${NC}"
-echo -e "${GREEN}${BOLD}  |  Compilador APK — Concentrados Monserrath v2.0  |${NC}"
+echo -e "${GREEN}${BOLD}  |  Compilador APK — Supermercado GO v2.0         |${NC}"
 echo -e "${GREEN}${BOLD}  +================================================+${NC}"
 echo ""
 
@@ -212,8 +212,17 @@ if [ "${#MISSING_PKGS[@]}" -gt 0 ]; then
     warn "Instalando componentes SDK faltantes..."
     for pkg in "${MISSING_PKGS[@]}"; do
         warn "  → $pkg"
-        yes 2>/dev/null | "$SDKMANAGER" "$pkg" 2>&1 | grep -v "^Warning\|^Unzip\|^Prepare\|^\[=" | tail -3 || \
-            warn "  Advertencia: no se pudo instalar $pkg (puede seguir si ya existe)"
+        # sdkmanager imprime TODO su progreso como barras "[===]"/"Unzipping..."
+        # -- filtrarlas para el log deja el pipe sin ninguna linea de salida,
+        # y con `grep -v` eso es exit 1 (nada paso el filtro). Con
+        # `set -o pipefail` activo, eso tumbaba el `||` de abajo SIEMPRE,
+        # aunque la instalacion hubiera terminado perfecta (100% descargado
+        # y descomprimido). La señal real de exito es que el path exista
+        # despues, no el codigo de salida de un pipeline de filtrado visual.
+        yes 2>/dev/null | "$SDKMANAGER" "$pkg" 2>&1 \
+            | grep -v "^Warning\|^Unzip\|^Prepare\|^\[=" | tail -3 || true
+        check_path="${SDK_CHECKS[$pkg]}"
+        [ -e "$check_path" ] || warn "  Advertencia: no se pudo instalar $pkg (no aparece en $check_path)"
     done
     ok "Componentes SDK instalados"
 else
@@ -241,8 +250,13 @@ ok "local.properties escrito: sdk=$SDK, flutter=$FLUTTER_DIR"
 # ── PASO 5: Gradle performance ───────────────────────────────────
 GRADLE_PROPS="$APPDIR/android/gradle.properties"
 # Solo ajustar jvmargs si el valor actual es bajo (< 2GB)
-CURRENT_XMX=$(grep 'org.gradle.jvmargs' "$GRADLE_PROPS" 2>/dev/null | grep -oP '(?<=-Xmx)\d+(?=[gGmM])' || echo "0")
-CURRENT_UNIT=$(grep 'org.gradle.jvmargs' "$GRADLE_PROPS" 2>/dev/null | grep -oP '(?<=-Xmx\d{1,4})[gGmM]' || echo "m")
+# Un solo -oP con lookbehind de ancho fijo (-Xmx son 4 caracteres) captura
+# digitos+unidad juntos -- un lookbehind de ancho variable (\d{1,4}) para
+# separarlos en dos greps distintos fallaba con "lookbehind assertion is
+# not fixed length" en algunas builds de PCRE (Ubuntu/Debian recientes).
+CURRENT_XMX_RAW=$(grep 'org.gradle.jvmargs' "$GRADLE_PROPS" 2>/dev/null | grep -oP '(?<=-Xmx)\d+[gGmM]' || echo "0m")
+CURRENT_XMX="${CURRENT_XMX_RAW%[gGmM]}"
+CURRENT_UNIT="${CURRENT_XMX_RAW: -1}"
 if [[ "${CURRENT_UNIT,,}" == "g" ]] && [[ "${CURRENT_XMX:-0}" -ge 2 ]]; then
     ok "Gradle JVM: ${CURRENT_XMX}G (OK)"
 else
