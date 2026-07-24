@@ -359,7 +359,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text('CONCENTRADOS MONSERRATH',
+                    Text('SUPERMERCADO GO',
                         style: TextStyle(
                             color: scheme.secondary,
                             fontSize: 11,
@@ -681,7 +681,7 @@ class _LoginScreenState extends State<LoginScreen>
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text('v2.0 — Monserrath © 2025',
+                      Text('v2.0 — Supermercado GO © 2026',
                           style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.25),
                               fontSize: 10)),

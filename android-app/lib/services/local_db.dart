@@ -25,7 +25,7 @@ class LocalDB {
 
   static Future<Database> _open() async {
     return openDatabase(
-      p.join(await getDatabasesPath(), 'monserrath_v2.db'),
+      p.join(await getDatabasesPath(), 'supermercado_go_v2.db'),
       version: 2,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await db.execute(_locationQueueSql);

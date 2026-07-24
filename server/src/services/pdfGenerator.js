@@ -83,7 +83,7 @@ function divider(doc) {
 function drawCover(doc, subtitle, rangeLabel) {
   doc.rect(0, 0, doc.page.width, 110).fill('#0D4F1C');
   doc.fillColor('white').fontSize(20).font('Helvetica-Bold')
-     .text('CONCENTRADOS MONSERRATH', 40, 28, { align: 'center' });
+     .text('SUPERMERCADO GO', 40, 28, { align: 'center' });
   doc.fontSize(13).font('Helvetica').text(subtitle, { align: 'center' });
   doc.fontSize(10).fillColor('#a5d6a7').text(rangeLabel, { align: 'center' });
   doc.y = 140;

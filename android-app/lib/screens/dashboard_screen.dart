@@ -65,8 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         barrierDismissible: false,
         title: 'Ubicación por seguridad',
         icon: Icons.location_on_rounded,
-        message:
-            'Concentrados Monserrath registra tu ubicación mientras tienes '
+        message: 'Supermercado GO registra tu ubicación mientras tienes '
             'sesión iniciada como parte del control de seguridad del equipo -- '
             'incluso si cierras la app, hasta que cierres sesión. Solo el '
             'administrador puede ver esta información, nunca los clientes.',

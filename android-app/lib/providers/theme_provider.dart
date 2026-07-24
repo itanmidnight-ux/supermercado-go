@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 class ThemeProvider extends ChangeNotifier {
   Color _primary = const Color(0xFF2D5016);
   Color _accent = const Color(0xFFD4800A);
-  String _brandName = 'Concentrados Monserrath';
+  String _brandName = 'Supermercado GO';
   String? _logoFilename;
 
   ThemeData get lightTheme => AppTheme.build(

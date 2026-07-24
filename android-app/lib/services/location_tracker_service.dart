@@ -55,7 +55,7 @@ class LocationTrackerService {
         distanceFilter: 25,
         intervalDuration: const Duration(seconds: 30),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'Concentrados Monserrath',
+          notificationTitle: 'Supermercado GO',
           notificationText:
               'Compartiendo tu ubicación por seguridad mientras trabajas',
           enableWakeLock: true,

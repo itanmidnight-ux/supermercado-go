@@ -102,7 +102,7 @@ class _GuestShellScreenState extends State<GuestShellScreen> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CONCENTRADOS MONSERRATH'),
+        title: const Text('SUPERMERCADO GO'),
         actions: [
           TextButton.icon(
             onPressed: _goToLogin,

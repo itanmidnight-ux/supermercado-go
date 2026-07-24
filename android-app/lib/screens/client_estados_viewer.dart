@@ -358,7 +358,7 @@ class _ClientEstadosViewerState extends State<ClientEstadosViewer>
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    const Text('Concentrados Monserrath',
+                    const Text('Supermercado GO',
                         style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
