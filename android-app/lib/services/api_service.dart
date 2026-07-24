@@ -1087,6 +1087,21 @@ class ApiService {
   }
 
   // ── Settings ─────────────────────────────────────────────
+  // Marca pública (nombre/logo/colores) -- sin sesión, para la pantalla de
+  // login. _serverUrl puede seguir vacío/local si el usuario nunca
+  // configuró un servidor (primer arranque) -- ahí simplemente falla y el
+  // caller se queda con los defaults, no rompe nada.
+  static Future<Map<String, String>> getPublicSettings() async {
+    final res = await _client
+        .get(Uri.parse('$_serverUrl/api/settings/public'))
+        .timeout(const Duration(seconds: 8));
+    if (res.statusCode == 200) {
+      final body = jsonDecode(res.body)['settings'] as Map<String, dynamic>;
+      return body.map((k, v) => MapEntry(k, v.toString()));
+    }
+    throw Exception('Error cargando marca');
+  }
+
   static Future<Map<String, String>> getSettings() async {
     final res = await _client
         .get(Uri.parse('$_serverUrl/api/settings'), headers: _headers)

@@ -7,6 +7,7 @@ import '../services/notification_service.dart';
 import '../services/local_db.dart';
 import '../services/tab_navigator.dart';
 import '../theme/breakpoints.dart';
+import '../widgets/app_logo.dart';
 import 'client_products_screen.dart';
 import 'client_cart_screen.dart';
 import 'client_estados_screen.dart';
@@ -166,17 +167,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(children: [
                 // Logo
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                      child: Icon(Icons.storefront_rounded,
-                          size: 20, color: Colors.white)),
-                ),
+                const AppLogo(size: 36, animate: false),
                 const SizedBox(width: 10),
                 const Expanded(
                     child: Column(

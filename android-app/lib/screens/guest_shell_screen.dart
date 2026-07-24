@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../services/guest_cart_service.dart';
 import '../utils/product_description.dart';
 import '../widgets/animated_tap_scale.dart';
+import '../widgets/app_logo.dart';
 import '../widgets/empty_state.dart';
 import 'login_screen.dart';
 
@@ -102,7 +103,11 @@ class _GuestShellScreenState extends State<GuestShellScreen> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SUPERMERCADO GO'),
+        title: Row(mainAxisSize: MainAxisSize.min, children: const [
+          AppLogo(size: 30, animate: false),
+          SizedBox(width: 10),
+          Text('SUPERMERCADO GO'),
+        ]),
         actions: [
           TextButton.icon(
             onPressed: _goToLogin,

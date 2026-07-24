@@ -32,7 +32,25 @@ class StatTile extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
+          ClipRect(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                          begin: const Offset(0, 0.35), end: Offset.zero)
+                      .animate(anim),
+                  child: child,
+                ),
+              ),
+              child: Text(value,
+                  key: ValueKey(value),
+                  style: Theme.of(context).textTheme.headlineSmall),
+            ),
+          ),
           if (delta != null) ...[
             const SizedBox(width: 8),
             Icon(

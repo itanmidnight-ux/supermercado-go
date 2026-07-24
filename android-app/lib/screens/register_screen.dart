@@ -4,6 +4,7 @@ import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../services/guest_cart_service.dart';
 import '../widgets/app_button.dart';
+import '../widgets/app_logo.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -162,8 +163,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.storefront_rounded,
-                            size: 36, color: scheme.secondary),
+                        const AppLogo(size: 44),
                         const SizedBox(height: 8),
                         Text('Supermercado GO',
                             style: TextStyle(

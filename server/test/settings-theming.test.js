@@ -34,6 +34,33 @@ describe('Settings de theming', () => {
   });
 });
 
+describe('GET /api/settings/public -- marca sin sesión (para el login)', () => {
+  test('sin Authorization devuelve nombre/colores (no 401)', async () => {
+    // No asume el color default -- el describe anterior en este mismo
+    // archivo ya pudo haber cambiado theme_primary via PUT; solo verifica
+    // que los campos de marca vengan presentes sin necesitar sesión.
+    const res = await request(app).get('/api/settings/public');
+    expect(res.status).toBe(200);
+    expect(res.body.settings.theme_primary).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(res.body.settings.theme_accent).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(res.body.settings.theme_name).toBeTruthy();
+  });
+
+  test('no expone datos no relacionados a marca (ej. nequi_phone)', async () => {
+    const res = await request(app).get('/api/settings/public');
+    expect(res.body.settings.nequi_phone).toBeUndefined();
+    expect(res.body.settings.server_domain).toBeUndefined();
+  });
+
+  test('refleja cambios hechos por el admin', async () => {
+    const token = await loginAdmin();
+    await request(app).put('/api/settings').set('Authorization', `Bearer ${token}`)
+      .send({ key: 'theme_name', value: 'Mi Tienda De Prueba' });
+    const res = await request(app).get('/api/settings/public');
+    expect(res.body.settings.theme_name).toBe('Mi Tienda De Prueba');
+  });
+});
+
 describe('Logo de marca', () => {
   test('POST /api/settings/logo sin archivo -> 400', async () => {
     const token = await loginAdmin();

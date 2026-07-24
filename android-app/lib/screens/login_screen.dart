@@ -8,6 +8,7 @@ import '../providers/theme_provider.dart';
 import '../services/api_service.dart';
 import '../services/guest_cart_service.dart';
 import '../widgets/app_button.dart';
+import '../widgets/app_logo.dart';
 import '../widgets/forgot_password_flow.dart';
 import '../widgets/futuristic_modal.dart';
 import 'register_screen.dart';
@@ -338,24 +339,14 @@ class _LoginScreenState extends State<LoginScreen>
                     GestureDetector(
                       onTap: _onLogoTap,
                       child: Container(
-                        width: 66,
-                        height: 66,
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.12),
                           border: Border.all(
                               color: scheme.secondary.withValues(alpha: 0.7),
                               width: 2.5),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8)),
-                          ],
                         ),
-                        child: Center(
-                            child: Icon(Icons.storefront_rounded,
-                                size: 30, color: scheme.secondary)),
+                        child: const AppLogo(size: 62),
                       ),
                     ),
                     const SizedBox(height: 8),
