@@ -147,6 +147,16 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_claimed_by ON orders(claimed_by);
 
+-- Entrega + pago elegidos en el checkout (app/sitio web). delivery_mode:
+-- 'gps' (ubicación en tiempo real, habilita contra entrega) o 'address'
+-- (dirección escrita a mano). payment_method: 'nequi' | 'visa' | 'contra_entrega'.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_mode TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lat DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid INTEGER NOT NULL DEFAULT 0;
+
 CREATE TABLE IF NOT EXISTS order_items (
   id            SERIAL PRIMARY KEY,
   order_id      INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -182,6 +192,10 @@ CREATE TABLE IF NOT EXISTS client_orders (
   delivery_date   TEXT,
   created_at      TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
 );
+ALTER TABLE client_orders ADD COLUMN IF NOT EXISTS delivery_mode TEXT;
+ALTER TABLE client_orders ADD COLUMN IF NOT EXISTS delivery_lat DOUBLE PRECISION;
+ALTER TABLE client_orders ADD COLUMN IF NOT EXISTS delivery_lng DOUBLE PRECISION;
+ALTER TABLE client_orders ADD COLUMN IF NOT EXISTS delivery_address TEXT;
 
 CREATE TABLE IF NOT EXISTS promotional_campaigns (
   id          SERIAL PRIMARY KEY,

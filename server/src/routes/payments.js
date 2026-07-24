@@ -116,12 +116,18 @@ router.get('/methods', clientAuth, async (req, res, next) => {
     const row = rows[0];
     const nequiAvailable = row?.status === 'connected' && !!row.phone_encrypted;
     res.json({
+      // Contra entrega existe siempre como método, pero el checkout la
+      // bloquea si el cliente no compartió ubicación en tiempo real (regla
+      // aplicada también en el servidor, ver POST /api/cart/checkout).
       contra_entrega: true,
       nequi: nequiAvailable ? {
         available: true,
         phone: decryptText(row.phone_encrypted),
         account_name: row.account_name,
       } : { available: false },
+      // Visa/tarjeta: igual que Nequi, sin pasarela real todavía -- se
+      // confirma con una referencia que el negocio concilia manualmente.
+      visa: { available: true },
     });
   } catch (e) { next(e); }
 });

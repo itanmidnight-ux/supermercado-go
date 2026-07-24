@@ -985,8 +985,12 @@ class ApiService {
 
   static Future<Map<String, dynamic>> checkout({
     required String paymentMethod,
-    String? nequiReference,
+    String? paymentReference,
     String? deliveryDate,
+    required String deliveryMode, // 'gps' | 'address'
+    double? deliveryLat,
+    double? deliveryLng,
+    String? deliveryAddress,
   }) async {
     final res = await _client
         .post(
@@ -994,13 +998,18 @@ class ApiService {
           headers: _headers,
           body: jsonEncode({
             'payment_method': paymentMethod,
-            'nequi_reference': nequiReference,
+            'payment_reference': paymentReference,
             'delivery_date': deliveryDate,
+            'delivery_mode': deliveryMode,
+            'delivery_lat': deliveryLat,
+            'delivery_lng': deliveryLng,
+            'delivery_address': deliveryAddress,
           }),
         )
         .timeout(const Duration(seconds: 15));
     if (res.statusCode == 201) return jsonDecode(res.body)['order'];
-    throw Exception(jsonDecode(res.body)['error'] ?? 'Error realizando pedido');
+    final body = _tryDecodeBody(res.body);
+    throw Exception(body['error'] as String? ?? 'Error realizando pedido');
   }
 
   // ── Settings ─────────────────────────────────────────────
