@@ -1,279 +1,463 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../models/product.dart';
+import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/futuristic_modal.dart';
 
+/// Inventario real: listado de todos los productos agrupados por categoría
+/// ("cajones"), con imagen y nombre, buscador, y al tocar uno se abre una
+/// ventana emergente con cantidad/precio editables. El botón eliminar solo
+/// se habilita cuando la cantidad en existencia es 0 (seguridad -- evita
+/// borrar productos con stock real por error).
 class InventarioScreen extends StatefulWidget {
   const InventarioScreen({super.key});
-  @override State<InventarioScreen> createState() => _InventarioScreenState();
+  @override
+  State<InventarioScreen> createState() => _InventarioScreenState();
 }
 
 class _InventarioScreenState extends State<InventarioScreen> {
-  bool _loading = true;
-  String? _error;
-  List<Map<String, dynamic>> _productTotals = [];
-  List<Map<String, dynamic>> _dailyDeliveries = [];
-  Map<String, dynamic> _summary = {};
+  final _searchCtrl = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _searchCtrl.addListener(
+        () => setState(() => _query = _searchCtrl.text.trim().toLowerCase()));
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final provider = context.watch<AppProvider>();
+    final all = provider.products;
+
+    final filtered = _query.isEmpty
+        ? all
+        : all.where((p) => p.name.toLowerCase().contains(_query)).toList();
+
+    final groups = <String, List<Product>>{};
+    for (final p in filtered) {
+      final key = (p.category == null || p.category!.trim().isEmpty)
+          ? 'Sin categoría'
+          : p.category!;
+      groups.putIfAbsent(key, () => []).add(p);
+    }
+    final sortedKeys = groups.keys.toList()..sort();
+
+    return Column(children: [
+      Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: TextField(
+          controller: _searchCtrl,
+          decoration: InputDecoration(
+            hintText: 'Buscar producto en el inventario...',
+            prefixIcon: Icon(Icons.search_rounded, color: scheme.primary),
+            suffixIcon: _query.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => _searchCtrl.clear())
+                : null,
+            filled: true,
+            fillColor: const Color(0xFFF5F5F5),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none),
+          ),
+        ),
+      ),
+      Expanded(
+        child: all.isEmpty
+            ? const EmptyState(
+                icon: Icons.inventory_2_rounded,
+                title: 'Sin productos en el inventario')
+            : filtered.isEmpty
+                ? EmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: 'Sin resultados para "$_query"')
+                : RefreshIndicator(
+                    onRefresh: provider.refreshProducts,
+                    color: scheme.primary,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                      itemCount: sortedKeys.length,
+                      itemBuilder: (_, gi) {
+                        final key = sortedKeys[gi];
+                        final items = groups[key]!;
+                        return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(6, 14, 6, 8),
+                                child: Row(children: [
+                                  Icon(Icons.inventory_rounded,
+                                      size: 16, color: scheme.primary),
+                                  const SizedBox(width: 6),
+                                  Text(key.toUpperCase(),
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: scheme.primary,
+                                          letterSpacing: 0.5)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(8)),
+                                    child: Text('${items.length}',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey.shade600)),
+                                  ),
+                                ]),
+                              ),
+                              ...items.map((p) => _InventoryTile(
+                                  product: p,
+                                  onTap: () => _openDetail(context, p))),
+                            ]);
+                      },
+                    ),
+                  ),
+      ),
+    ]);
+  }
+
+  Future<void> _openDetail(BuildContext context, Product p) async {
+    await showFuturisticModal(context,
+        builder: (_) => _InventoryDetailModal(product: p));
+  }
+}
+
+class _InventoryTile extends StatelessWidget {
+  final Product product;
+  final VoidCallback onTap;
+  const _InventoryTile({required this.product, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final stock = product.stock;
+    final lowStock = stock != null && stock <= 3;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 54,
+                  height: 54,
+                  child: product.images.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl:
+                              ApiService.productImageUrl(product.images.first),
+                          httpHeaders: ApiService.imageHeaders,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                              color: scheme.primary.withValues(alpha: 0.1),
+                              child: Icon(Icons.inventory_2_outlined,
+                                  color: scheme.primary)),
+                        )
+                      : Container(
+                          color: scheme.primary.withValues(alpha: 0.1),
+                          child: Icon(Icons.inventory_2_outlined,
+                              color: scheme.primary)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(product.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 13.5)),
+                    const SizedBox(height: 3),
+                    Text(
+                        '\$${NumberFormat('#,###', 'es_CO').format(product.price)}',
+                        style: TextStyle(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5)),
+                  ])),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: stock == null
+                      ? Colors.grey.shade100
+                      : (stock == 0
+                          ? Colors.red.shade50
+                          : lowStock
+                              ? Colors.orange.shade50
+                              : Colors.green.shade50),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  stock == null ? 'Sin dato' : '$stock uds',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: stock == null
+                        ? Colors.grey.shade600
+                        : (stock == 0
+                            ? Colors.red.shade700
+                            : lowStock
+                                ? Colors.orange.shade800
+                                : Colors.green.shade700),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InventoryDetailModal extends StatefulWidget {
+  final Product product;
+  const _InventoryDetailModal({required this.product});
+  @override
+  State<_InventoryDetailModal> createState() => _InventoryDetailModalState();
+}
+
+class _InventoryDetailModalState extends State<_InventoryDetailModal> {
+  late final _priceCtrl =
+      TextEditingController(text: widget.product.price.toStringAsFixed(0));
+  late final _stockCtrl =
+      TextEditingController(text: (widget.product.stock ?? 0).toString());
+  bool _saving = false;
+  bool _deleting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _priceCtrl.dispose();
+    _stockCtrl.dispose();
+    super.dispose();
+  }
+
+  int get _currentStock => int.tryParse(_stockCtrl.text.trim()) ?? -1;
+
+  Future<void> _save() async {
+    final price = double.tryParse(_priceCtrl.text.trim());
+    final stock = int.tryParse(_stockCtrl.text.trim());
+    if (price == null || price < 0) {
+      setState(() => _error = 'Precio inválido');
+      return;
+    }
+    if (stock == null || stock < 0) {
+      setState(() => _error = 'Cantidad inválida');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
-      final data = await ApiService.getInventoryStats();
-      setState(() {
-        _productTotals   = List<Map<String, dynamic>>.from(data['product_totals'] ?? []);
-        _dailyDeliveries = List<Map<String, dynamic>>.from(data['daily_deliveries'] ?? []);
-        _summary         = Map<String, dynamic>.from(data['summary'] ?? {});
-        _loading         = false;
-      });
+      await context
+          .read<AppProvider>()
+          .updateProduct(widget.product.id!, {'price': price, 'stock': stock});
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Inventario actualizado'),
+            behavior: SnackBarBehavior.floating));
+      }
     } catch (e) {
-      setState(() { _error = e.toString().replaceAll('Exception: ', ''); _loading = false; });
+      if (mounted)
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _saving = false;
+        });
+    }
+  }
+
+  Future<void> _delete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Eliminar del inventario'),
+        content: Text(
+            '¿Eliminar "${widget.product.name}" permanentemente? Ya no tiene existencias.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _deleting = true);
+    try {
+      await context.read<AppProvider>().deleteProduct(widget.product.id!);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _deleting = false;
+        });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: scheme.primary,
-      child: _loading
-        ? Center(child: CircularProgressIndicator(color: scheme.primary))
-        : _error != null
-          ? _buildError()
-          : _buildContent(),
-    );
-  }
+    final p = widget.product;
+    final canDelete = _currentStock == 0;
 
-  Widget _buildError() {
-    final scheme = Theme.of(context).colorScheme;
-    return ListView(children: [
-      const SizedBox(height: 100),
-      Center(child: Column(children: [
-        const Icon(Icons.error_outline, size: 48, color: Colors.red),
-        const SizedBox(height: 12),
-        Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: _load,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Reintentar'),
-          style: FilledButton.styleFrom(backgroundColor: scheme.primary),
-        ),
-      ])),
-    ]);
-  }
-
-  Widget _buildContent() => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      _buildSummaryCards(),
-      const SizedBox(height: 20),
-      _buildBarChart(),
-      const SizedBox(height: 20),
-      _buildProductList(),
-      const SizedBox(height: 40),
-    ],
-  );
-
-  Widget _buildSummaryCards() {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Resumen del día', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: scheme.primary)),
-      const SizedBox(height: 10),
-      Row(children: [
-        Expanded(child: _statCard('Pendientes', '${_summary['pending'] ?? 0}', Icons.hourglass_top_rounded, scheme.secondary)),
-        const SizedBox(width: 10),
-        Expanded(child: _statCard('En camino', '${_summary['en_camino'] ?? 0}', Icons.directions_bike_rounded, scheme.primary)),
-      ]),
-      const SizedBox(height: 10),
-      Row(children: [
-        Expanded(child: _statCard('Reclamados', '${_summary['claimed'] ?? 0}', Icons.person_pin_circle_rounded, Colors.blue)),
-        const SizedBox(width: 10),
-        Expanded(child: _statCard('Entregados hoy', '${_summary['delivered_today'] ?? 0}', Icons.check_circle_rounded, Colors.teal)),
-      ]),
-    ],
-  );
-  }
-
-  Widget _statCard(String label, String value, IconData icon, Color color) => Card(
-    elevation: 2,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      child: Row(children: [
-        CircleAvatar(radius: 22, backgroundColor: color.withValues(alpha: 0.12),
-          child: Icon(icon, color: color, size: 22)),
-        const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-        ]),
-      ]),
-    ),
-  );
-
-  Widget _buildBarChart() {
-    // Build last 7 days labels + counts
-    final now = DateTime.now();
-    const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-
-    final dayMap = <String, int>{};
-    for (var d in _dailyDeliveries) {
-      dayMap[d['day'] as String] = (d['count'] as int?) ?? 0;
-    }
-
-    final bars = List.generate(7, (i) {
-      final date = now.subtract(Duration(days: 6 - i));
-      final key = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      final count = dayMap[key] ?? 0;
-      final label = dayNames[(date.weekday - 1) % 7];
-      final isToday = i == 6;
-      return (label: label, count: count, isToday: isToday);
-    });
-
-    final maxCount = bars.map((b) => b.count).reduce((a, b) => a > b ? a : b);
-    final scheme = Theme.of(context).colorScheme;
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Pedidos entregados (últimos 7 días)',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: scheme.primary)),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 140,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: bars.map((b) {
-                final barH = maxCount == 0 ? 0.0 : (b.count / maxCount) * 100.0;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (b.count > 0)
-                          Text('${b.count}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: b.isToday ? scheme.secondary : scheme.primary)),
-                        const SizedBox(height: 2),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 400),
-                          height: barH.clamp(4, 100),
-                          decoration: BoxDecoration(
-                            color: b.isToday ? scheme.secondary : scheme.primary,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(b.label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: b.isToday ? FontWeight.bold : FontWeight.normal,
-                            color: b.isToday ? scheme.secondary : Colors.grey.shade700)),
-                      ],
-                    ),
+    return FuturisticModalCard(
+      child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const ModalCloseButton(),
+            Center(
+                child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: p.images.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: ApiService.productImageUrl(p.images.first),
+                        httpHeaders: ApiService.imageHeaders,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Container(
+                            color: scheme.primary.withValues(alpha: 0.1),
+                            child: Icon(Icons.inventory_2_outlined,
+                                color: scheme.primary, size: 36)),
+                      )
+                    : Container(
+                        color: scheme.primary.withValues(alpha: 0.1),
+                        child: Icon(Icons.inventory_2_outlined,
+                            color: scheme.primary, size: 36)),
+              ),
+            )),
+            const SizedBox(height: 12),
+            Text(p.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A1A1A))),
+            if (p.category != null)
+              Text(p.category!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            const SizedBox(height: 18),
+            Row(children: [
+              Expanded(
+                  child: TextField(
+                controller: _priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText: 'Precio',
+                    prefixText: '\$',
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAF8),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade200))),
+              )),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: TextField(
+                controller: _stockCtrl,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                    labelText: 'Cantidad',
+                    suffixText: 'uds',
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAF8),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade200))),
+              )),
+            ]),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(_error!,
+                    style: const TextStyle(
+                        color: Color(0xFFD32F2F), fontSize: 12)),
+              ),
+            const SizedBox(height: 16),
+            SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.save_rounded),
+                  label: const Text('Guardar cambios'),
+                  style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14))),
+                )),
+            const SizedBox(height: 10),
+            SizedBox(
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: (!canDelete || _deleting) ? null : _delete,
+                  icon: _deleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.delete_outline_rounded),
+                  label: Text(canDelete
+                      ? 'Eliminar del inventario'
+                      : 'Eliminar (requiere cantidad = 0)'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: BorderSide(
+                        color: canDelete ? Colors.red : Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
-                );
-              }).toList(),
-            ),
-          ),
-          if (maxCount == 0) ...[
-            const SizedBox(height: 8),
-            Center(child: Text('Sin entregas esta semana',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12))),
-          ],
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildProductList() {
-    final scheme = Theme.of(context).colorScheme;
-    if (_productTotals.isEmpty) {
-      return const EmptyState(icon: Icons.inventory_2_rounded, title: 'No hay pedidos activos');
-    }
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(children: [
-            Icon(Icons.inventory_2_rounded, color: scheme.primary, size: 20),
-            const SizedBox(width: 8),
-            Text('Productos requeridos',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: scheme.primary)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10)),
-              child: Text('${_productTotals.length} productos',
-                style: TextStyle(fontSize: 11, color: scheme.primary, fontWeight: FontWeight.w600)),
-            ),
+                )),
           ]),
-        ),
-        const Divider(height: 1),
-        ..._productTotals.asMap().entries.map((e) {
-          final item = e.value;
-          final isLast = e.key == _productTotals.length - 1;
-          final total = (item['total'] as num?)?.toInt() ?? 0;
-          final maxTotal = (_productTotals.first['total'] as num?)?.toInt() ?? 1;
-          final ratio = total / maxTotal;
-
-          return Column(children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(child: Text(item['name'] as String? ?? '',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: scheme.secondary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: scheme.secondary.withValues(alpha: 0.4))),
-                    child: Text(
-                      NumberFormat('#,###', 'es_CO').format(total),
-                      style: TextStyle(fontWeight: FontWeight.bold, color: scheme.secondary, fontSize: 13)),
-                  ),
-                ]),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    minHeight: 4,
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      ratio > 0.7 ? Colors.red.shade400 : ratio > 0.4 ? scheme.secondary : scheme.primary),
-                  ),
-                ),
-              ]),
-            ),
-            if (!isLast) const Divider(height: 1, indent: 16, endIndent: 16),
-          ]);
-        }),
-        const SizedBox(height: 8),
-      ]),
     );
   }
 }
