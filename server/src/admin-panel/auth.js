@@ -26,10 +26,6 @@ function requireAdmin(req, res, next) {
   }
 }
 
-function csrfToken(req) {
-  return parseCookies(req).csrf || '';
-}
-
 function verifyCsrf(req, res, next) {
   const cookieVal = parseCookies(req).csrf;
   const bodyVal = req.body?._csrf;
@@ -43,4 +39,4 @@ function newCsrfToken() {
   return crypto.randomBytes(24).toString('hex');
 }
 
-module.exports = { requireAdmin, csrfToken, verifyCsrf, newCsrfToken };
+module.exports = { requireAdmin, verifyCsrf, newCsrfToken };
