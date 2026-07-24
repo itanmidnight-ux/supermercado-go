@@ -11,6 +11,7 @@ import 'client_products_screen.dart';
 import 'client_cart_screen.dart';
 import 'client_estados_screen.dart';
 import 'client_profile_screen.dart';
+import 'client_track_order_screen.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   const ClientHomeScreen({super.key});
@@ -106,6 +107,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
         estados: _estados,
         onRefresh: _loadEstados,
       ),
+      const ClientTrackOrderScreen(),
       const ClientProfileScreen(),
     ]);
 
@@ -273,6 +275,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
           label: 'Promociones',
         ),
         NavigationDestination(
+          icon: const Icon(Icons.local_shipping_outlined),
+          selectedIcon:
+              Icon(Icons.local_shipping_rounded, color: scheme.primary),
+          label: 'Rastrear',
+        ),
+        NavigationDestination(
           icon: const Icon(Icons.person_outline_rounded),
           selectedIcon: Icon(Icons.person_rounded, color: scheme.primary),
           label: 'Perfil',
@@ -329,6 +337,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
           ]),
           selectedIcon: const Icon(Icons.local_offer_rounded),
           label: const Text('Promociones'),
+        ),
+        const NavigationRailDestination(
+          icon: Icon(Icons.local_shipping_outlined),
+          selectedIcon: Icon(Icons.local_shipping_rounded),
+          label: Text('Rastrear'),
         ),
         const NavigationRailDestination(
           icon: Icon(Icons.person_outline_rounded),

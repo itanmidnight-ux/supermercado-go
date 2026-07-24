@@ -150,6 +150,57 @@ router.get('/mine', clientAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// GET /api/orders/:id/track — rastreo del cliente dueño del pedido. La
+// ubicación del trabajador SOLO se expone cuando el pedido está en camino
+// (o ya entregado) -- antes de eso el trabajador apenas va camino al punto
+// principal a recogerlo, y su ubicación es información personal que no se
+// comparte todavía. Debe ir antes de /:id para no perder la ruta.
+router.get('/:id/track', clientAuth, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || id <= 0) return res.status(400).json({ error: 'ID inválido' });
+    const db = getDB();
+
+    const { rows: userRows } = await db.query('SELECT phone FROM users WHERE id=$1', [req.user.id]);
+    const myPhone = userRows[0]?.phone;
+    if (!myPhone) return res.status(404).json({ error: 'Pedido no encontrado' });
+
+    const order = await findOrder(db, id);
+    if (!order || order.phone !== myPhone) return res.status(404).json({ error: 'Pedido no encontrado' });
+
+    const base = { order_id: order.id, status: order.status };
+
+    if (!['en_camino', 'delivered'].includes(order.status)) {
+      return res.json({
+        ...base,
+        tracking_available: false,
+        message: 'Tu pedido aún no ha sido enviado, agradecemos tu espera. En pocos minutos tu pedido será enviado.',
+      });
+    }
+
+    if (!order.claimed_by) {
+      // No debería pasar (en_camino siempre implica claimed_by), pero por
+      // si acaso no se filtra info de ubicación sin un trabajador asignado.
+      return res.json({ ...base, tracking_available: false, message: 'Buscando un trabajador disponible...' });
+    }
+
+    const { rows: locRows } = await db.query(
+      'SELECT lat, lng, accuracy, recorded_at FROM staff_locations WHERE user_id=$1', [order.claimed_by]
+    );
+    const loc = locRows[0];
+    if (!loc) {
+      return res.json({ ...base, tracking_available: false, message: 'Tu pedido va en camino. Ubicación no disponible por ahora.' });
+    }
+
+    res.json({
+      ...base,
+      tracking_available: true,
+      worker_name: order.claimed_by_display || order.claimed_by_name,
+      lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy, last_seen_at: loc.recorded_at,
+    });
+  } catch (e) { next(e); }
+});
+
 // GET /api/orders/:id
 router.get('/:id', staffAuth, async (req, res, next) => {
   try {
