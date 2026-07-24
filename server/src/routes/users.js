@@ -169,14 +169,23 @@ router.delete('/:id', adminAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/users/clients — list client users (admin only)
+// GET /api/users/clients — list client users (admin only). Incluye
+// order_count (via customers.phone) para la ficha de detalle del panel.
 router.get('/clients', adminAuth, async (req, res, next) => {
   try {
-    const { rows: clients } = await getDB().query(
-      `SELECT id, username, display_name, email, nickname, address, profile_pic, active, created_at
-       FROM users WHERE role='client' ORDER BY created_at DESC`
-    );
-    res.json({ clients });
+    const { rows: clients } = await getDB().query(`
+      SELECT u.id, u.username, u.display_name, u.email, u.phone, u.address,
+        u.profile_pic, u.active, u.created_at, COALESCE(oc.order_count, 0) AS order_count
+      FROM users u
+      LEFT JOIN (
+        SELECT c.phone, COUNT(*) AS order_count
+        FROM orders o JOIN customers c ON c.id = o.customer_id
+        GROUP BY c.phone
+      ) oc ON oc.phone = u.phone
+      WHERE u.role = 'client'
+      ORDER BY u.created_at DESC
+    `);
+    res.json({ clients: clients.map(c => ({ ...c, order_count: Number(c.order_count) })) });
   } catch (e) { next(e); }
 });
 
