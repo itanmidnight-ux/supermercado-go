@@ -60,14 +60,39 @@ router.delete('/', clientAuth, async (req, res, next) => {
 });
 
 // POST /api/cart/checkout — place order from cart
+// delivery_mode: 'gps' (comparte ubicación en tiempo real) o 'address'
+// (dirección escrita a mano). Contra entrega SOLO se permite en modo 'gps'
+// -- sin ubicación en tiempo real el trabajador no puede confirmar la
+// entrega para cobrar en efectivo, es una regla de seguridad del negocio,
+// no solo de la UI (se valida aquí, no solo en la app).
 router.post('/checkout', clientAuth, async (req, res, next) => {
   try {
-    const { payment_method, nequi_reference, delivery_date } = req.body;
-    if (!['nequi', 'contra_entrega'].includes(payment_method))
-      return res.status(400).json({ error: 'payment_method debe ser nequi o contra_entrega' });
-    if (payment_method === 'nequi') {
-      if (!nequi_reference || typeof nequi_reference !== 'string' || !nequi_reference.trim() || nequi_reference.length > 100)
-        return res.status(400).json({ error: 'nequi_reference inválido (máx 100 chars)' });
+    const {
+      payment_method, nequi_reference, payment_reference, delivery_date,
+      delivery_mode, delivery_lat, delivery_lng, delivery_address,
+    } = req.body;
+
+    if (!['nequi', 'visa', 'contra_entrega'].includes(payment_method))
+      return res.status(400).json({ error: 'payment_method debe ser nequi, visa o contra_entrega' });
+    if (!['gps', 'address'].includes(delivery_mode))
+      return res.status(400).json({ error: 'delivery_mode debe ser gps o address' });
+
+    const reference = payment_reference || nequi_reference;
+    if (payment_method === 'nequi' || payment_method === 'visa') {
+      if (!reference || typeof reference !== 'string' || !reference.trim() || reference.length > 100)
+        return res.status(400).json({ error: 'Referencia de pago inválida (máx 100 caracteres)' });
+    }
+    if (payment_method === 'contra_entrega' && delivery_mode !== 'gps')
+      return res.status(400).json({ error: 'Pago contra entrega requiere compartir tu ubicación en tiempo real' });
+
+    let lat = null, lng = null;
+    if (delivery_mode === 'gps') {
+      lat = Number(delivery_lat);
+      lng = Number(delivery_lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180)
+        return res.status(400).json({ error: 'Ubicación GPS inválida' });
+    } else if (!delivery_address || typeof delivery_address !== 'string' || !delivery_address.trim() || delivery_address.length > 300) {
+      return res.status(400).json({ error: 'Dirección de entrega inválida (máx 300 caracteres)' });
     }
 
     const db = getDB();
@@ -83,13 +108,20 @@ router.post('/checkout', clientAuth, async (req, res, next) => {
     const total        = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
     const finalDate     = delivery_date || items[0]?.delivery_date || null;
     const itemsSummary = items.map(i => `${i.quantity}x ${i.product_name}`).join(', ');
-    const payLabel     = payment_method === 'nequi' ? 'Nequi' : 'Contra entrega';
-    const safeRef      = nequi_reference ? nequi_reference.trim() : null;
+    const payLabels    = { nequi: 'Nequi', visa: 'Tarjeta Visa', contra_entrega: 'Contra entrega' };
+    const payLabel     = payLabels[payment_method];
+    const safeRef      = reference ? reference.trim() : null;
+    // nequi/visa se confirman con una referencia -- se marcan pagados de
+    // inmediato (misma logica que ya usaba Nequi); contra entrega se cobra
+    // cuando el trabajador entrega, ahi queda en 0 hasta ese momento.
+    const isPaid       = payment_method !== 'contra_entrega';
+    const addrForOrder = delivery_mode === 'gps'
+      ? 'Ubicación en tiempo real (ver mapa)'
+      : String(delivery_address).trim();
 
     const { rows: clientRows } = await db.query('SELECT display_name, address, phone FROM users WHERE username=$1', [req.user.username]);
     const clientUser = clientRows[0];
     const clientName = clientUser?.display_name || req.user.username;
-    const clientAddr = clientUser?.address || '';
     // Telefono real del cliente (columna users.phone, pedida en el registro)
     // -- antes se usaba un placeholder falso "app:<username>" que dejaba al
     // trabajador sin forma de llamar o escribirle de verdad por WhatsApp.
@@ -109,9 +141,15 @@ router.post('/checkout', clientAuth, async (req, res, next) => {
       }
 
       const { rows: orderRows } = await client.query(`
-        INSERT INTO orders (customer_id, product_name, delivery_address, wa_message, requested_at, status, is_fiado)
-        VALUES ($1,$2,$3,$4,now_iso(),'pending',0) RETURNING id
-      `, [customerId, itemsSummary, clientAddr, `[App] ${clientName} • ${payLabel}${safeRef ? ' ref:' + safeRef : ''}`]);
+        INSERT INTO orders (
+          customer_id, product_name, delivery_address, wa_message, requested_at, status, is_fiado,
+          delivery_mode, delivery_lat, delivery_lng, payment_method, payment_reference, paid
+        )
+        VALUES ($1,$2,$3,$4,now_iso(),'pending',0,$5,$6,$7,$8,$9,$10) RETURNING id
+      `, [
+        customerId, itemsSummary, addrForOrder, `[App] ${clientName} • ${payLabel}${safeRef ? ' ref:' + safeRef : ''}`,
+        delivery_mode, lat, lng, payment_method, safeRef, isPaid ? 1 : 0,
+      ]);
       const mainOrderId = orderRows[0].id;
 
       for (const item of items) {
@@ -120,12 +158,16 @@ router.post('/checkout', clientAuth, async (req, res, next) => {
       }
 
       const { rows: coRows } = await client.query(`
-        INSERT INTO client_orders (client_username, items_json, total, payment_method, nequi_reference, delivery_date)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
+        INSERT INTO client_orders (
+          client_username, items_json, total, payment_method, nequi_reference, delivery_date,
+          delivery_mode, delivery_lat, delivery_lng, delivery_address
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
       `, [
         req.user.username,
         JSON.stringify(items.map(i => ({ id: i.product_id, name: i.product_name, price: i.price, qty: i.quantity }))),
         total, payment_method, safeRef, finalDate,
+        delivery_mode, lat, lng, addrForOrder,
       ]);
 
       await client.query('DELETE FROM cart_items WHERE client_username=$1', [req.user.username]);

@@ -8,8 +8,10 @@ import '../services/local_db.dart';
 import '../utils/product_description.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
+import '../widgets/delivery_modal.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/long_press_preview_detector.dart';
+import '../widgets/payment_modal.dart';
 import '../widgets/product_preview_modal.dart';
 import 'client_product_detail.dart';
 
@@ -70,170 +72,35 @@ class ClientCartScreenState extends State<ClientCartScreen> {
 
   double get _total => _items.fold(0, (s, i) => s + i.subtotal);
 
+  // Checkout en dos pasos, cada uno su propia ventana emergente futurista:
+  // 1) entrega (ubicación en tiempo real o dirección escrita) 2) método de
+  // pago (contra entrega solo si se compartió ubicación en el paso 1).
   Future<void> _checkout() async {
     if (_items.isEmpty) return;
 
-    Map<String, dynamic>? methods;
-    try {
-      methods = await ApiService.getPaymentMethods();
-    } catch (_) {}
-    final nequi = methods?['nequi'] as Map<String, dynamic>?;
-    final nequiAvailable = nequi?['available'] == true;
+    final delivery = await showDeliveryModal(context);
+    if (delivery == null || !mounted) return;
 
-    final method = await _pickPaymentMethod(nequiAvailable);
-    if (method == null) return;
+    final payment = await showPaymentModal(context,
+        gpsGranted: delivery.mode == 'gps', total: _total);
+    if (payment == null || !mounted) return;
 
-    if (method == 'nequi') {
-      await _nequiFlow(nequi!);
-    } else {
-      await _contraEntregaFlow();
-    }
-  }
-
-  Future<String?> _pickPaymentMethod(bool nequiAvailable) async {
-    return showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Método de pago',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              // Nequi solo aparece si el admin lo conectó desde el dashboard
-              // del servidor -- antes siempre se mostraba aunque no hubiera
-              // ninguna cuenta configurada, dejando un numero vacio/incorrecto.
-              if (nequiAvailable) ...[
-                _PayOption(
-                  icon: Icons.account_balance_wallet_rounded,
-                  title: 'Nequi',
-                  subtitle: 'Transferencia Nequi',
-                  color: Colors.purple,
-                  onTap: () => Navigator.pop(_, 'nequi'),
-                ),
-                const SizedBox(height: 10),
-              ],
-              _PayOption(
-                icon: Icons.local_shipping_rounded,
-                title: 'Contra entrega',
-                subtitle: 'Pago en efectivo al recibir',
-                color: Colors.orange,
-                onTap: () => Navigator.pop(_, 'contra_entrega'),
-              ),
-            ]),
-      ),
-    );
-  }
-
-  Future<void> _nequiFlow(Map<String, dynamic> nequi) async {
-    final nequiPhone = nequi['phone'] as String? ?? '';
-    final nequiName =
-        nequi['account_name'] as String? ?? 'Concentrados Monserrath';
-    final totalStr = '\$${_fmt(_total)}';
-
-    final refCtrl = TextEditingController();
-    final ref = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Pago Nequi'),
-        content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                    color: Colors.purple.shade50,
-                    borderRadius: BorderRadius.circular(12)),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Enviar $totalStr a:',
-                          style: const TextStyle(
-                              fontSize: 13, color: Colors.black54)),
-                      const SizedBox(height: 4),
-                      Text(nequiName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(nequiPhone,
-                          style: const TextStyle(
-                              fontSize: 18,
-                              color: Colors.purple,
-                              fontWeight: FontWeight.bold)),
-                    ]),
-              ),
-              const SizedBox(height: 16),
-              const Text('Número de referencia Nequi:',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: refCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: 'Ej: 1234567890',
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none),
-                ),
-              ),
-            ]),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(_, null),
-              child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.purple),
-            onPressed: () {
-              if (refCtrl.text.trim().isEmpty) return;
-              Navigator.pop(_, refCtrl.text.trim());
-            },
-            child: const Text('Confirmar pedido'),
-          ),
-        ],
-      ),
-    );
-    if (ref == null) return;
-    await _doCheckout(paymentMethod: 'nequi', nequiReference: ref);
-  }
-
-  Future<void> _contraEntregaFlow() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Contra entrega'),
-        content: Text(
-            'Total a pagar: \$${_fmt(_total)}\n\nConfirmar pedido con pago en efectivo al recibir.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(_, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () => Navigator.pop(_, true),
-            child: const Text('Confirmar pedido'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await _doCheckout(paymentMethod: 'contra_entrega');
+    await _doCheckout(delivery: delivery, payment: payment);
   }
 
   Future<void> _doCheckout(
-      {required String paymentMethod, String? nequiReference}) async {
+      {required DeliveryChoice delivery,
+      required PaymentChoice payment}) async {
     setState(() => _checking = true);
     try {
       await ApiService.checkout(
-        paymentMethod: paymentMethod,
-        nequiReference: nequiReference,
+        paymentMethod: payment.method,
+        paymentReference: payment.reference,
         deliveryDate: _items.isNotEmpty ? _items.first.deliveryDate : null,
+        deliveryMode: delivery.mode,
+        deliveryLat: delivery.lat,
+        deliveryLng: delivery.lng,
+        deliveryAddress: delivery.address,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -438,55 +305,4 @@ class ClientCartScreenState extends State<ClientCartScreen> {
                 ]),
     );
   }
-}
-
-class _PayOption extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-  const _PayOption(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      required this.color,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: color,
-                          fontSize: 15)),
-                  Text(subtitle,
-                      style:
-                          TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                ])),
-            Icon(Icons.arrow_forward_ios_rounded,
-                size: 14, color: Colors.grey.shade400),
-          ]),
-        ),
-      );
 }
