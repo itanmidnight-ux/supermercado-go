@@ -111,8 +111,10 @@ app.post('/productos/:id/imagenes/:filename/eliminar', verifyCsrf, async (req, r
 });
 
 // Proxy de imagenes -- el admin panel no guarda imagenes propias, solo
-// reenvia la del server principal (mismo archivo en disco), adjuntando el
-// token de la cookie porque esa ruta SI exige auth en la API real.
+// reenvia la del server principal (mismo archivo en disco). Esta ruta ya
+// no requiere auth en la API real (son fotos de producto públicas, ver
+// Fase 15), pero igual queda protegida detrás del requireAdmin de este
+// panel -- solo un admin logueado puede llegar hasta aquí.
 app.get('/img/:filename', async (req, res) => {
   const upstream = await fetchImage(req.adminToken, req.params.filename);
   if (!upstream.ok) return res.status(upstream.status).end();
