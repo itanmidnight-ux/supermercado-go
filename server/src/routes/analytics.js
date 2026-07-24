@@ -46,6 +46,14 @@ router.get('/summary', adminAuth, async (req, res, next) => {
 
     const cancelledPct = counts.total > 0 ? Math.round((counts.cancelled / counts.total) * 100) : 0;
 
+    // Pedidos activos ahora mismo -- reemplaza el "ticket promedio" en el
+    // resumen: más útil operativamente para un supermercado en el día a día
+    // (cuántos pedidos hay que atender ya) que un promedio histórico.
+    const { rows: activeRows } = await db.query(
+      `SELECT COUNT(*) AS c FROM orders WHERE status IN ('pending','claimed','en_camino')`
+    );
+    const activeOrders = Number(activeRows[0].c);
+
     // Distribución por estado -- para el donut de la app/panel
     const { rows: statusRows } = await db.query(`
       SELECT status, COUNT(*) AS count FROM orders
@@ -75,6 +83,7 @@ router.get('/summary', adminAuth, async (req, res, next) => {
     res.json({
       sales_today: salesToday,
       avg_ticket: Math.round(avgTicket),
+      active_orders: activeOrders,
       cancelled_pct: cancelledPct,
       delivered_total: counts.delivered,
       status_breakdown: statusBreakdown,
@@ -105,7 +114,36 @@ router.get('/products', adminAuth, async (req, res, next) => {
       ORDER BY stock ASC
     `);
 
-    res.json({ top_products: topProducts, low_stock: lowStock });
+    // Productos que requieren atención: poco stock, o se venden muy poco
+    // (0-2 unidades entregadas en el histórico) -- unificado en una sola
+    // lista para el panel admin, cada uno con su motivo.
+    const { rows: lowDemand } = await db.query(`
+      SELECT p.id, p.name, COALESCE(sold.qty, 0) AS total_qty
+      FROM products p
+      LEFT JOIN (
+        SELECT oi.product_id, SUM(oi.quantity) AS qty
+        FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE o.status IN ('entregado','delivered')
+        GROUP BY oi.product_id
+      ) sold ON sold.product_id = p.id
+      WHERE p.available = 1 AND COALESCE(sold.qty, 0) <= 2
+      ORDER BY total_qty ASC, p.name ASC
+      LIMIT 15
+    `);
+
+    const lowStockIds = new Set(lowStock.map(p => p.id));
+    const needsAttention = [
+      ...lowStock.map(p => ({
+        id: p.id, name: p.name, reason: 'low_stock',
+        detail: `${p.stock} unidades (mínimo ${p.low_stock_threshold})`,
+      })),
+      ...lowDemand.filter(p => !lowStockIds.has(p.id)).map(p => ({
+        id: p.id, name: p.name, reason: 'low_demand',
+        detail: `${Number(p.total_qty)} vendidos en total`,
+      })),
+    ];
+
+    res.json({ top_products: topProducts, low_stock: lowStock, needs_attention: needsAttention });
   } catch (e) { next(e); }
 });
 
@@ -201,11 +239,17 @@ router.get('/customers', adminAuth, async (req, res, next) => {
     `);
     const returning = Number(returningRows[0].c);
 
+    // email viene de users.phone (mismo numero que customers.phone para
+    // clientes registrados en la app) -- clientes que solo escriben por
+    // WhatsApp sin cuenta en la app simplemente no tienen email.
     const { rows: topCustomersRaw } = await db.query(`
-      SELECT c.name, c.phone, COUNT(*) AS order_count
-      FROM orders o JOIN customers c ON c.id = o.customer_id
+      SELECT c.name, c.phone, c.created_at AS customer_since, u.email,
+        COUNT(*) AS order_count
+      FROM orders o
+      JOIN customers c ON c.id = o.customer_id
+      LEFT JOIN users u ON u.phone = c.phone
       WHERE o.status IN ('entregado','delivered')
-      GROUP BY o.customer_id, c.name, c.phone
+      GROUP BY o.customer_id, c.name, c.phone, c.created_at, u.email
       ORDER BY order_count DESC
       LIMIT 10
     `);
