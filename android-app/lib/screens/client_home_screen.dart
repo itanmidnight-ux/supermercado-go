@@ -7,6 +7,7 @@ import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/local_db.dart';
+import '../services/tab_navigator.dart';
 import '../theme/breakpoints.dart';
 import 'client_products_screen.dart';
 import 'client_cart_screen.dart';
@@ -15,13 +16,15 @@ import 'client_profile_screen.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   const ClientHomeScreen({super.key});
-  @override State<ClientHomeScreen> createState() => _ClientHomeScreenState();
+  @override
+  State<ClientHomeScreen> createState() => _ClientHomeScreenState();
 }
 
-class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBindingObserver {
-  int  _tab       = 0;
-  int  _newEstados = 0;
-  bool _isOnline  = true;
+class _ClientHomeScreenState extends State<ClientHomeScreen>
+    with WidgetsBindingObserver {
+  int _tab = 0;
+  int _newEstados = 0;
+  bool _isOnline = true;
   List<Estado> _estados = [];
 
   final _cartKey = GlobalKey<ClientCartScreenState>();
@@ -34,6 +37,16 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
     _initConnectivity();
     _loadEstados();
     NotificationService.startPolling();
+    TabNavigator.requestedTab.addListener(_onTabRequested);
+  }
+
+  void _onTabRequested() {
+    final t = TabNavigator.requestedTab.value;
+    if (t != null && mounted) {
+      setState(() => _tab = t);
+      if (t == 1) _cartKey.currentState?.reload();
+      TabNavigator.requestedTab.value = null;
+    }
   }
 
   @override
@@ -63,10 +76,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
       } else {
         list = await LocalDB.getCachedEstados();
       }
-      if (mounted) setState(() {
-        _estados = list;
-        _newEstados = list.length;
-      });
+      if (mounted)
+        setState(() {
+          _estados = list;
+          _newEstados = list.length;
+        });
     } catch (_) {
       final cached = await LocalDB.getCachedEstados();
       if (mounted) setState(() => _estados = cached);
@@ -78,6 +92,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
     WidgetsBinding.instance.removeObserver(this);
     _connSub?.cancel();
     NotificationService.stopPolling();
+    TabNavigator.requestedTab.removeListener(_onTabRequested);
     super.dispose();
   }
 
@@ -86,14 +101,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
     final size = MediaQuery.of(context).size;
     final isWide = size.width >= kDesktopBreakpoint;
     final content = IndexedStack(index: _tab, children: [
-          const ClientProductsScreen(),
-          ClientCartScreen(key: _cartKey, onViewProducts: () => setState(() => _tab = 0)),
-          ClientEstadosScreen(
-            estados: _estados,
-            onRefresh: _loadEstados,
-          ),
-          const ClientProfileScreen(),
-        ]);
+      const ClientProductsScreen(),
+      ClientCartScreen(
+          key: _cartKey, onViewProducts: () => setState(() => _tab = 0)),
+      ClientEstadosScreen(
+        estados: _estados,
+        onRefresh: _loadEstados,
+      ),
+      const ClientProfileScreen(),
+    ]);
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -108,8 +124,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
             child: Row(children: [
               const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
               const SizedBox(width: 8),
-              const Expanded(child: Text('Sin conexión — mostrando datos guardados',
-                style: TextStyle(color: Colors.white, fontSize: 12))),
+              const Expanded(
+                  child: Text('Sin conexión — mostrando datos guardados',
+                      style: TextStyle(color: Colors.white, fontSize: 12))),
             ]),
           ),
         // ── Content ───────────────────────────────────────
@@ -141,61 +158,85 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
           ],
         ),
       ),
-      child: SafeArea(bottom: false, child: Column(children: [
-        // AppBar row
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(children: [
-            // Logo
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Center(child: Icon(Icons.storefront_rounded, size: 20, color: Colors.white)),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Concentrados', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1)),
-                Text('Monserrath', style: TextStyle(
-                  color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800, height: 1.1)),
-              ],
-            )),
-            // Online/offline indicator
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _isOnline ? Colors.green.shade700 : Colors.orange.shade700,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 6, height: 6,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
-                const SizedBox(width: 5),
-                Text(_isOnline ? 'En línea' : 'Sin conexión',
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+      child: SafeArea(
+          bottom: false,
+          child: Column(children: [
+            // AppBar row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                // Logo
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                      child: Icon(Icons.storefront_rounded,
+                          size: 20, color: Colors.white)),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                    child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Concentrados',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            letterSpacing: 1)),
+                    Text('Monserrath',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1)),
+                  ],
+                )),
+                // Online/offline indicator
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _isOnline
+                        ? Colors.green.shade700
+                        : Colors.orange.shade700,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                            color: Colors.white, shape: BoxShape.circle)),
+                    const SizedBox(width: 5),
+                    Text(_isOnline ? 'En línea' : 'Sin conexión',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+                const SizedBox(width: 8),
+                // Logout
+                GestureDetector(
+                  onTap: () => _confirmLogout(),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.logout_rounded,
+                        color: Colors.white70, size: 18),
+                  ),
+                ),
               ]),
             ),
-            const SizedBox(width: 8),
-            // Logout
-            GestureDetector(
-              onTap: () => _confirmLogout(),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.logout_rounded, color: Colors.white70, size: 18),
-              ),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 4),
-      ])),
+            const SizedBox(height: 4),
+          ])),
     );
   }
 
@@ -204,43 +245,51 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
     return NavigationBar(
       selectedIndex: _tab,
       onDestinationSelected: (i) {
-        setState(() { _tab = i; });
+        setState(() {
+          _tab = i;
+        });
         if (i == 1) _cartKey.currentState?.reload();
         if (i == 2) setState(() => _newEstados = 0);
       },
-
       backgroundColor: Colors.white,
       indicatorColor: scheme.primary.withValues(alpha: 0.16),
       elevation: 8,
       shadowColor: Colors.black26,
       destinations: [
         NavigationDestination(
-          icon:         const Icon(Icons.storefront_outlined),
+          icon: const Icon(Icons.storefront_outlined),
           selectedIcon: Icon(Icons.storefront_rounded, color: scheme.primary),
           label: 'Tienda',
         ),
         NavigationDestination(
-          icon:         const Icon(Icons.shopping_cart_outlined),
-          selectedIcon: Icon(Icons.shopping_cart_rounded, color: scheme.primary),
+          icon: const Icon(Icons.shopping_cart_outlined),
+          selectedIcon:
+              Icon(Icons.shopping_cart_rounded, color: scheme.primary),
           label: 'Carrito',
         ),
         NavigationDestination(
           icon: Stack(clipBehavior: Clip.none, children: [
             const Icon(Icons.auto_stories_outlined),
             if (_newEstados > 0)
-              Positioned(right: -4, top: -4,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: scheme.secondary, shape: BoxShape.circle),
-                  child: Text('$_newEstados',
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                )),
+              Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                        color: scheme.secondary, shape: BoxShape.circle),
+                    child: Text('$_newEstados',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                  )),
           ]),
           selectedIcon: Icon(Icons.auto_stories_rounded, color: scheme.primary),
           label: 'Estados',
         ),
         NavigationDestination(
-          icon:         const Icon(Icons.person_outline_rounded),
+          icon: const Icon(Icons.person_outline_rounded),
           selectedIcon: Icon(Icons.person_rounded, color: scheme.primary),
           label: 'Perfil',
         ),
@@ -256,7 +305,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
     return NavigationRail(
       selectedIndex: _tab,
       onDestinationSelected: (i) {
-        setState(() { _tab = i; });
+        setState(() {
+          _tab = i;
+        });
         if (i == 1) _cartKey.currentState?.reload();
         if (i == 2) setState(() => _newEstados = 0);
       },
@@ -278,13 +329,19 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
           icon: Stack(clipBehavior: Clip.none, children: [
             const Icon(Icons.auto_stories_outlined),
             if (_newEstados > 0)
-              Positioned(right: -4, top: -4,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: scheme.secondary, shape: BoxShape.circle),
-                  child: Text('$_newEstados',
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                )),
+              Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                        color: scheme.secondary, shape: BoxShape.circle),
+                    child: Text('$_newEstados',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                  )),
           ]),
           selectedIcon: const Icon(Icons.auto_stories_rounded),
           label: const Text('Estados'),
@@ -306,8 +363,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
         title: const Text('Cerrar sesión'),
         content: const Text('¿Deseas salir de tu cuenta?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Salir')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Salir')),
         ],
       ),
     );
@@ -317,4 +378,3 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> with WidgetsBinding
     }
   }
 }
-

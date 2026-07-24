@@ -1,29 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/cart_item.dart';
+import '../models/product.dart';
 import '../services/api_service.dart';
+import '../services/local_db.dart';
+import '../utils/product_description.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/long_press_preview_detector.dart';
+import '../widgets/product_preview_modal.dart';
+import 'client_product_detail.dart';
 
 class ClientCartScreen extends StatefulWidget {
   final VoidCallback? onViewProducts;
   const ClientCartScreen({super.key, this.onViewProducts});
-  @override State<ClientCartScreen> createState() => ClientCartScreenState();
+  @override
+  State<ClientCartScreen> createState() => ClientCartScreenState();
 }
 
 class ClientCartScreenState extends State<ClientCartScreen> {
   List<CartItem> _items = [];
   bool _loading = true;
   bool _checking = false;
+  Map<int, Product> _productsById = {};
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadProductsMap();
   }
 
-  void reload() { if (mounted) _load(); }
+  void reload() {
+    if (mounted) _load();
+  }
+
+  // Cache de productos completos (imágenes, aliases) para poder abrir la
+  // vista previa o la página completa desde una tarjeta del carrito -- la
+  // respuesta de /api/cart solo trae nombre/precio, no el producto entero.
+  Future<void> _loadProductsMap() async {
+    try {
+      var list = await LocalDB.getCachedProducts();
+      if (list.isEmpty) list = await ApiService.getProducts();
+      if (mounted)
+        setState(() => _productsById = {
+              for (final p in list)
+                if (p.id != null) p.id!: p
+            });
+    } catch (_) {}
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -47,7 +74,9 @@ class ClientCartScreenState extends State<ClientCartScreen> {
     if (_items.isEmpty) return;
 
     Map<String, dynamic>? methods;
-    try { methods = await ApiService.getPaymentMethods(); } catch (_) {}
+    try {
+      methods = await ApiService.getPaymentMethods();
+    } catch (_) {}
     final nequi = methods?['nequi'] as Map<String, dynamic>?;
     final nequiAvailable = nequi?['available'] == true;
 
@@ -65,41 +94,46 @@ class ClientCartScreenState extends State<ClientCartScreen> {
     return showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Método de pago', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          // Nequi solo aparece si el admin lo conectó desde el dashboard
-          // del servidor -- antes siempre se mostraba aunque no hubiera
-          // ninguna cuenta configurada, dejando un numero vacio/incorrecto.
-          if (nequiAvailable) ...[
-            _PayOption(
-              icon: Icons.account_balance_wallet_rounded,
-              title: 'Nequi',
-              subtitle: 'Transferencia Nequi',
-              color: Colors.purple,
-              onTap: () => Navigator.pop(_, 'nequi'),
-            ),
-            const SizedBox(height: 10),
-          ],
-          _PayOption(
-            icon: Icons.local_shipping_rounded,
-            title: 'Contra entrega',
-            subtitle: 'Pago en efectivo al recibir',
-            color: Colors.orange,
-            onTap: () => Navigator.pop(_, 'contra_entrega'),
-          ),
-        ]),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Método de pago',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              // Nequi solo aparece si el admin lo conectó desde el dashboard
+              // del servidor -- antes siempre se mostraba aunque no hubiera
+              // ninguna cuenta configurada, dejando un numero vacio/incorrecto.
+              if (nequiAvailable) ...[
+                _PayOption(
+                  icon: Icons.account_balance_wallet_rounded,
+                  title: 'Nequi',
+                  subtitle: 'Transferencia Nequi',
+                  color: Colors.purple,
+                  onTap: () => Navigator.pop(_, 'nequi'),
+                ),
+                const SizedBox(height: 10),
+              ],
+              _PayOption(
+                icon: Icons.local_shipping_rounded,
+                title: 'Contra entrega',
+                subtitle: 'Pago en efectivo al recibir',
+                color: Colors.orange,
+                onTap: () => Navigator.pop(_, 'contra_entrega'),
+              ),
+            ]),
       ),
     );
   }
 
   Future<void> _nequiFlow(Map<String, dynamic> nequi) async {
     final nequiPhone = nequi['phone'] as String? ?? '';
-    final nequiName  = nequi['account_name'] as String? ?? 'Concentrados Monserrath';
-    final totalStr   = '\$${_fmt(_total)}';
+    final nequiName =
+        nequi['account_name'] as String? ?? 'Concentrados Monserrath';
+    final totalStr = '\$${_fmt(_total)}';
 
     final refCtrl = TextEditingController();
     final ref = await showDialog<String>(
@@ -107,37 +141,53 @@ class ClientCartScreenState extends State<ClientCartScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: const Text('Pago Nequi'),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.purple.shade50,
-              borderRadius: BorderRadius.circular(12)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Enviar $totalStr a:', style: const TextStyle(fontSize: 13, color: Colors.black54)),
-              const SizedBox(height: 4),
-              Text(nequiName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              Text(nequiPhone, style: const TextStyle(fontSize: 18, color: Colors.purple, fontWeight: FontWeight.bold)),
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                    color: Colors.purple.shade50,
+                    borderRadius: BorderRadius.circular(12)),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Enviar $totalStr a:',
+                          style: const TextStyle(
+                              fontSize: 13, color: Colors.black54)),
+                      const SizedBox(height: 4),
+                      Text(nequiName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(nequiPhone,
+                          style: const TextStyle(
+                              fontSize: 18,
+                              color: Colors.purple,
+                              fontWeight: FontWeight.bold)),
+                    ]),
+              ),
+              const SizedBox(height: 16),
+              const Text('Número de referencia Nequi:',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: refCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: 'Ej: 1234567890',
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none),
+                ),
+              ),
             ]),
-          ),
-          const SizedBox(height: 16),
-          const Text('Número de referencia Nequi:',
-            style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: refCtrl,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              hintText: 'Ej: 1234567890',
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            ),
-          ),
-        ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(_, null), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(_, null),
+              child: const Text('Cancelar')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.purple),
             onPressed: () {
@@ -158,9 +208,12 @@ class ClientCartScreenState extends State<ClientCartScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Contra entrega'),
-        content: Text('Total a pagar: \$${_fmt(_total)}\n\nConfirmar pedido con pago en efectivo al recibir.'),
+        content: Text(
+            'Total a pagar: \$${_fmt(_total)}\n\nConfirmar pedido con pago en efectivo al recibir.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(_, false), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(_, false),
+              child: const Text('Cancelar')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () => Navigator.pop(_, true),
@@ -173,7 +226,8 @@ class ClientCartScreenState extends State<ClientCartScreen> {
     await _doCheckout(paymentMethod: 'contra_entrega');
   }
 
-  Future<void> _doCheckout({required String paymentMethod, String? nequiReference}) async {
+  Future<void> _doCheckout(
+      {required String paymentMethod, String? nequiReference}) async {
     setState(() => _checking = true);
     try {
       await ApiService.checkout(
@@ -190,17 +244,20 @@ class ClientCartScreenState extends State<ClientCartScreen> {
         setState(() => _items = []);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceAll('Exception: ', '')),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
-      ));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ));
     } finally {
       if (mounted) setState(() => _checking = false);
     }
   }
 
-  String _fmt(double v) => NumberFormat.currency(locale: 'es_CO', symbol: '', decimalDigits: 0).format(v);
+  String _fmt(double v) =>
+      NumberFormat.currency(locale: 'es_CO', symbol: '', decimalDigits: 0)
+          .format(v);
 
   @override
   Widget build(BuildContext context) {
@@ -216,7 +273,8 @@ class ClientCartScreenState extends State<ClientCartScreen> {
                 await ApiService.clearCart();
                 _load();
               },
-              child: const Text('Vaciar', style: TextStyle(color: Colors.white70)),
+              child:
+                  const Text('Vaciar', style: TextStyle(color: Colors.white70)),
             ),
         ],
       ),
@@ -237,36 +295,98 @@ class ClientCartScreenState extends State<ClientCartScreen> {
                   ),
                 )
               : Column(children: [
-                  Expanded(child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  Expanded(
+                      child: ListView.builder(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                     itemCount: _items.length,
                     itemBuilder: (_, i) {
                       final item = _items[i];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: AppCard(
-                          padding: const EdgeInsets.all(14),
-                          child: Row(children: [
-                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(item.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              Text('\$${_fmt(item.price)} c/u',
-                                style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                              if (item.deliveryDate != null)
-                                Text('Entrega: ${item.deliveryDate}',
-                                  style: TextStyle(color: scheme.primary, fontSize: 12)),
-                            ])),
-                            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                              Text('\$${_fmt(item.subtotal)}',
-                                style: TextStyle(fontWeight: FontWeight.bold, color: scheme.primary, fontSize: 15)),
-                              Text('x${item.quantity}',
-                                style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                            ]),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                              onPressed: () => _remove(item),
+                      final product = _productsById[item.productId];
+                      final radius = BorderRadius.circular(20);
+
+                      final card = AppCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(children: [
+                          Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                Text(item.productName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                                Text('\$${_fmt(item.price)} c/u',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 12)),
+                                if (item.deliveryDate != null)
+                                  Text('Entrega: ${item.deliveryDate}',
+                                      style: TextStyle(
+                                          color: scheme.primary, fontSize: 12)),
+                              ])),
+                          Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('\$${_fmt(item.subtotal)}',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: scheme.primary,
+                                        fontSize: 15)),
+                                Text('x${item.quantity}',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 13)),
+                              ]),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              _remove(item);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.delete_outline_rounded,
+                                  color: Colors.red, size: 20),
                             ),
-                          ]),
+                          ),
+                        ]),
+                      );
+
+                      return TweenAnimationBuilder<double>(
+                        key: ValueKey(item.productId),
+                        tween: Tween(begin: 0, end: 1),
+                        duration:
+                            Duration(milliseconds: 320 + (i.clamp(0, 6) * 50)),
+                        curve: Curves.easeOutCubic,
+                        builder: (_, v, child) => Opacity(
+                          opacity: v,
+                          child: Transform.translate(
+                              offset: Offset(0, (1 - v) * 14), child: child),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: LongPressPreviewDetector(
+                            borderRadius: radius,
+                            onDoubleTap: product == null
+                                ? null
+                                : () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => ClientProductDetail(
+                                            product: product,
+                                            description:
+                                                productDescription(product)))),
+                            onLongPressReached: product == null
+                                ? () {}
+                                : () => showProductPreviewModal(context,
+                                    product: product,
+                                    description: productDescription(product)),
+                            child: card,
+                          ),
                         ),
                       );
                     },
@@ -277,20 +397,36 @@ class ClientCartScreenState extends State<ClientCartScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(20)),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 8,
+                            offset: Offset(0, -2))
+                      ],
                     ),
-                    child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    child: SafeArea(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
                       Row(children: [
-                        const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text('Total:',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
                         const Spacer(),
                         Text('\$${_fmt(_total)}',
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: scheme.primary)),
+                            style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: scheme.primary)),
                       ]),
                       const SizedBox(height: 12),
-                      SizedBox(width: double.infinity, height: 52,
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
                         child: AppButton(
-                          label: _checking ? 'Procesando...' : 'Realizar pedido',
+                          label:
+                              _checking ? 'Procesando...' : 'Realizar pedido',
                           onPressed: _checking ? null : _checkout,
                           loading: _checking,
                           icon: Icons.payment_rounded,
@@ -310,32 +446,47 @@ class _PayOption extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
-  const _PayOption({required this.icon, required this.title, required this.subtitle,
-    required this.color, required this.onTap});
+  const _PayOption(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.color,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-          child: Icon(icon, color: color, size: 24),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                          fontSize: 15)),
+                  Text(subtitle,
+                      style:
+                          TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                ])),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: Colors.grey.shade400),
+          ]),
         ),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15)),
-          Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-        ])),
-        Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey.shade400),
-      ]),
-    ),
-  );
+      );
 }

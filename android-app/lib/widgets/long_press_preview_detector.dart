@@ -7,7 +7,8 @@ import 'package:flutter/services.dart';
 /// llena mientras el dedo sigue sobre la tarjeta.
 class LongPressPreviewDetector extends StatefulWidget {
   final Widget child;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
   final VoidCallback onLongPressReached;
   final Duration duration;
   final BorderRadius borderRadius;
@@ -15,7 +16,8 @@ class LongPressPreviewDetector extends StatefulWidget {
   const LongPressPreviewDetector({
     super.key,
     required this.child,
-    required this.onTap,
+    this.onTap,
+    this.onDoubleTap,
     required this.onLongPressReached,
     this.duration = const Duration(milliseconds: 2000),
     this.borderRadius = const BorderRadius.all(Radius.circular(20)),
@@ -65,7 +67,7 @@ class _LongPressPreviewDetectorState extends State<LongPressPreviewDetector>
       _triggered = false;
       return;
     }
-    widget.onTap();
+    widget.onTap?.call();
   }
 
   @override
@@ -74,6 +76,7 @@ class _LongPressPreviewDetectorState extends State<LongPressPreviewDetector>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _handleTap,
+      onDoubleTap: widget.onDoubleTap,
       onTapDown: (_) => _start(),
       onTapUp: (_) => _cancelHold(),
       onTapCancel: _cancelHold,
