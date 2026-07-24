@@ -8,6 +8,7 @@ const path    = require('path');
 const { getDB }     = require('../db/database');
 const { adminAuth, clientAuth } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/sanitize');
+const { normalizeAndValidatePhone } = require('../utils/phone');
 
 const PICS_DIR = path.join(process.env.APPDATA || process.env.HOME, 'pedidos-bot', 'profile-pics');
 fs.mkdirSync(PICS_DIR, { recursive: true });
@@ -56,6 +57,52 @@ router.post('/', adminAuth, async (req, res, next) => {
 
     const { rows: userRows } = await db.query(`SELECT ${SAFE_FIELDS} FROM users WHERE id = $1`, [rows[0].id]);
     res.status(201).json({ user: userRows[0] });
+  } catch (e) { next(e); }
+});
+
+// GET /api/users/me — datos propios para la pestaña de perfil. No es una
+// red social: el cliente no puede editar nombre/apodo/dirección/bio (por
+// eso ni siquiera se devuelven para edición), solo ve lo esencial.
+// IMPORTANTE: debe registrarse ANTES de PUT/DELETE /:id -- Express matchea
+// rutas en orden de registro y "/me" calza con el patrón "/:id" (id="me"),
+// lo que forzaría adminAuth sobre cualquier cliente que solo quiere ver o
+// editar su propio perfil.
+router.get('/me', clientAuth, async (req, res, next) => {
+  try {
+    const { rows } = await getDB().query(
+      'SELECT id, username, display_name, role, email, phone, profile_pic FROM users WHERE id=$1', [req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ user: rows[0] });
+  } catch (e) { next(e); }
+});
+
+// PUT /api/users/me — SOLO permite cambiar el correo, y únicamente si se
+// confirma la contraseña actual (evita que un token robado baste para
+// secuestrar la cuenta cambiando el correo de recuperación). Nombre,
+// apodo, dirección y descripción no son editables -- no es una red social.
+router.put('/me', clientAuth, async (req, res, next) => {
+  try {
+    const { email, current_password } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim()))
+      return res.status(400).json({ error: 'Correo inválido' });
+    if (!current_password)
+      return res.status(400).json({ error: 'Confirma tu contraseña actual para cambiar el correo' });
+
+    const db = getDB();
+    const { rows } = await db.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
+    const user = rows[0];
+    const match = await bcrypt.compare(String(current_password), user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+
+    const newEmail = String(email).trim().toLowerCase().slice(0, 200);
+    try {
+      await db.query('UPDATE users SET email=$1 WHERE id=$2', [newEmail, req.user.id]);
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'Ese correo ya está en uso por otra cuenta' });
+      throw e;
+    }
+    res.json({ ok: true, email: newEmail });
   } catch (e) { next(e); }
 });
 
@@ -133,34 +180,29 @@ router.get('/clients', adminAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// PUT /api/users/me — update own profile (any authenticated user)
-router.put('/me', clientAuth, async (req, res, next) => {
+// PUT /api/users/me/phone — igual que el correo: exige contraseña actual.
+router.put('/me/phone', clientAuth, async (req, res, next) => {
   try {
+    const { phone, current_password } = req.body;
+    const normalized = normalizeAndValidatePhone(phone);
+    if (!normalized)
+      return res.status(400).json({ error: 'Número de celular inválido (celular colombiano de 10 dígitos)' });
+    if (!current_password)
+      return res.status(400).json({ error: 'Confirma tu contraseña actual para cambiar el número' });
+
     const db = getDB();
-    const { display_name, address, nickname, bio, email } = req.body;
-    const updates = [];
-    const vals    = [];
-    if (display_name !== undefined) { vals.push(sanitizeText(display_name, 100)); updates.push(`display_name=$${vals.length}`); }
-    if (address !== undefined)      { vals.push(sanitizeText(address, 300));      updates.push(`address=$${vals.length}`); }
-    if (nickname !== undefined)     { vals.push(sanitizeText(nickname, 50));      updates.push(`nickname=$${vals.length}`); }
-    if (bio !== undefined)          { vals.push(sanitizeText(bio, 500));          updates.push(`bio=$${vals.length}`); }
-    if (email !== undefined) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim()))
-        return res.status(400).json({ error: 'Email inválido' });
-      vals.push(String(email).trim().toLowerCase().slice(0,200)); updates.push(`email=$${vals.length}`);
-    }
-    if (!updates.length) return res.status(400).json({ error: 'Nada que actualizar' });
-    vals.push(req.user.id);
+    const { rows } = await db.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
+    const user = rows[0];
+    const match = await bcrypt.compare(String(current_password), user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+
     try {
-      await db.query(`UPDATE users SET ${updates.join(',')} WHERE id=$${vals.length}`, vals);
+      await db.query('UPDATE users SET phone=$1 WHERE id=$2', [normalized, req.user.id]);
     } catch (e) {
-      if (e.code === '23505') { // unique_violation
-        return res.status(409).json({ error: 'Ese correo ya está en uso por otra cuenta' });
-      }
+      if (e.code === '23505') return res.status(409).json({ error: 'Ese número ya está en uso por otra cuenta' });
       throw e;
     }
-    const { rows } = await db.query('SELECT id,username,display_name,role,email,address,nickname,bio,profile_pic FROM users WHERE id=$1', [req.user.id]);
-    res.json({ user: rows[0] });
+    res.json({ ok: true, phone: normalized });
   } catch (e) { next(e); }
 });
 

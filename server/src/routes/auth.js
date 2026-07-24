@@ -192,16 +192,11 @@ const { sanitizeText } = require('../utils/sanitize');
 // (waBot.js, order_card.dart, message.dart): 10 digitos que empiezan en
 // 3 -> se antepone 57. Cualquier otra cosa se rechaza -- no es celular
 // colombiano valido.
-function normalizeAndValidatePhone(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
-  if (digits.length === 10 && digits.startsWith('3')) return '57' + digits;
-  if (digits.length === 12 && digits.startsWith('573')) return digits;
-  return null;
-}
+const { normalizeAndValidatePhone } = require('../utils/phone');
 
 // ── POST /api/auth/register — Self-registration for clients ───
 router.post('/register', async (req, res) => {
-  const { password, email, display_name, address, nickname, bio, phone } = req.body;
+  const { password, email, display_name, address, phone } = req.body;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim()))
     return res.status(400).json({ error: 'Correo electrónico inválido' });
@@ -240,16 +235,14 @@ router.post('/register', async (req, res) => {
     // unico (indice UNIQUE en la base) es la validacion real: evita que
     // se repitan cuentas para la misma persona.
     await db.query(
-      `INSERT INTO users (username, password_hash, pin, display_name, role, active, email, address, nickname, bio, phone)
-       VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10)`,
+      `INSERT INTO users (username, password_hash, pin, display_name, role, active, email, address, phone)
+       VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8)`,
       [
         name, hash, hash,
         sanitizeText(display_name, 100),
         'client',
         String(email).trim().toLowerCase().slice(0, 200),
         sanitizeText(address, 300),
-        nickname ? sanitizeText(nickname, 50) : null,
-        bio      ? sanitizeText(bio, 500)      : null,
         normalizedPhone,
       ]
     );
