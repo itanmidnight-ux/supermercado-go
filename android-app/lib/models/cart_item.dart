@@ -16,13 +16,13 @@ class CartItem {
   });
 
   factory CartItem.fromJson(Map<String, dynamic> j) => CartItem(
-    id:           j['id'],
-    productId:    j['product_id'],
-    productName:  j['product_name'] ?? '',
-    price:        (j['price'] as num).toDouble(),
-    quantity:     j['quantity'] ?? 1,
-    deliveryDate: j['delivery_date'],
-  );
+        id: j['id'],
+        productId: j['product_id'],
+        productName: j['product_name'] ?? '',
+        price: (j['price'] as num).toDouble(),
+        quantity: j['quantity'] ?? 1,
+        deliveryDate: j['delivery_date'],
+      );
 
   double get subtotal => price * quantity;
 }

@@ -326,7 +326,7 @@ setup_service_user() {
 install_npm_deps() {
     step "Dependencias npm"
     cd "$SERVER_DIR"
-    if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json 2>/dev/null ]; then
+    if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]; then
         local log="/tmp/npm-install-$$.log"
         ( npm ci --omit=dev &>"$log" || npm install --omit=dev &>"$log" ) &
         spinner $! "Instalando dependencias npm..." || true

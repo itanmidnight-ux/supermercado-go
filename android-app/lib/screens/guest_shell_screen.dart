@@ -5,6 +5,7 @@ import '../models/product.dart';
 import '../services/api_service.dart';
 import '../services/guest_cart_service.dart';
 import '../utils/product_description.dart';
+import '../widgets/animated_tap_scale.dart';
 import '../widgets/empty_state.dart';
 import 'login_screen.dart';
 
@@ -343,8 +344,7 @@ class _GuestProductCard extends StatelessWidget {
                           color: scheme.primary,
                           fontWeight: FontWeight.w800,
                           fontSize: 16))),
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
+              AnimatedTapScale(
                 onTap: () => onAdd(product),
                 child: Container(
                   padding: const EdgeInsets.all(6),

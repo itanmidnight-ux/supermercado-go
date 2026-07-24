@@ -196,7 +196,9 @@ describe('scanSuspiciousIPs', () => {
   test('marca alerta cuando una IP supera el umbral de LOGINS fallidos reales', async () => {
     const db = getDB();
     const minute = new Date().toISOString().slice(0, 16);
-    await db.query(`INSERT INTO ip_activity (ip, minute, requests, count_401, count_403, count_404, count_auth_fail) VALUES ('198.51.100.77', $1, 20, 6, 0, 0, 6)`, [minute]);
+    await db.query(`INSERT INTO ip_activity (ip, minute, requests, count_401, count_403, count_404, count_auth_fail) VALUES ('198.51.100.77', $1, 20, 6, 0, 0, 6)
+      ON CONFLICT (ip, minute) DO UPDATE SET requests = ip_activity.requests + excluded.requests,
+        count_401 = ip_activity.count_401 + excluded.count_401, count_auth_fail = ip_activity.count_auth_fail + excluded.count_auth_fail`, [minute]);
     await scanSuspiciousIPs();
     const { rows } = await db.query(`SELECT * FROM security_alerts WHERE kind='ip_flagged' ORDER BY id DESC LIMIT 1`);
     expect(rows[0].message).toContain('198.51.100.77');
@@ -208,7 +210,9 @@ describe('scanSuspiciousIPs', () => {
     // Mismo volumen de 401/403 que antes disparaba alerta -- ahora, sin
     // count_auth_fail, es trafico normal (tokens expirando, recursos
     // opcionales sin encontrar), no debe generar ninguna alerta nueva.
-    await db.query(`INSERT INTO ip_activity (ip, minute, requests, count_401, count_403, count_404, count_auth_fail) VALUES ('198.51.100.88', $1, 20, 6, 0, 0, 0)`, [minute]);
+    await db.query(`INSERT INTO ip_activity (ip, minute, requests, count_401, count_403, count_404, count_auth_fail) VALUES ('198.51.100.88', $1, 20, 6, 0, 0, 0)
+      ON CONFLICT (ip, minute) DO UPDATE SET requests = ip_activity.requests + excluded.requests,
+        count_401 = ip_activity.count_401 + excluded.count_401`, [minute]);
     const { rows: beforeRows } = await db.query(`SELECT COUNT(*) c FROM security_alerts WHERE kind='ip_flagged' AND message LIKE '%198.51.100.88%'`);
     await scanSuspiciousIPs();
     const { rows: afterRows } = await db.query(`SELECT COUNT(*) c FROM security_alerts WHERE kind='ip_flagged' AND message LIKE '%198.51.100.88%'`);
@@ -218,7 +222,13 @@ describe('scanSuspiciousIPs', () => {
   test('nunca marca localhost (webhook interno del bot) como sospechoso', async () => {
     const db = getDB();
     const minute = new Date().toISOString().slice(0, 16);
-    await db.query(`INSERT INTO ip_activity (ip, minute, requests, count_401, count_403, count_404, count_auth_fail) VALUES ('127.0.0.1', $1, 1000, 50, 50, 50, 50)`, [minute]);
+    // ON CONFLICT porque el middleware real (ipActivityMiddleware) ya
+    // acumula en segundo plano actividad de 127.0.0.1 por las propias
+    // requests de supertest de este archivo y otros -- un INSERT plano
+    // choca con esa fila si un flush ya la creó para este mismo minuto.
+    await db.query(`INSERT INTO ip_activity (ip, minute, requests, count_401, count_403, count_404, count_auth_fail) VALUES ('127.0.0.1', $1, 1000, 50, 50, 50, 50)
+      ON CONFLICT (ip, minute) DO UPDATE SET requests = ip_activity.requests + excluded.requests,
+        count_401 = ip_activity.count_401 + excluded.count_401, count_auth_fail = ip_activity.count_auth_fail + excluded.count_auth_fail`, [minute]);
     await scanSuspiciousIPs();
     const { rows } = await db.query(`SELECT COUNT(*) c FROM security_alerts WHERE kind='ip_flagged' AND message LIKE '%127.0.0.1%'`);
     expect(Number(rows[0].c)).toBe(0);

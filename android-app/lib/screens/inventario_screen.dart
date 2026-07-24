@@ -302,25 +302,14 @@ class _InventoryDetailModalState extends State<_InventoryDetailModal> {
   }
 
   Future<void> _delete() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Eliminar del inventario'),
-        content: Text(
-            '¿Eliminar "${widget.product.name}" permanentemente? Ya no tiene existencias.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
+    final ok = await showFuturisticConfirm(context,
+        title: 'Eliminar del inventario',
+        message:
+            '¿Eliminar "${widget.product.name}" permanentemente? Ya no tiene existencias.',
+        icon: Icons.delete_outline_rounded,
+        iconColor: Colors.red,
+        confirmLabel: 'Eliminar',
+        confirmColor: Colors.red);
     if (ok != true) return;
     setState(() => _deleting = true);
     try {

@@ -89,8 +89,6 @@ JAVA_MAJ=$(javac -version 2>&1 | grep -oP '(?<=javac )\d+' || echo 0)
 [[ "${JAVA_MAJ:-0}" -ge 17 ]] || die "JDK 17+ requerido. Detectado: $JAVA_MAJ en $JAVA_HOME"
 ok "JDK $JAVA_MAJ — JAVA_HOME=$JAVA_HOME"
 
-JAVA_BIN="$JAVA_HOME/bin/java"
-
 # ── PASO 2: Flutter ──────────────────────────────────────────────
 step "Verificando Flutter..."
 
@@ -141,7 +139,7 @@ PYEOF
         # Fallback a versión conocida
         if [ -z "$FLUTTER_URL" ]; then
             warn "No se pudo obtener URL dinámica — usando versión estable conocida..."
-            FLUTTER_URL="https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.32.2-stable.tar.xz"
+            FLUTTER_URL="https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.8-stable.tar.xz"
         fi
 
         if [ ! -d "$FLUTTER_DIR/.git" ]; then
@@ -346,15 +344,18 @@ ndk.dir=$SDK/ndk/$NDK_VERSION
 LOCALEOF
 
 cd "$APPDIR"
-"$FLUTTER" build apk \
+# Con `set -e` activo, encadenar "cmd; STATUS=$?" nunca llega a evaluar
+# STATUS -- el script aborta en cuanto el build falla, antes de esa
+# línea, y el die() de abajo quedaba como código muerto. El if de aquí
+# captura el fallo sin disparar `set -e`.
+if ! "$FLUTTER" build apk \
     --release \
     --no-pub \
     --obfuscate \
     --split-debug-info="$PROJ/debug-symbols" \
-    2>&1
-
-BUILD_STATUS=$?
-[ "$BUILD_STATUS" -eq 0 ] || die "flutter build apk falló con código $BUILD_STATUS"
+    2>&1; then
+    die "flutter build apk falló. Revisa el log completo arriba."
+fi
 
 # ── PASO 10: Copiar APK al directorio raíz ───────────────────────
 [ -f "$APK_BUILD" ] || die "APK no generado en: $APK_BUILD"

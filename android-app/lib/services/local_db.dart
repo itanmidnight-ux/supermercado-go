@@ -17,7 +17,8 @@ class LocalDB {
   static Database? _db;
 
   static Future<Database> get _database async {
-    if (kIsWeb) throw UnsupportedError('LocalDB no está disponible en Flutter Web');
+    if (kIsWeb)
+      throw UnsupportedError('LocalDB no está disponible en Flutter Web');
     _db ??= await _open();
     return _db!;
   }
@@ -97,11 +98,14 @@ class LocalDB {
   ''';
 
   // ── Cola de ubicaciones pendientes ───────────────────────────
-  static Future<void> queueLocation(double lat, double lng, double? accuracy) async {
+  static Future<void> queueLocation(
+      double lat, double lng, double? accuracy) async {
     if (kIsWeb) return;
     final db = await _database;
     await db.insert('location_queue', {
-      'lat': lat, 'lng': lng, 'accuracy': accuracy,
+      'lat': lat,
+      'lng': lng,
+      'accuracy': accuracy,
       'recorded_at': DateTime.now().millisecondsSinceEpoch,
     });
   }
@@ -123,8 +127,11 @@ class LocalDB {
   static Future<void> pruneOldQueuedLocations() async {
     if (kIsWeb) return;
     final db = await _database;
-    final cutoff = DateTime.now().subtract(const Duration(hours: 24)).millisecondsSinceEpoch;
-    await db.delete('location_queue', where: 'recorded_at < ?', whereArgs: [cutoff]);
+    final cutoff = DateTime.now()
+        .subtract(const Duration(hours: 24))
+        .millisecondsSinceEpoch;
+    await db.delete('location_queue',
+        where: 'recorded_at < ?', whereArgs: [cutoff]);
   }
 
   // ── Products ──────────────────────────────────────────────
@@ -135,17 +142,20 @@ class LocalDB {
     batch.delete('cached_products');
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final p in products) {
-      batch.insert('cached_products', {
-        'id':        p.id,
-        'name':      p.name,
-        'aliases':   jsonEncode(p.aliases),
-        'price':     p.price,
-        'available': p.available ? 1 : 0,
-        'favorite':  p.favorite  ? 1 : 0,
-        'no_fiado':  p.noFiado   ? 1 : 0,
-        'images':    jsonEncode(p.images),
-        'cached_at': now,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+          'cached_products',
+          {
+            'id': p.id,
+            'name': p.name,
+            'aliases': jsonEncode(p.aliases),
+            'price': p.price,
+            'available': p.available ? 1 : 0,
+            'favorite': p.favorite ? 1 : 0,
+            'no_fiado': p.noFiado ? 1 : 0,
+            'images': jsonEncode(p.images),
+            'cached_at': now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
@@ -153,17 +163,22 @@ class LocalDB {
   static Future<List<Product>> getCachedProducts() async {
     if (kIsWeb) return [];
     final db = await _database;
-    final rows = await db.query('cached_products', orderBy: 'favorite DESC, name ASC');
-    return rows.map((r) => Product(
-      id:        r['id']    as int?,
-      name:      r['name']  as String,
-      aliases:   List<String>.from(jsonDecode(r['aliases'] as String? ?? '[]')),
-      price:     (r['price'] as num).toDouble(),
-      available: (r['available'] as int) == 1,
-      favorite:  (r['favorite']  as int) == 1,
-      noFiado:   (r['no_fiado']  as int) == 1,
-      images:    List<String>.from(jsonDecode(r['images'] as String? ?? '[]')),
-    )).toList();
+    final rows =
+        await db.query('cached_products', orderBy: 'favorite DESC, name ASC');
+    return rows
+        .map((r) => Product(
+              id: r['id'] as int?,
+              name: r['name'] as String,
+              aliases: List<String>.from(
+                  jsonDecode(r['aliases'] as String? ?? '[]')),
+              price: (r['price'] as num).toDouble(),
+              available: (r['available'] as int) == 1,
+              favorite: (r['favorite'] as int) == 1,
+              noFiado: (r['no_fiado'] as int) == 1,
+              images:
+                  List<String>.from(jsonDecode(r['images'] as String? ?? '[]')),
+            ))
+        .toList();
   }
 
   // ── Estados ───────────────────────────────────────────────
@@ -173,18 +188,21 @@ class LocalDB {
     final batch = db.batch();
     batch.delete('cached_estados');
     for (final e in estados) {
-      batch.insert('cached_estados', {
-        'id':            e.id,
-        'admin_username': e.adminUsername,
-        'filename':      e.filename,
-        'media_type':    e.mediaType,
-        'caption':       e.caption,
-        'created_at':    e.createdAt.toIso8601String(),
-        'expires_at':    e.expiresAt.toIso8601String(),
-        'heart_count':   e.heartCount,
-        'has_hearted':   e.hasHearted ? 1 : 0,
-        'comment_count': e.commentCount,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+          'cached_estados',
+          {
+            'id': e.id,
+            'admin_username': e.adminUsername,
+            'filename': e.filename,
+            'media_type': e.mediaType,
+            'caption': e.caption,
+            'created_at': e.createdAt.toIso8601String(),
+            'expires_at': e.expiresAt.toIso8601String(),
+            'heart_count': e.heartCount,
+            'has_hearted': e.hasHearted ? 1 : 0,
+            'comment_count': e.commentCount,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
@@ -195,121 +213,139 @@ class LocalDB {
     final rows = await db.query('cached_estados', orderBy: 'created_at DESC');
     final now = DateTime.now();
     return rows
-      .map((r) {
-        final expires = DateTime.parse(r['expires_at'] as String);
-        if (expires.isBefore(now)) return null;
-        return Estado(
-          id:           r['id']            as int,
-          adminUsername: r['admin_username'] as String,
-          filename:     r['filename']       as String,
-          mediaType:    r['media_type']     as String,
-          caption:      r['caption']        as String?,
-          createdAt:    DateTime.parse(r['created_at'] as String),
-          expiresAt:    expires,
-          heartCount:   (r['heart_count']   as int?) ?? 0,
-          hasHearted:   ((r['has_hearted']  as int?) ?? 0) == 1,
-          commentCount: (r['comment_count'] as int?) ?? 0,
-        );
-      })
-      .where((e) => e != null)
-      .cast<Estado>()
-      .toList();
+        .map((r) {
+          final expires = DateTime.parse(r['expires_at'] as String);
+          if (expires.isBefore(now)) return null;
+          return Estado(
+            id: r['id'] as int,
+            adminUsername: r['admin_username'] as String,
+            filename: r['filename'] as String,
+            mediaType: r['media_type'] as String,
+            caption: r['caption'] as String?,
+            createdAt: DateTime.parse(r['created_at'] as String),
+            expiresAt: expires,
+            heartCount: (r['heart_count'] as int?) ?? 0,
+            hasHearted: ((r['has_hearted'] as int?) ?? 0) == 1,
+            commentCount: (r['comment_count'] as int?) ?? 0,
+          );
+        })
+        .where((e) => e != null)
+        .cast<Estado>()
+        .toList();
   }
 
   // ── App state (notification tracking) ────────────────────
   static Future<int> getLastEstadoId() async {
     if (kIsWeb) return 0;
-    final db  = await _database;
-    final row = await db.query('app_state', where: 'key=?', whereArgs: ['last_estado_id']);
+    final db = await _database;
+    final row = await db
+        .query('app_state', where: 'key=?', whereArgs: ['last_estado_id']);
     return int.tryParse(row.firstOrNull?['value'] as String? ?? '0') ?? 0;
   }
 
   static Future<void> setLastEstadoId(int id) async {
     if (kIsWeb) return;
     final db = await _database;
-    await db.insert('app_state', {'key': 'last_estado_id', 'value': id.toString()},
-      conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+        'app_state', {'key': 'last_estado_id', 'value': id.toString()},
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<int> getLastProductId() async {
     if (kIsWeb) return 0;
-    final db  = await _database;
-    final row = await db.query('app_state', where: 'key=?', whereArgs: ['last_product_id']);
+    final db = await _database;
+    final row = await db
+        .query('app_state', where: 'key=?', whereArgs: ['last_product_id']);
     return int.tryParse(row.firstOrNull?['value'] as String? ?? '0') ?? 0;
   }
 
   static Future<void> setLastProductId(int id) async {
     if (kIsWeb) return;
     final db = await _database;
-    await db.insert('app_state', {'key': 'last_product_id', 'value': id.toString()},
-      conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+        'app_state', {'key': 'last_product_id', 'value': id.toString()},
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// Ultimo status conocido por pedido (id -> status), para detectar cambios
   /// de estado del cliente (en_camino/entregado/cancelled) y notificar.
   static Future<Map<String, String>> getOrderStatuses() async {
     if (kIsWeb) return {};
-    final db  = await _database;
-    final row = await db.query('app_state', where: 'key=?', whereArgs: ['order_statuses']);
+    final db = await _database;
+    final row = await db
+        .query('app_state', where: 'key=?', whereArgs: ['order_statuses']);
     final raw = row.firstOrNull?['value'] as String?;
     if (raw == null) return {};
-    try { return Map<String, String>.from(jsonDecode(raw) as Map); } catch (_) { return {}; }
+    try {
+      return Map<String, String>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return {};
+    }
   }
 
   static Future<void> setOrderStatuses(Map<String, String> statuses) async {
     if (kIsWeb) return;
     final db = await _database;
-    await db.insert('app_state', {'key': 'order_statuses', 'value': jsonEncode(statuses)},
-      conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+        'app_state', {'key': 'order_statuses', 'value': jsonEncode(statuses)},
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ── Orders cache ──────────────────────────────────────────
   static Future<void> saveOrders(List<Order> orders) async {
     if (kIsWeb) return;
-    final db  = await _database;
+    final db = await _database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final batch = db.batch();
     batch.delete('cached_orders');
     for (final o in orders) {
-      batch.insert('cached_orders', {
-        'id':        o.id,
-        'data_json': jsonEncode(o.toMap()),
-        'cached_at': now,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+          'cached_orders',
+          {
+            'id': o.id,
+            'data_json': jsonEncode(o.toMap()),
+            'cached_at': now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
 
   static Future<List<Order>> getOrders() async {
     if (kIsWeb) return [];
-    final db   = await _database;
+    final db = await _database;
     final rows = await db.query('cached_orders', orderBy: 'id DESC');
     const active = {'pending', 'claimed', 'en_camino'};
     return rows
-      .map((r) => Order.fromJson(jsonDecode(r['data_json'] as String)))
-      .where((o) => active.contains(o.status))
-      .toList();
+        .map((r) => Order.fromJson(jsonDecode(r['data_json'] as String)))
+        .where((o) => active.contains(o.status))
+        .toList();
   }
 
   // ── Pending sync ──────────────────────────────────────────
-  static Future<void> _addSync(String action, int id, {Map<String, dynamic>? data}) async {
+  static Future<void> _addSync(String action, int id,
+      {Map<String, dynamic>? data}) async {
     final db = await _database;
     await db.insert('pending_sync', {
-      'action':    action,
-      'order_id':  id,
+      'action': action,
+      'order_id': id,
       'data_json': data != null ? jsonEncode(data) : null,
     });
   }
 
   static Future<List<Map<String, dynamic>>> getPendingSync() async {
     if (kIsWeb) return [];
-    final db   = await _database;
+    final db = await _database;
     final rows = await db.query('pending_sync', orderBy: 'id ASC');
-    return rows.map((r) => {
-      'action': r['action'],
-      'id':     r['order_id'],
-      if (r['data_json'] != null) ...(jsonDecode(r['data_json'] as String) as Map<String, dynamic>),
-    }).toList();
+    return rows
+        .map((r) => {
+              'action': r['action'],
+              'id': r['order_id'],
+              if (r['data_json'] != null)
+                ...(jsonDecode(r['data_json'] as String)
+                    as Map<String, dynamic>),
+            })
+        .toList();
   }
 
   static Future<void> clearPendingSync() async {
@@ -319,15 +355,20 @@ class LocalDB {
   }
 
   static Future<void> _updateOrder(int id, void Function(Order o) fn) async {
-    final db  = await _database;
-    final rows = await db.query('cached_orders', where: 'id=?', whereArgs: [id]);
+    final db = await _database;
+    final rows =
+        await db.query('cached_orders', where: 'id=?', whereArgs: [id]);
     if (rows.isEmpty) return;
     final order = Order.fromJson(jsonDecode(rows.first['data_json'] as String));
     fn(order);
-    await db.update('cached_orders', {
-      'data_json': jsonEncode(order.toMap()),
-      'cached_at': DateTime.now().millisecondsSinceEpoch,
-    }, where: 'id=?', whereArgs: [id]);
+    await db.update(
+        'cached_orders',
+        {
+          'data_json': jsonEncode(order.toMap()),
+          'cached_at': DateTime.now().millisecondsSinceEpoch,
+        },
+        where: 'id=?',
+        whereArgs: [id]);
   }
 
   static Future<void> markDelivered(int id) async {

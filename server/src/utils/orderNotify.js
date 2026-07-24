@@ -11,9 +11,13 @@ const STATUS_TEXT = {
   cancelled: order => `❌ Tu pedido #${order.id} fue cancelado.${order.cancel_reason ? ` Motivo: ${order.cancel_reason}` : ''}`,
 };
 
-// Se llama sin await desde orders.js (efecto secundario, no bloquea la
-// respuesta al cliente) -- por eso atrapa sus propios errores en vez de
-// dejar una promesa rechazada sin manejar.
+// orders.js espera esta promesa antes de responder -- un solo INSERT es
+// despreciable en latencia y así se garantiza que la notificación ya está
+// encolada cuando el cliente recibe la respuesta (sin esto, un GET
+// /messages inmediatamente después podía no ver todavía el mensaje nuevo).
+// Aun así atrapa sus propios errores: un fallo al encolar la notificación
+// no debe tumbar la respuesta del cambio de estado del pedido, que ya se
+// aplicó correctamente en la base de datos.
 async function notifyOrderStatus(order) {
   const build = STATUS_TEXT[order.status];
   if (!build || !order.phone) return;

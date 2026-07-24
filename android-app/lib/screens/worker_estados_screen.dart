@@ -6,7 +6,8 @@ import '../widgets/empty_state.dart';
 
 class WorkerEstadosScreen extends StatefulWidget {
   const WorkerEstadosScreen({super.key});
-  @override State<WorkerEstadosScreen> createState() => _WorkerEstadosScreenState();
+  @override
+  State<WorkerEstadosScreen> createState() => _WorkerEstadosScreenState();
 }
 
 class _WorkerEstadosScreenState extends State<WorkerEstadosScreen> {
@@ -38,7 +39,8 @@ class _WorkerEstadosScreenState extends State<WorkerEstadosScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    if (_loading) return Center(child: CircularProgressIndicator(color: scheme.primary));
+    if (_loading)
+      return Center(child: CircularProgressIndicator(color: scheme.primary));
 
     if (_estados.isEmpty) {
       return const EmptyState(
@@ -54,8 +56,10 @@ class _WorkerEstadosScreenState extends State<WorkerEstadosScreen> {
       child: GridView.builder(
         padding: const EdgeInsets.all(12),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
-          childAspectRatio: 0.75),
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.75),
         itemCount: _estados.length,
         itemBuilder: (_, i) {
           final e = _estados[i];
@@ -69,43 +73,63 @@ class _WorkerEstadosScreenState extends State<WorkerEstadosScreen> {
                         httpHeaders: ApiService.imageHeaders,
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(Icons.image_not_supported, color: Colors.grey, size: 48)),
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.image_not_supported,
+                                color: Colors.grey, size: 48)),
                       )
                     : Container(
                         color: Colors.black87,
-                        child: const Icon(Icons.videocam, color: Colors.white, size: 48)),
+                        child: const Icon(Icons.videocam,
+                            color: Colors.white, size: 48)),
               ),
-              Positioned.fill(child: DecoratedBox(
+              Positioned.fill(
+                  child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.6)
+                    ],
                   ),
                 ),
               )),
-              Positioned(left: 8, right: 8, bottom: 8, child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (e.caption != null)
-                    Text(e.caption!,
-                      maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
-                  if (e.productName != null)
-                    Row(children: [
-                      Icon(Icons.shopping_bag_outlined, color: scheme.secondary, size: 12),
-                      const SizedBox(width: 3),
-                      Expanded(child: Text(e.productName!,
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: scheme.secondary, fontSize: 11))),
-                    ]),
-                  const SizedBox(height: 2),
-                  Text(_timeLeft(e),
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 10)),
-                ],
-              )),
+              Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 8,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (e.caption != null)
+                        Text(e.caption!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500)),
+                      if (e.productName != null)
+                        Row(children: [
+                          Icon(Icons.shopping_bag_outlined,
+                              color: scheme.secondary, size: 12),
+                          const SizedBox(width: 3),
+                          Expanded(
+                              child: Text(e.productName!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: scheme.secondary, fontSize: 11))),
+                        ]),
+                      const SizedBox(height: 2),
+                      Text(_timeLeft(e),
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 10)),
+                    ],
+                  )),
             ]),
           );
         },

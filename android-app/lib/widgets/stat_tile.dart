@@ -26,18 +26,29 @@ class StatTile extends StatelessWidget {
         Row(children: [
           if (icon != null) Icon(icon, size: 18, color: scheme.primary),
           if (icon != null) const SizedBox(width: 6),
-          Expanded(child: Text(label, style: Theme.of(context).textTheme.labelSmall)),
+          Expanded(
+              child:
+                  Text(label, style: Theme.of(context).textTheme.labelSmall)),
         ]),
         const SizedBox(height: 8),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(value, style: Theme.of(context).textTheme.headlineSmall),
           if (delta != null) ...[
             const SizedBox(width: 8),
-            Icon(deltaPositive ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                size: 14, color: deltaPositive ? AppTheme.successColor : AppTheme.errorColor),
-            Text(delta!, style: TextStyle(
-                fontSize: 12,
-                color: deltaPositive ? AppTheme.successColor : AppTheme.errorColor)),
+            Icon(
+                deltaPositive
+                    ? Icons.arrow_upward_rounded
+                    : Icons.arrow_downward_rounded,
+                size: 14,
+                color: deltaPositive
+                    ? AppTheme.successColor
+                    : AppTheme.errorColor),
+            Text(delta!,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: deltaPositive
+                        ? AppTheme.successColor
+                        : AppTheme.errorColor)),
           ],
         ]),
       ]),

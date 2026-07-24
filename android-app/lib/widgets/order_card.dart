@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/order.dart';
 import '../screens/chat_screen.dart';
 import '../screens/order_detail_screen.dart';
+import 'futuristic_modal.dart';
 
 class OrderCard extends StatelessWidget {
   final Order order;
@@ -66,55 +67,88 @@ class OrderCard extends StatelessWidget {
 
   void _showCancelDialog(BuildContext ctx) {
     final ctrl = TextEditingController();
-    showDialog(
-        context: ctx,
-        builder: (_) => AlertDialog(
-              title: const Text('Cancelar pedido'),
-              content: TextField(
+    showFuturisticModal(
+      ctx,
+      builder: (_) => FuturisticModalCard(
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModalCloseButton(),
+              const Icon(Icons.cancel_outlined, size: 40, color: Colors.red),
+              const SizedBox(height: 8),
+              const Text('Cancelar pedido',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 14),
+              TextField(
                   controller: ctrl,
+                  autofocus: true,
                   decoration: const InputDecoration(
-                      hintText: 'Motivo de cancelación...')),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Volver')),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () {
-                    if (ctrl.text.trim().isNotEmpty) {
-                      onCancel?.call(ctrl.text.trim());
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  child: const Text('Cancelar pedido'),
-                ),
-              ],
-            ));
+                      hintText: 'Motivo de cancelación...',
+                      border: OutlineInputBorder())),
+              const SizedBox(height: 18),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  if (ctrl.text.trim().isNotEmpty) {
+                    onCancel?.call(ctrl.text.trim());
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: const Text('Cancelar pedido'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Volver')),
+            ]),
+      ),
+    );
   }
 
   void _showCommentDialog(BuildContext ctx) {
     final ctrl = TextEditingController(text: order.comment);
-    showDialog(
-        context: ctx,
-        builder: (_) => AlertDialog(
-              title: const Text('Comentario'),
-              content: TextField(
+    showFuturisticModal(
+      ctx,
+      builder: (_) => FuturisticModalCard(
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModalCloseButton(),
+              const Icon(Icons.comment_outlined, size: 36),
+              const SizedBox(height: 8),
+              const Text('Comentario',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 14),
+              TextField(
                   controller: ctrl,
                   maxLines: 3,
+                  autofocus: true,
                   decoration: const InputDecoration(
-                      hintText: 'Escribe un comentario...')),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar')),
-                FilledButton(
-                    onPressed: () {
-                      onComment(ctrl.text);
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Guardar')),
-              ],
-            ));
+                      hintText: 'Escribe un comentario...',
+                      border: OutlineInputBorder())),
+              const SizedBox(height: 18),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  onComment(ctrl.text);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Guardar'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar')),
+            ]),
+      ),
+    );
   }
 
   void _openInAppChat(BuildContext ctx) {
