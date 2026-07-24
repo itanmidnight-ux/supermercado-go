@@ -32,10 +32,29 @@ const upload = multer({
 
 function validPhone(p) { return /^\d{7,15}$/.test(String(p || '').trim()); }
 
+// Un worker solo puede leer/escribir en la conversación de un cliente cuyo
+// pedido reclamó alguna vez -- los admins siempre pueden. Mismo criterio
+// aplicado en GET / (listado), aquí se repite por si acceden directo a
+// una conversación puntual sin pasar por el listado filtrado.
+async function canAccessConversation(req, phone) {
+  if (req.user.role === 'admin') return true;
+  const { rows } = await getDB().query(
+    `SELECT 1 FROM orders o JOIN customers c ON c.id = o.customer_id
+     WHERE o.claimed_by = $1 AND c.phone = $2 LIMIT 1`,
+    [req.user.id, phone]
+  );
+  return rows.length > 0;
+}
+
 // ── GET / — Conversaciones (no archivadas por defecto) ────────
+// Seguridad: un worker solo ve los chats de clientes cuyo pedido
+// reclamó alguna vez -- evita que cualquier trabajador pueda leer
+// conversaciones de pedidos ajenos. Los admins ven todo (administran
+// el negocio completo).
 router.get('/', staffAuth, async (req, res, next) => {
   try {
     const archived = req.query.archived === 'true' ? 1 : 0;
+    const isAdmin  = req.user.role === 'admin';
     // MAX(...) envuelve columnas no agregadas -- Postgres exige que todo lo
     // no listado en GROUP BY sea agregado (SQLite era laxo con esto). Los
     // subqueries correlacionados ya devuelven un solo valor por m.phone, asi
@@ -54,9 +73,13 @@ router.get('/', staffAuth, async (req, res, next) => {
       FROM messages m
       LEFT JOIN customers c ON c.phone = m.phone
       WHERE COALESCE(c.archived, 0) = $1 AND m.deleted_at IS NULL
+        ${isAdmin ? '' : `AND m.phone IN (
+          SELECT cu.phone FROM orders o JOIN customers cu ON cu.id = o.customer_id
+          WHERE o.claimed_by = $2
+        )`}
       GROUP BY m.phone
       ORDER BY flagged_count DESC, last_at DESC
-    `, [archived]);
+    `, isAdmin ? [archived] : [archived, req.user.id]);
     res.json(convs.map(c => ({ ...c, unread: Number(c.unread), flagged_count: Number(c.flagged_count) })));
   } catch (e) { next(e); }
 });
@@ -149,6 +172,8 @@ router.put('/:phone/read', staffAuth, async (req, res, next) => {
 router.get('/:phone', staffAuth, async (req, res, next) => {
   try {
     if (!validPhone(req.params.phone)) return res.status(400).json({ error: 'phone inválido' });
+    if (!await canAccessConversation(req, req.params.phone.trim()))
+      return res.status(403).json({ error: 'No tienes acceso a esta conversación' });
     const { rows } = await getDB().query(
       `SELECT * FROM messages WHERE phone=$1 AND deleted_at IS NULL ORDER BY created_at ASC`,
       [req.params.phone.trim()]
@@ -196,6 +221,10 @@ router.post('/send-media', staffAuth, upload.single('file'), async (req, res, ne
 
     const { phone, media_type } = req.body;
     if (!validPhone(phone)) return res.status(400).json({ error: 'phone inválido' });
+    if (!await canAccessConversation(req, phone.trim())) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(403).json({ error: 'No tienes acceso a esta conversación' });
+    }
     const validTypes = ['audio', 'image', 'video', 'document'];
     if (!validTypes.includes(media_type)) return res.status(400).json({ error: 'media_type inválido' });
 
@@ -242,6 +271,8 @@ router.post('/send', staffAuth, async (req, res, next) => {
     // Normalize Colombian 10-digit mobiles to full E.164
     const phone = (raw.length === 10 && raw.startsWith('3')) ? '57' + raw : raw;
     if (!validPhone(phone)) return res.status(400).json({ error: 'phone inválido (7-15 dígitos)' });
+    if (!await canAccessConversation(req, phone))
+      return res.status(403).json({ error: 'No tienes acceso a esta conversación' });
     const { content } = req.body;
     if (!content || typeof content !== 'string' || content.trim().length === 0 || content.length > 1000) {
       return res.status(400).json({ error: 'content requerido (máximo 1000 caracteres)' });

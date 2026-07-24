@@ -17,6 +17,12 @@ class Order {
   final String? cancelReason;
   final List<Map<String, dynamic>> items;
   bool pendingSync;
+  final String? paymentMethod; // 'nequi' | 'visa' | 'contra_entrega'
+  final String? paymentReference;
+  final bool paid;
+  final String? deliveryMode; // 'gps' | 'address'
+  final double? deliveryLat;
+  final double? deliveryLng;
 
   Order({
     this.id,
@@ -37,50 +43,76 @@ class Order {
     this.cancelReason,
     this.items = const [],
     this.pendingSync = false,
+    this.paymentMethod,
+    this.paymentReference,
+    this.paid = false,
+    this.deliveryMode,
+    this.deliveryLat,
+    this.deliveryLng,
   });
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
-    id:              j['id'],
-    productName:     j['product_name'] ?? '',
-    productPrice:    (j['product_price'] as num?)?.toDouble(),
-    deliveryAddress: j['delivery_address'] ?? '',
-    isFiado:         j['is_fiado'] == 1 || j['is_fiado'] == true,
-    status:          j['status'] ?? 'pending',
-    waMessage:       j['wa_message'] ?? '',
-    comment:         j['comment'],
-    requestedAt:     j['requested_at'] ?? '',
-    deliveredAt:     j['delivered_at'],
-    customerName:    j['customer_name'],
-    customerPhone:   j['phone'],
-    claimedBy:           j['claimed_by'],
-    claimedByName:       j['claimed_by_display'] ?? j['claimed_by_name'],
-    claimedByUsername:   j['claimed_by_name'],
-    cancelReason:        j['cancel_reason'],
-    items:           (j['items'] as List?)?.cast<Map<String, dynamic>>() ?? [],
-  );
+        id: j['id'],
+        productName: j['product_name'] ?? '',
+        productPrice: (j['product_price'] as num?)?.toDouble(),
+        deliveryAddress: j['delivery_address'] ?? '',
+        isFiado: j['is_fiado'] == 1 || j['is_fiado'] == true,
+        status: j['status'] ?? 'pending',
+        waMessage: j['wa_message'] ?? '',
+        comment: j['comment'],
+        requestedAt: j['requested_at'] ?? '',
+        deliveredAt: j['delivered_at'],
+        customerName: j['customer_name'],
+        customerPhone: j['phone'],
+        claimedBy: j['claimed_by'],
+        claimedByName: j['claimed_by_display'] ?? j['claimed_by_name'],
+        claimedByUsername: j['claimed_by_name'],
+        cancelReason: j['cancel_reason'],
+        items: (j['items'] as List?)?.cast<Map<String, dynamic>>() ?? [],
+        paymentMethod: j['payment_method'] as String?,
+        paymentReference: j['payment_reference'] as String?,
+        paid: j['paid'] == 1 || j['paid'] == true,
+        deliveryMode: j['delivery_mode'] as String?,
+        deliveryLat: (j['delivery_lat'] as num?)?.toDouble(),
+        deliveryLng: (j['delivery_lng'] as num?)?.toDouble(),
+      );
 
-  bool get isActive  => ['pending', 'claimed', 'en_camino'].contains(status);
+  bool get isActive => ['pending', 'claimed', 'en_camino'].contains(status);
   bool get isClaimed => claimedBy != null;
   String get statusLabel {
     switch (status) {
-      case 'pending':   return 'Pendiente';
-      case 'claimed':   return 'Reclamado por ${claimedByName ?? '?'}';
-      case 'en_camino': return 'En camino • ${claimedByName ?? '?'}';
+      case 'pending':
+        return 'Pendiente';
+      case 'claimed':
+        return 'Reclamado por ${claimedByName ?? '?'}';
+      case 'en_camino':
+        return 'En camino • ${claimedByName ?? '?'}';
       case 'entregado':
-      case 'delivered': return 'Entregado';
-      case 'cancelled': return 'Cancelado';
-      default:          return status;
+      case 'delivered':
+        return 'Entregado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return status;
     }
   }
 
   Map<String, dynamic> toMap() => {
-    'id': id, 'product_name': productName, 'product_price': productPrice,
-    'delivery_address': deliveryAddress, 'is_fiado': isFiado ? 1 : 0,
-    'status': status, 'wa_message': waMessage, 'comment': comment,
-    'requested_at': requestedAt, 'delivered_at': deliveredAt,
-    'customer_name': customerName, 'customer_phone': customerPhone,
-    'claimed_by': claimedBy, 'claimed_by_name': claimedByName,
-    'cancel_reason': cancelReason,
-    'pending_sync': pendingSync ? 1 : 0,
-  };
+        'id': id,
+        'product_name': productName,
+        'product_price': productPrice,
+        'delivery_address': deliveryAddress,
+        'is_fiado': isFiado ? 1 : 0,
+        'status': status,
+        'wa_message': waMessage,
+        'comment': comment,
+        'requested_at': requestedAt,
+        'delivered_at': deliveredAt,
+        'customer_name': customerName,
+        'customer_phone': customerPhone,
+        'claimed_by': claimedBy,
+        'claimed_by_name': claimedByName,
+        'cancel_reason': cancelReason,
+        'pending_sync': pendingSync ? 1 : 0,
+      };
 }
