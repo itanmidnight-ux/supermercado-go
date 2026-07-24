@@ -886,6 +886,8 @@ class ApiService {
     String? mimeType,
     int? productId,
     String? productName,
+    String? discountType, // 'percent' | '2x1'
+    double? discountValue,
   }) async {
     final uri = Uri.parse('$_serverUrl/api/estados');
     final request = http.MultipartRequest('POST', uri);
@@ -893,6 +895,9 @@ class ApiService {
     if (caption != null) request.fields['caption'] = caption;
     if (productId != null) request.fields['product_id'] = productId.toString();
     if (productName != null) request.fields['product_name'] = productName;
+    if (discountType != null) request.fields['discount_type'] = discountType;
+    if (discountValue != null)
+      request.fields['discount_value'] = discountValue.toString();
 
     if (bytes != null) {
       final mt = MediaType.parse(mimeType ?? 'image/jpeg');

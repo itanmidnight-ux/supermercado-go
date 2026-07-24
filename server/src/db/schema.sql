@@ -218,6 +218,12 @@ CREATE TABLE IF NOT EXISTS estados (
   expires_at     TEXT NOT NULL
 );
 
+-- Promociones: mismo mecanismo que "estados" (publicación con TTL), con
+-- descuento opcional que se muestra automáticamente como insignia en el
+-- listado del cliente. discount_type NULL = publicación normal sin oferta.
+ALTER TABLE estados ADD COLUMN IF NOT EXISTS discount_type TEXT;
+ALTER TABLE estados ADD COLUMN IF NOT EXISTS discount_value DOUBLE PRECISION;
+
 CREATE TABLE IF NOT EXISTS estado_reactions (
   id         SERIAL PRIMARY KEY,
   estado_id  INTEGER NOT NULL REFERENCES estados(id) ON DELETE CASCADE,

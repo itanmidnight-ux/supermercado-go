@@ -8,7 +8,7 @@ class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _ready = false;
   static Timer? _timer;
-  static int _lastEstadoId  = 0;
+  static int _lastEstadoId = 0;
   static int _lastProductId = 0;
 
   static const _channel = AndroidNotificationChannel(
@@ -26,14 +26,15 @@ class NotificationService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _plugin.initialize(const InitializationSettings(android: android));
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_channel);
     _ready = true;
   }
 
   static Future<void> startPolling() async {
     _timer?.cancel();
-    _lastEstadoId  = await LocalDB.getLastEstadoId();
+    _lastEstadoId = await LocalDB.getLastEstadoId();
     _lastProductId = await LocalDB.getLastProductId();
     // First check after 5s (let app fully load), then every 30s
     await Future.delayed(const Duration(seconds: 5));
@@ -58,8 +59,12 @@ class NotificationService {
           final count = estados.where((e) => e.id > _lastEstadoId).length;
           await _notify(
             id: 1,
-            title: count == 1 ? '¡Nuevo estado en Monserrath!' : '¡$count nuevos estados!',
-            body: count == 1 ? 'Hay un nuevo contenido disponible — ¡míralo ahora!' : '$count nuevas publicaciones esperan por ti',
+            title: count == 1
+                ? '¡Nueva promoción en Monserrath!'
+                : '¡$count nuevas promociones!',
+            body: count == 1
+                ? 'Hay una nueva oferta disponible — ¡míralo ahora!'
+                : '$count nuevas publicaciones esperan por ti',
           );
         }
         if (maxId > _lastEstadoId) {
@@ -74,13 +79,19 @@ class NotificationService {
     try {
       final products = await ApiService.getProducts();
       if (products.isNotEmpty) {
-        final maxId = products.map((p) => p.id ?? 0).reduce((a, b) => a > b ? a : b);
+        final maxId =
+            products.map((p) => p.id ?? 0).reduce((a, b) => a > b ? a : b);
         if (_lastProductId > 0 && maxId > _lastProductId) {
-          final count = products.where((p) => (p.id ?? 0) > _lastProductId).length;
+          final count =
+              products.where((p) => (p.id ?? 0) > _lastProductId).length;
           await _notify(
             id: 2,
-            title: count == 1 ? '¡Nuevo producto disponible!' : '¡$count nuevos productos!',
-            body: count == 1 ? 'Un nuevo producto se agregó a nuestra tienda' : '$count nuevos productos esperan en la tienda',
+            title: count == 1
+                ? '¡Nuevo producto disponible!'
+                : '¡$count nuevos productos!',
+            body: count == 1
+                ? 'Un nuevo producto se agregó a nuestra tienda'
+                : '$count nuevos productos esperan en la tienda',
           );
         }
         if (maxId > _lastProductId) {
@@ -97,34 +108,48 @@ class NotificationService {
   }
 
   static const _orderStatusText = {
-    'en_camino': ('🛵 Tu pedido va en camino', 'El pedido #%d está en camino a tu dirección.'),
-    'entregado': ('✅ Pedido entregado', '¡Tu pedido #%d fue entregado! Gracias por tu compra.'),
+    'en_camino': (
+      '🛵 Tu pedido va en camino',
+      'El pedido #%d está en camino a tu dirección.'
+    ),
+    'entregado': (
+      '✅ Pedido entregado',
+      '¡Tu pedido #%d fue entregado! Gracias por tu compra.'
+    ),
     'cancelled': ('❌ Pedido cancelado', 'Tu pedido #%d fue cancelado.'),
   };
 
   static Future<void> _pollMyOrders() async {
     try {
       final orders = await ApiService.getMyOrders();
-      final known  = await LocalDB.getOrderStatuses();
-      final fresh  = <String, String>{};
+      final known = await LocalDB.getOrderStatuses();
+      final fresh = <String, String>{};
       var notifyId = 100;
       for (final o in orders) {
         final key = (o.id ?? 0).toString();
         fresh[key] = o.status;
         final prev = known[key];
-        if (prev != null && prev != o.status && _orderStatusText.containsKey(o.status)) {
+        if (prev != null &&
+            prev != o.status &&
+            _orderStatusText.containsKey(o.status)) {
           final (title, bodyTpl) = _orderStatusText[o.status]!;
-          await _notify(id: notifyId++, title: title, body: bodyTpl.replaceAll('%d', '${o.id}'));
+          await _notify(
+              id: notifyId++,
+              title: title,
+              body: bodyTpl.replaceAll('%d', '${o.id}'));
         }
       }
       await LocalDB.setOrderStatuses(fresh);
     } catch (_) {}
   }
 
-  static Future<void> _notify({required int id, required String title, required String body}) async {
+  static Future<void> _notify(
+      {required int id, required String title, required String body}) async {
     HapticFeedback.vibrate();
     await _plugin.show(
-      id, title, body,
+      id,
+      title,
+      body,
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channel.id,
@@ -142,7 +167,8 @@ class NotificationService {
 
   static Future<void> requestPermission() async {
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
   }
 
@@ -151,8 +177,8 @@ class NotificationService {
       id: 3,
       title: count == 1 ? '¡Nuevo pedido recibido!' : '$count nuevos pedidos!',
       body: count == 1
-        ? 'Tienes un pedido pendiente por atender'
-        : '$count pedidos pendientes por atender',
+          ? 'Tienes un pedido pendiente por atender'
+          : '$count pedidos pendientes por atender',
     );
   }
 }

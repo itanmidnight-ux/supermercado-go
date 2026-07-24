@@ -253,7 +253,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
         ),
         NavigationDestination(
           icon: Stack(clipBehavior: Clip.none, children: [
-            const Icon(Icons.auto_stories_outlined),
+            const Icon(Icons.local_offer_outlined),
             if (_newEstados > 0)
               Positioned(
                   right: -4,
@@ -269,8 +269,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
                             fontWeight: FontWeight.bold)),
                   )),
           ]),
-          selectedIcon: Icon(Icons.auto_stories_rounded, color: scheme.primary),
-          label: 'Estados',
+          selectedIcon: Icon(Icons.local_offer_rounded, color: scheme.primary),
+          label: 'Promociones',
         ),
         NavigationDestination(
           icon: const Icon(Icons.person_outline_rounded),
@@ -311,7 +311,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
         ),
         NavigationRailDestination(
           icon: Stack(clipBehavior: Clip.none, children: [
-            const Icon(Icons.auto_stories_outlined),
+            const Icon(Icons.local_offer_outlined),
             if (_newEstados > 0)
               Positioned(
                   right: -4,
@@ -327,8 +327,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
                             fontWeight: FontWeight.bold)),
                   )),
           ]),
-          selectedIcon: const Icon(Icons.auto_stories_rounded),
-          label: const Text('Estados'),
+          selectedIcon: const Icon(Icons.local_offer_rounded),
+          label: const Text('Promociones'),
         ),
         const NavigationRailDestination(
           icon: Icon(Icons.person_outline_rounded),

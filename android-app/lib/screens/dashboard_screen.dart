@@ -19,14 +19,20 @@ import 'admin_ubicaciones_screen.dart';
 
 // Filter chips
 const _allStatuses = ['pending', 'claimed', 'en_camino'];
-final _statusLabels = {'pending': 'Pendientes', 'claimed': 'Reclamados', 'en_camino': 'En camino'};
+final _statusLabels = {
+  'pending': 'Pendientes',
+  'claimed': 'Reclamados',
+  'en_camino': 'En camino'
+};
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
-  @override State<DashboardScreen> createState() => _DashboardScreenState();
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   int _tab = 0;
   Set<String> _filter = {};
 
@@ -60,17 +66,17 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       builder: (_) => AlertDialog(
         title: const Text('Ubicación por seguridad'),
         content: const Text(
-          'Concentrados Monserrath registra tu ubicación mientras tienes '
-          'sesión iniciada como parte del control de seguridad del equipo -- '
-          'incluso si cierras la app, hasta que cierres sesión. Solo el '
-          'administrador puede ver esta información, nunca los clientes.'),
+            'Concentrados Monserrath registra tu ubicación mientras tienes '
+            'sesión iniciada como parte del control de seguridad del equipo -- '
+            'incluso si cierras la app, hasta que cierres sesión. Solo el '
+            'administrador puede ver esta información, nunca los clientes.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Ahora no')),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Ahora no')),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Entendido, activar')),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Entendido, activar')),
         ],
       ),
     );
@@ -106,11 +112,13 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     final me = ApiService.currentUser;
 
     final filtered = _filter.isEmpty
-      ? orders.where((o) => o.status == 'pending' || o.claimedByUsername == me).toList()
-      : orders.where((o) => _filter.contains(o.status)).toList();
+        ? orders
+            .where((o) => o.status == 'pending' || o.claimedByUsername == me)
+            .toList()
+        : orders.where((o) => _filter.contains(o.status)).toList();
 
     // Backend returns ASC already; just pin mine to top
-    final mine   = filtered.where((o) => o.claimedByUsername == me).toList();
+    final mine = filtered.where((o) => o.claimedByUsername == me).toList();
     final others = filtered.where((o) => o.claimedByUsername != me).toList();
     return [...mine, ...others];
   }
@@ -149,88 +157,177 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         child: ListView(padding: EdgeInsets.zero, children: [
           DrawerHeader(
             decoration: BoxDecoration(color: scheme.primary),
-            child: const Align(alignment: Alignment.bottomLeft,
-              child: Text('Menú', style: TextStyle(color: Colors.white, fontSize: 20))),
+            child: const Align(
+                alignment: Alignment.bottomLeft,
+                child: Text('Menú',
+                    style: TextStyle(color: Colors.white, fontSize: 20))),
           ),
           if (provider.isAdmin) ...[
-            const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text('NEGOCIO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1))),
-            ListTile(leading: const Icon(Icons.bar_chart_rounded), title: const Text('Analíticas'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAnalyticsScreen())); }),
-            ListTile(leading: const Icon(Icons.bar_chart_rounded), title: const Text('Inventario'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-                appBar: AppBar(title: const Text('Inventario')),
-                body: const InventarioScreen()))); }),
-            ListTile(leading: const Icon(Icons.auto_stories_rounded), title: const Text('Estados'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-                appBar: AppBar(title: const Text('Estados')),
-                body: const AdminEstadosScreen()))); }),
-            const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Text('SISTEMA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1))),
-            ListTile(leading: const Icon(Icons.group_rounded), title: const Text('Usuarios'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-                appBar: AppBar(title: const Text('Usuarios')),
-                body: const UsersScreen()))); }),
-            ListTile(leading: const Icon(Icons.location_on_rounded), title: const Text('Ubicaciones'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-                appBar: AppBar(title: const Text('Ubicaciones')),
-                body: const AdminUbicacionesScreen()))); }),
-            ListTile(leading: const Icon(Icons.settings_rounded), title: const Text('Configuración'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-                appBar: AppBar(title: const Text('Configuración')),
-                body: const AdminSettingsScreen()))); }),
+            const Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text('NEGOCIO',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1))),
+            ListTile(
+                leading: const Icon(Icons.bar_chart_rounded),
+                title: const Text('Analíticas'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const AdminAnalyticsScreen()));
+                }),
+            ListTile(
+                leading: const Icon(Icons.bar_chart_rounded),
+                title: const Text('Inventario'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('Inventario')),
+                              body: const InventarioScreen())));
+                }),
+            ListTile(
+                leading: const Icon(Icons.local_offer_rounded),
+                title: const Text('Promociones'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('Promociones')),
+                              body: const AdminEstadosScreen())));
+                }),
+            const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text('SISTEMA',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1))),
+            ListTile(
+                leading: const Icon(Icons.group_rounded),
+                title: const Text('Usuarios'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('Usuarios')),
+                              body: const UsersScreen())));
+                }),
+            ListTile(
+                leading: const Icon(Icons.location_on_rounded),
+                title: const Text('Ubicaciones'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('Ubicaciones')),
+                              body: const AdminUbicacionesScreen())));
+                }),
+            ListTile(
+                leading: const Icon(Icons.settings_rounded),
+                title: const Text('Configuración'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                              appBar:
+                                  AppBar(title: const Text('Configuración')),
+                              body: const AdminSettingsScreen())));
+                }),
           ] else
-            ListTile(leading: const Icon(Icons.auto_stories_rounded), title: const Text('Estados'),
-              onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-                appBar: AppBar(title: const Text('Estados')),
-                body: const WorkerEstadosScreen()))); }),
+            ListTile(
+                leading: const Icon(Icons.local_offer_rounded),
+                title: const Text('Promociones'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                              appBar: AppBar(title: const Text('Promociones')),
+                              body: const WorkerEstadosScreen())));
+                }),
           const Divider(),
-          ListTile(leading: const Icon(Icons.logout_rounded), title: const Text('Cerrar sesión'),
-            onTap: () async {
-              Navigator.pop(context);
-              final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
-                title: const Text('Cerrar sesión'), content: const Text('¿Deseas cerrar sesión?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-                  FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Salir')),
-                ]));
-              if (confirm == true && context.mounted) context.read<AppProvider>().logout();
-            }),
+          ListTile(
+              leading: const Icon(Icons.logout_rounded),
+              title: const Text('Cerrar sesión'),
+              onTap: () async {
+                Navigator.pop(context);
+                final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                            title: const Text('Cerrar sesión'),
+                            content: const Text('¿Deseas cerrar sesión?'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancelar')),
+                              FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Salir')),
+                            ]));
+                if (confirm == true && context.mounted)
+                  context.read<AppProvider>().logout();
+              }),
         ]),
       ),
       body: _buildBody(context, provider, scheme, safeTab, isWide),
-      bottomNavigationBar: isWide ? null : _buildBottomNav(provider, scheme, safeTab),
+      bottomNavigationBar:
+          isWide ? null : _buildBottomNav(provider, scheme, safeTab),
     );
   }
 
-  Widget _buildBody(BuildContext context, AppProvider provider, ColorScheme scheme, int safeTab, bool isWide) {
+  Widget _buildBody(BuildContext context, AppProvider provider,
+      ColorScheme scheme, int safeTab, bool isWide) {
     final content = IndexedStack(index: safeTab, children: [
-        // PEDIDOS (all roles)
-        Column(children: [
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              children: _allStatuses.map((s) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(_statusLabels[s] ?? s),
-                  selected: _filter.contains(s),
-                  onSelected: (v) => setState(() => v ? _filter.add(s) : _filter.remove(s)),
-                  selectedColor: scheme.primary.withValues(alpha: 0.16),
-                  checkmarkColor: scheme.primary,
-                ),
-              )).toList(),
-            ),
+      // PEDIDOS (all roles)
+      Column(children: [
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            children: _allStatuses
+                .map((s) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(_statusLabels[s] ?? s),
+                        selected: _filter.contains(s),
+                        onSelected: (v) => setState(
+                            () => v ? _filter.add(s) : _filter.remove(s)),
+                        selectedColor: scheme.primary.withValues(alpha: 0.16),
+                        checkmarkColor: scheme.primary,
+                      ),
+                    ))
+                .toList(),
           ),
-          Expanded(child: RefreshIndicator(
-            onRefresh: provider.refreshOrders,
-            color: scheme.primary,
-            child: () {
-              if (provider.loading) return Center(child: CircularProgressIndicator(color: scheme.primary));
-              final sorted = _sortedOrders(provider.orders);
-              if (sorted.isEmpty) return ListView(children: [
+        ),
+        Expanded(
+            child: RefreshIndicator(
+          onRefresh: provider.refreshOrders,
+          color: scheme.primary,
+          child: () {
+            if (provider.loading)
+              return Center(
+                  child: CircularProgressIndicator(color: scheme.primary));
+            final sorted = _sortedOrders(provider.orders);
+            if (sorted.isEmpty)
+              return ListView(children: [
                 const SizedBox(height: 100),
                 const EmptyState(
                   icon: Icons.inventory_2_rounded,
@@ -238,34 +335,36 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                   subtitle: 'Desliza para actualizar',
                 ),
               ]);
-              return ListView.builder(
-                padding: const EdgeInsets.only(top: 4, bottom: 80),
-                itemCount: sorted.length,
-                itemBuilder: (ctx, i) {
-                  final order = sorted[i];
-                  return OrderCard(
-                    key: ValueKey(order.id),
-                    order: order,
-                    onDeliver:  () => provider.deliverOrder(order.id!),
-                    onComment:  (c) => provider.addComment(order.id!, c),
-                    onClaim:    () => provider.claimOrder(order.id!),
-                    onUnclaim:  () => provider.unclaimOrder(order.id!),
-                    onEnCamino: () => provider.markEnCamino(order.id!),
-                    onTake:     order.status == 'pending' && !order.isClaimed
-                                  ? () => provider.takeOrder(order.id!)
-                                  : null,
-                    onCancel:   provider.isAdmin ? (r) => provider.cancelOrder(order.id!, r) : null,
-                  );
-                },
-              );
-            }(),
-          )),
-        ]),
-        // PRODUCTOS (admin only)
-        if (provider.isAdmin) const ProductsScreen(),
-        // MENSAJES (all roles)
-        const MessagesScreen(),
-      ]);
+            return ListView.builder(
+              padding: const EdgeInsets.only(top: 4, bottom: 80),
+              itemCount: sorted.length,
+              itemBuilder: (ctx, i) {
+                final order = sorted[i];
+                return OrderCard(
+                  key: ValueKey(order.id),
+                  order: order,
+                  onDeliver: () => provider.deliverOrder(order.id!),
+                  onComment: (c) => provider.addComment(order.id!, c),
+                  onClaim: () => provider.claimOrder(order.id!),
+                  onUnclaim: () => provider.unclaimOrder(order.id!),
+                  onEnCamino: () => provider.markEnCamino(order.id!),
+                  onTake: order.status == 'pending' && !order.isClaimed
+                      ? () => provider.takeOrder(order.id!)
+                      : null,
+                  onCancel: provider.isAdmin
+                      ? (r) => provider.cancelOrder(order.id!, r)
+                      : null,
+                );
+              },
+            );
+          }(),
+        )),
+      ]),
+      // PRODUCTOS (admin only)
+      if (provider.isAdmin) const ProductsScreen(),
+      // MENSAJES (all roles)
+      const MessagesScreen(),
+    ]);
 
     if (!isWide) return content;
 
@@ -279,7 +378,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         backgroundColor: Colors.white,
         indicatorColor: scheme.primary.withValues(alpha: 0.16),
         destinations: _navDestinations(provider, scheme)
-            .map((d) => NavigationRailDestination(icon: d.icon, selectedIcon: d.selectedIcon, label: Text(d.label)))
+            .map((d) => NavigationRailDestination(
+                icon: d.icon,
+                selectedIcon: d.selectedIcon,
+                label: Text(d.label)))
             .toList(),
       ),
       const VerticalDivider(width: 1),
@@ -287,44 +389,47 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     ]);
   }
 
-  Widget _buildBottomNav(AppProvider provider, ColorScheme scheme, int safeTab) {
+  Widget _buildBottomNav(
+      AppProvider provider, ColorScheme scheme, int safeTab) {
     return NavigationBar(
       selectedIndex: safeTab,
       onDestinationSelected: (i) => setState(() => _tab = i),
       backgroundColor: Colors.white,
       indicatorColor: scheme.primary.withValues(alpha: 0.16),
       destinations: _navDestinations(provider, scheme)
-          .map((d) => NavigationDestination(icon: d.icon, selectedIcon: d.selectedIcon, label: d.label))
+          .map((d) => NavigationDestination(
+              icon: d.icon, selectedIcon: d.selectedIcon, label: d.label))
           .toList(),
     );
   }
 
   List<_NavItem> _navDestinations(AppProvider provider, ColorScheme scheme) => [
         _NavItem(
-          icon: Badge(
-            isLabelVisible: provider.orders.isNotEmpty,
-            label: Text('${provider.orders.length}'),
-            backgroundColor: scheme.secondary,
-            child: const Icon(Icons.dashboard_rounded)),
-          selectedIcon: Icon(Icons.dashboard_rounded, color: scheme.primary),
-          label: 'Pedidos'),
+            icon: Badge(
+                isLabelVisible: provider.orders.isNotEmpty,
+                label: Text('${provider.orders.length}'),
+                backgroundColor: scheme.secondary,
+                child: const Icon(Icons.dashboard_rounded)),
+            selectedIcon: Icon(Icons.dashboard_rounded, color: scheme.primary),
+            label: 'Pedidos'),
         if (provider.isAdmin)
           _NavItem(
-            icon: const Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2_rounded, color: scheme.primary),
-            label: 'Productos'),
+              icon: const Icon(Icons.inventory_2_outlined),
+              selectedIcon:
+                  Icon(Icons.inventory_2_rounded, color: scheme.primary),
+              label: 'Productos'),
         _NavItem(
-          icon: Badge(
-            isLabelVisible: provider.flaggedCount > 0,
-            label: Text('${provider.flaggedCount}'),
-            backgroundColor: Colors.red,
-            child: const Icon(Icons.chat_bubble_outline_rounded)),
-          selectedIcon: Badge(
-            isLabelVisible: provider.flaggedCount > 0,
-            label: Text('${provider.flaggedCount}'),
-            backgroundColor: Colors.red,
-            child: Icon(Icons.chat_bubble_rounded, color: scheme.primary)),
-          label: 'Mensajes'),
+            icon: Badge(
+                isLabelVisible: provider.flaggedCount > 0,
+                label: Text('${provider.flaggedCount}'),
+                backgroundColor: Colors.red,
+                child: const Icon(Icons.chat_bubble_outline_rounded)),
+            selectedIcon: Badge(
+                isLabelVisible: provider.flaggedCount > 0,
+                label: Text('${provider.flaggedCount}'),
+                backgroundColor: Colors.red,
+                child: Icon(Icons.chat_bubble_rounded, color: scheme.primary)),
+            label: 'Mensajes'),
       ];
 }
 
@@ -332,5 +437,6 @@ class _NavItem {
   final Widget icon;
   final Widget selectedIcon;
   final String label;
-  const _NavItem({required this.icon, required this.selectedIcon, required this.label});
+  const _NavItem(
+      {required this.icon, required this.selectedIcon, required this.label});
 }
