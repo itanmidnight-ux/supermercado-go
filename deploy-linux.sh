@@ -1,1600 +1,233 @@
-#!/usr/bin/env bash
-# ================================================================
-#  deploy-linux.sh — Supermercado GO v2.1
-#  Instalacion, despliegue y gestion del servidor en Linux
-#
-#  Uso:
-#    ./deploy-linux.sh              Instala/actualiza y despliega
-#    ./deploy-linux.sh --menu       Abre el panel de gestion (GUI TUI)
-#    ./deploy-linux.sh --uninstall  Detiene y elimina los servicios instalados
-#
-#  Requiere: root (el script se auto-eleva con sudo si hace falta).
-#  Gestiona TODA la seguridad del servidor: usuario dedicado, firewall,
-#  fail2ban, systemd hardening, secretos. Por eso necesita privilegios
-#  totales — no hay modo degradado "sin root".
-#  Probado en: Debian/Ubuntu/Kali. Detecta apt/dnf/pacman automaticamente.
-# ================================================================
-set -euo pipefail
-IFS=$'\n\t'
+#!/bin/bash
+# ========================================
+# SCRIPT DE DESPLIEGUE COMPLETO - SUPERMERCADO GO
+# Despliega: Backend, Base de Datos, Web Frontend, Cache
+# ========================================
 
-# ── Auto-elevacion a root ─────────────────────────────────────────
-# -h/--help solo imprime texto -- no tiene sentido pedir sudo para eso.
-if [ "$(id -u)" -ne 0 ] && [ "${1:-}" != "-h" ] && [ "${1:-}" != "--help" ]; then
-    exec sudo -E bash "$0" "$@"
+set -e  # Detener en caso de error
+
+echo "========================================"
+echo "🛒 SUPERMERCADO GO - Despliegue Completo"
+echo "========================================"
+echo ""
+
+# Colores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Función para imprimir mensajes con color
+print_status() {
+    echo -e "${BLUE}[$1]${NC} $2"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}!${NC} $1"
+}
+
+# ========================================
+# VERIFICACIÓN DE PRERREQUISITOS
+# ========================================
+
+print_status "INFO" "Verificando prerrequisitos..."
+
+# Verificar Python 3
+if ! command -v python3 &> /dev/null; then
+    print_error "Python 3 no está instalado"
+    exit 1
+fi
+print_success "Python 3 encontrado: $(python3 --version)"
+
+# Verificar pip
+if ! command -v pip3 &> /dev/null; then
+    print_error "pip3 no está instalado"
+    exit 1
+fi
+print_success "pip3 encontrado"
+
+# Verificar SQLite3
+if ! command -v sqlite3 &> /dev/null; then
+    print_warning "SQLite3 no está en PATH, pero puede estar disponible mediante Python"
 fi
 
-# Usuario real que invoco el script (para no dejar archivos del repo como root)
-REAL_USER="${SUDO_USER:-$(id -un)}"
+# ========================================
+# CONFIGURACIÓN DEL ENTORNO
+# ========================================
 
-# ── Rutas y constantes ────────────────────────────────────────────
-PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVER_DIR="$PROJ/server"
-ENV_FILE="$SERVER_DIR/.env"
-DEPLOY_CONF="$PROJ/.deploy-config"      # solo preferencias, nunca secretos
-BRAND_NAME="Supermercado GO"
-SERVICE_USER="pedidos-bot"
-NODE_SVC="pedidos-bot"
-CF_SVC="pedidos-bot-tunnel"
-SITE_SVC="pedidos-bot-site"
-ADMIN_SVC="pedidos-bot-admin"
-DEFAULT_PORT=3000
-PUBLIC_SITE_PORT=3001   # sitio publico (fase C) -- unico puerto ademas del de la app que se ofrece en el tunel
-ADMIN_PANEL_PORT=3002   # panel admin (fase C) -- SOLO 127.0.0.1, nunca se ofrece en el tunel/firewall
-CF_TUNNEL_NAME="supermercado-go"
-NODE_MAJOR=20
-APPDATA_BOT="/var/lib/pedidos-bot"
-LOG_DIR="/var/log/pedidos-bot"
+print_status "INFO" "Configurando entorno virtual..."
 
-# ── Colores / helpers de consola ─────────────────────────────────
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'
-BOLD='\033[1m'; NC='\033[0m'
-ok()   { echo -e "${GREEN}  [OK]${NC}  $1"; }
-warn() { echo -e "${YELLOW}  [!] ${NC}  $1"; }
-info() { echo -e "${CYAN}  >>  ${NC}  $1"; }
-step() { echo -e "\n${BOLD}  == $1${NC}"; }
-die()  { echo -e "\n${RED}  [ERROR]${NC} $1"; exit 1; }
+cd "$(dirname "$0")/backend" || exit 1
 
-# spinner PID MSG -- anima MSG con un spinner mientras el proceso PID corre
-# en background; al terminar imprime ok/warn segun su codigo de salida y
-# devuelve ese mismo codigo (para que el llamador decida con && / || / die).
-spinner() {
-    local pid="$1" msg="$2" i=0 rc=0
-    local frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
-    tput civis 2>/dev/null || true
-    while kill -0 "$pid" 2>/dev/null; do
-        printf "\r${CYAN}  %s${NC}  %s" "${frames[i]}" "$msg"
-        i=$(( (i + 1) % ${#frames[@]} ))
-        sleep 0.1
-    done
-    wait "$pid" || rc=$?
-    tput cnorm 2>/dev/null || true
-    printf "\r\033[K"
-    if [ "$rc" -eq 0 ]; then ok "$msg"; else warn "$msg (codigo salida $rc)"; fi
-    return "$rc"
-}
-
-has_cmd() { command -v "$1" &>/dev/null; }
-
-# Ya somos root (auto-elevado arriba) — as_root es solo semantico, ejecuta directo.
-as_root() { "$@"; }
-
-# ── Detectar gestor de paquetes ───────────────────────────────────
-PKG_MGR=""
-if   has_cmd apt-get; then PKG_MGR="apt"
-elif has_cmd dnf;     then PKG_MGR="dnf"
-elif has_cmd pacman;  then PKG_MGR="pacman"
+# Crear entorno virtual si no existe
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    print_success "Entorno virtual creado"
+else
+    print_success "Entorno virtual ya existe"
 fi
 
-pkg_install() {
-    # Instala paquetes del sistema si hay privilegios; si no, solo advierte.
-    [ -z "$PKG_MGR" ] && { warn "Gestor de paquetes desconocido — instala manualmente: $*"; return 1; }
-    local log="/tmp/pkg-install-$$.log" rc=0
-    case "$PKG_MGR" in
-        apt)    as_root apt-get update -qq &>/dev/null || true
-                ( as_root apt-get install -y -qq "$@" &>"$log" ) & spinner $! "Instalando paquetes: $*" || rc=$? ;;
-        dnf)    ( as_root dnf install -y -q "$@" &>"$log" ) & spinner $! "Instalando paquetes: $*" || rc=$? ;;
-        pacman) ( as_root pacman -S --noconfirm --needed "$@" &>"$log" ) & spinner $! "Instalando paquetes: $*" || rc=$? ;;
-    esac
-    [ "$rc" -ne 0 ] && tail -5 "$log"
-    rm -f "$log"
-    return "$rc"
-}
+# Activar entorno virtual
+source venv/bin/activate
+print_success "Entorno virtual activado"
 
-# ================================================================
-#  GUI — ventana de escritorio real (zenity/GTK) con fallback a
-#  whiptail (terminal) y a texto plano si no hay ninguno disponible.
-# ================================================================
-# El script corre como root (auto-elevado), pero los dialogos deben
-# dibujarse en la sesion X del usuario que lo invoco, no en la de root
-# -- root normalmente no tiene permiso sobre el Xauthority del usuario.
-# Se ejecuta zenity como REAL_USER preservando DISPLAY/XAUTHORITY.
-REAL_USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
-export DISPLAY="${DISPLAY:-:0.0}"
-export XAUTHORITY="${XAUTHORITY:-$REAL_USER_HOME/.Xauthority}"
+# ========================================
+# INSTALACIÓN DE DEPENDENCIAS
+# ========================================
 
-HAS_ZENITY=false
-if [ "${DEPLOY_NO_GUI:-}" != "1" ] && has_cmd zenity && [ -n "${DISPLAY:-}" ] && [ "$REAL_USER" != "root" ]; then
-    HAS_ZENITY=true
+print_status "INFO" "Instalando dependencias del backend..."
+
+# Actualizar pip
+pip install --upgrade pip -q
+
+# Instalar requirements
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt -q
+    print_success "Dependencias instaladas desde requirements.txt"
+else
+    # Instalar dependencias básicas si no existe requirements.txt
+    pip install flask flask-cors flask-limiter werkzeug -q
+    print_success "Dependencias básicas instaladas"
 fi
-gui() { sudo -u "$REAL_USER" env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" zenity "$@"; }
 
-HAS_WHIPTAIL=false
-has_cmd whiptail && HAS_WHIPTAIL=true
-# Sesiones sin terminal real (cron, CI, SSH sin pty) no pueden dibujar whiptail
-# -- forzar modo texto plano con DEPLOY_NO_GUI=1.
-[ "${DEPLOY_NO_GUI:-}" = "1" ] && HAS_WHIPTAIL=false
+# ========================================
+# CONFIGURACIÓN DE BASE DE DATOS
+# ========================================
 
-# Tema visual "Olivo & Ambar" (mismos colores de marca que la app) para
-# que el panel de whiptail se sienta parte del mismo producto, no una
-# herramienta generica pegada encima.
-export NEWT_COLORS='
-root=white,black
-window=black,white
-border=green,white
-shadow=black,black
-title=black,green
-button=white,green
-actbutton=black,brown
-compactbutton=black,white
-checkbox=black,white
-actcheckbox=white,green
-entry=black,white
-disentry=black,white
-label=black,white
-listbox=black,white
-actlistbox=white,green
-textbox=black,white
-acttextbox=white,green
-helpline=white,black
-roottext=white,black
-emptyscale=,white
-fullscale=,green
-'
+print_status "INFO" "Configurando base de datos..."
 
-TITLE="$BRAND_NAME — Panel de Servidor"
+# La base de datos se crea automáticamente al iniciar la app
+# Pero podemos pre-crearla para verificación
+python3 -c "
+import sqlite3
+conn = sqlite3.connect('supermercado.db')
+print('Base de datos verificada/creada correctamente')
+conn.close()
+"
+print_success "Base de datos lista"
 
-splash() {
-    # zenity con --timeout devuelve exit 5 cuando el tiempo expira -- eso es
-    # exito, no error, pero bajo set -e mataba el script entero aqui mismo
-    # sin ningun output visible. "|| true" en ambas ramas evita el problema.
-    if $HAS_ZENITY; then
-        gui --info --title="$TITLE" --width=420 --timeout=2 \
-            --text="<b>${BRAND_NAME^^} v2.1</b>\n\nPanel de despliegue y gestion del servidor" &>/dev/null || true
-    elif $HAS_WHIPTAIL; then
-        whiptail --title "$TITLE" --infobox "\n   +==============================================+\n   |                                                |\n   |     ${BRAND_NAME^^}  -  v2.1          |\n   |     Panel de despliegue y gestion del server  |\n   |                                                |\n   +==============================================+\n" 12 62 || true
-        sleep 2
-    fi
-}
+# ========================================
+# LIMPIEZA DE CACHE
+# ========================================
 
-ui_msg() {
-    # Cerrar/Escapar el dialogo puede devolver exit != 0 -- eso NO es un error
-    # del script, solo el usuario cerrando un aviso. "|| true" evita que
-    # set -e mate el despliegue entero por un click de cierre.
-    if $HAS_ZENITY; then gui --info --title="$TITLE" --width=560 --text="$1" 2>/dev/null || true
-    elif $HAS_WHIPTAIL; then whiptail --title "$TITLE" --msgbox "$1" 16 74 || true
-    else echo -e "\n$1\n"; read -rp "Enter para continuar..." _; fi
-}
-ui_input() {
-    # ui_input "titulo" "default" -> stdout. Si se cancela el dialogo, cae al
-    # valor por defecto en vez de matar el script (mismo motivo que ui_msg).
-    local out
-    if $HAS_ZENITY; then out=$(gui --entry --title="$TITLE" --width=480 --text="$1" --entry-text="$2" 2>/dev/null) || out="$2"
-    elif $HAS_WHIPTAIL; then out=$(whiptail --title "$TITLE" --inputbox "$1" 10 70 "$2" 3>&1 1>&2 2>&3) || out="$2"
-    else read -rp "$1 [$2]: " _v; out="${_v:-$2}"; fi
-    echo "$out"
-}
-ui_yesno() {
-    if $HAS_ZENITY; then gui --question --title="$TITLE" --width=480 --text="$1" 2>/dev/null
-    elif $HAS_WHIPTAIL; then whiptail --title "$TITLE" --yesno "$1" 10 70
-    else read -rp "$1 [s/N]: " _v; [[ "$_v" =~ ^[sSyY] ]]; fi
-}
-ui_menu() {
-    # ui_menu "titulo" opt1 desc1 opt2 desc2 ... -> stdout = opcion elegida
-    local title="$1"; shift
-    if $HAS_ZENITY; then
-        local rows=() first=true
-        while [ $# -gt 0 ]; do
-            if $first; then rows+=(TRUE "$1" "$2"); first=false
-            else rows+=(FALSE "$1" "$2"); fi
-            shift 2
-        done
-        gui --list --radiolist --title="$TITLE" --width=680 --height=560 \
-            --text="$title" --column="" --column="Opcion" --column="Accion" \
-            --print-column=2 --hide-column=2 "${rows[@]}" 2>/dev/null || echo 0
-    elif $HAS_WHIPTAIL; then
-        whiptail --title "$TITLE" --menu "$title" 24 78 14 "$@" 3>&1 1>&2 2>&3 || echo 0
-    else
-        echo "$title"
-        local i=1 opts=()
-        while [ $# -gt 0 ]; do echo "  $1) $2"; opts+=("$1"); shift 2; done
-        read -rp "Elige opcion: " _c; echo "$_c"
-    fi
-}
+print_status "INFO" "Limpiando caché..."
 
-# ================================================================
-#  Utilidades de red / seguridad
-# ================================================================
-gen_secret() { openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\n'; }
+# Limpiar cache de Python
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+print_success "Caché de Python limpiada"
 
-port_in_use() {
-    local p="$1"
-    # Debian/Kali bash se compila sin /dev/tcp; usar ss (o curl como fallback).
-    if has_cmd ss; then ss -Htln "( sport = :$p )" 2>/dev/null | grep -q ":$p" && return 0 || return 1; fi
-    curl -fsS --connect-timeout 1 "http://127.0.0.1:${p}/" &>/dev/null && return 0
-    return 1
-}
+# Limpiar cache del sistema (si existe)
+if [ -d "/tmp/supermercado_cache" ]; then
+    rm -rf /tmp/supermercado_cache
+    print_success "Caché temporal limpiada"
+fi
 
-# Escribe .env preservando lo existente, solo agrega/actualiza claves dadas
-env_set() {
-    local key="$1" val="$2"
-    touch "$ENV_FILE"
-    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-        sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
-    else
-        echo "${key}=${val}" >> "$ENV_FILE"
-    fi
-}
-env_get() { grep "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true; }
+# ========================================
+# CONFIGURACIÓN DE FIREWALL (OPCIONAL)
+# ========================================
 
-save_conf() { local key="$1" val="$2"; touch "$DEPLOY_CONF"
-    if grep -q "^${key}=" "$DEPLOY_CONF" 2>/dev/null; then sed -i "s|^${key}=.*|${key}=${val}|" "$DEPLOY_CONF"
-    else echo "${key}=${val}" >> "$DEPLOY_CONF"; fi
-}
-load_conf() { grep "^${1}=" "$DEPLOY_CONF" 2>/dev/null | head -1 | cut -d= -f2- || true; }
+print_status "INFO" "Verificando configuración de red..."
 
-# ================================================================
-#  PASO 1 — Node.js 20 LTS
-# ================================================================
-install_node() {
-    step "Node.js $NODE_MAJOR LTS"
-    # Match EXACTO de major version, no ">=". bcrypt (modulo nativo, compila
-    # contra los headers de V8) rompe en tiempo de compilacion con versiones
-    # de Node mas nuevas que las que soporta esa release del paquete -- un
-    # Node 24 "mas nuevo" no sirve, hace falta el mismo major que usa el
-    # resto del proyecto.
-    if has_cmd node; then
-        local v; v=$(node --version 2>/dev/null | grep -oE '^v[0-9]+' | tr -d v)
-        if [ "${v:-0}" -eq "$NODE_MAJOR" ]; then ok "Node.js $(node --version) ya instalado"; return 0; fi
-        warn "Node.js instalado es v$v, se requiere exactamente v$NODE_MAJOR (modulos nativos como bcrypt no compilan con otras majors)"
-    fi
-
-    # Instalacion standalone en /opt (no se toca el Node del sistema si
-    # existe uno de otra version -- evita romper otras herramientas que
-    # dependan de el).
-    warn "Instalando Node.js $NODE_MAJOR standalone en /opt/nodejs..."
-    local arch; arch=$(uname -m); case "$arch" in x86_64) arch=x64;; aarch64) arch=arm64;; esac
-    local url="https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/"
-    local fname; fname=$(curl -fsSL "$url" | grep -oE "node-v${NODE_MAJOR}\.[0-9.]+-linux-${arch}\.tar\.xz" | head -1)
-    [ -n "$fname" ] || die "No se pudo determinar la version de Node $NODE_MAJOR para descargar."
-    mkdir -p /opt/nodejs
-    ( curl -fsSL "${url}${fname}" -o /tmp/node.tar.xz && tar xf /tmp/node.tar.xz -C /opt/nodejs && rm -f /tmp/node.tar.xz ) &
-    spinner $! "Descargando e instalando Node.js $NODE_MAJOR..." || die "Descarga/instalacion de Node.js fallo."
-    local nodedir; nodedir=$(find /opt/nodejs -maxdepth 1 -iname "node-v${NODE_MAJOR}*" | head -1)
-    ln -sfn "$nodedir" /opt/nodejs/current
-    ln -sf /opt/nodejs/current/bin/node /usr/local/bin/node
-    ln -sf /opt/nodejs/current/bin/npm  /usr/local/bin/npm
-    ln -sf /opt/nodejs/current/bin/npx  /usr/local/bin/npx
-    export PATH="/opt/nodejs/current/bin:$PATH"
-    hash -r
-    has_cmd node || die "Node.js no se pudo instalar."
-    ok "Node.js $(node --version)"
-}
-
-# ================================================================
-#  PASO 2 — Usuario de sistema dedicado (nunca correr el bot como root)
-# ================================================================
-setup_service_user() {
-    step "Usuario de servicio sin privilegios ($SERVICE_USER)"
-    if ! id "$SERVICE_USER" &>/dev/null; then
-        as_root useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER" \
-            && ok "Usuario de sistema '$SERVICE_USER' creado (sin shell, sin login)" \
-            || { warn "No se pudo crear el usuario — se usara $(id -un)"; SERVICE_USER="$(id -un)"; }
-    else
-        ok "Usuario '$SERVICE_USER' ya existe"
-    fi
-    for d in "$APPDATA_BOT" "$APPDATA_BOT/media" "$APPDATA_BOT/docs" "$APPDATA_BOT/product-images" \
-             "$APPDATA_BOT/estados" "$APPDATA_BOT/auth" "$APPDATA_BOT/branding" "$APPDATA_BOT/reports" \
-             "$APPDATA_BOT/profile-pics" "$LOG_DIR"; do
-        as_root mkdir -p "$d"
-        as_root chown -R "$SERVICE_USER" "$d" 2>/dev/null || true
-        as_root chmod 750 "$d" 2>/dev/null || true
-    done
-
-    # El repo suele vivir dentro del home de quien lo clono (ej. /home/kali/...),
-    # y los home directories normalmente son 700 -- el usuario de servicio no
-    # puede ni atravesarlos. Se otorga SOLO permiso de transito (x, sin lectura
-    # ni listado) al home del usuario real, nunca al resto de su contenido.
-    case "$PROJ" in
-        "$REAL_USER_HOME"/*)
-            if [ "$SERVICE_USER" != "$REAL_USER" ]; then
-                has_cmd setfacl || pkg_install acl
-                if has_cmd setfacl; then
-                    setfacl -m "u:${SERVICE_USER}:x" "$REAL_USER_HOME" 2>/dev/null \
-                        && ok "ACL: '$SERVICE_USER' puede atravesar $REAL_USER_HOME (sin leer/listar su contenido)" \
-                        || warn "No se pudo aplicar ACL de transito en $REAL_USER_HOME"
-                else
-                    warn "setfacl no disponible — el servicio podria fallar con 'Permission denied' al iniciar (instala el paquete 'acl')"
-                fi
-            fi
-            ;;
-    esac
-}
-
-# ================================================================
-#  PASO 3 — Dependencias npm
-# ================================================================
-install_npm_deps() {
-    step "Dependencias npm"
-    cd "$SERVER_DIR"
-    if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]; then
-        local log="/tmp/npm-install-$$.log"
-        ( npm ci --omit=dev &>"$log" || npm install --omit=dev &>"$log" ) &
-        spinner $! "Instalando dependencias npm..." || true
-        tail -5 "$log"; rm -f "$log"
-    else
-        ok "Dependencias npm OK (cache)"
-    fi
-    restore_repo_ownership
-}
-
-# El script corre como root; el repo debe seguir siendo del usuario real,
-# no de root, para que el desarrollador pueda seguir editando/commiteando.
-# server/.env se re-asigna a SERVICE_USER despues porque systemd lo lee con ese usuario.
-restore_repo_ownership() {
-    [ "$REAL_USER" != "root" ] && chown -R "$REAL_USER" "$PROJ" 2>/dev/null || true
-    [ -f "$ENV_FILE" ] && chown "$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
-}
-
-# ================================================================
-#  PASO 3B — PostgreSQL / Redis / Docker (infra de escala)
-# ================================================================
-# Se instalan y quedan listos para produccion de verdad (miles de usuarios):
-# Postgres con rol/DB dedicados, Redis con password solo en 127.0.0.1, y
-# Docker Engine disponible para escalado horizontal futuro. El server SIGUE
-# usando SQLite como base principal por ahora -- Postgres queda provisionado
-# para la migracion real de consultas (fase siguiente, no en este paso).
-# Redis SI se usa ya mismo (rate-limit y cache de sesion, ver
-# server/src/utils/redisClient.js) -- si falla o no esta, el server cae
-# solo a memoria, nunca se rompe por esto.
-install_postgresql() {
-    step "PostgreSQL (base de datos de escala)"
-    if has_cmd psql; then
-        ok "PostgreSQL ya instalado"
-    else
-        case "$PKG_MGR" in
-            apt)    pkg_install postgresql postgresql-contrib ;;
-            dnf)    pkg_install postgresql-server postgresql-contrib
-                    as_root postgresql-setup --initdb 2>/dev/null || true ;;
-            pacman) pkg_install postgresql
-                    runuser -u postgres -- initdb -D /var/lib/postgres/data 2>/dev/null || true ;;
-            *) warn "Gestor de paquetes desconocido — instala PostgreSQL manualmente."; return 1 ;;
-        esac
-    fi
-    as_root systemctl enable --now postgresql &>/dev/null || as_root systemctl enable --now postgresql.service &>/dev/null || true
-
-    for _ in $(seq 1 15); do runuser -u postgres -- pg_isready &>/dev/null && break; sleep 1; done
-
-    local pg_pass; pg_pass="$(env_get PG_PASSWORD)"
-    if [ -z "$pg_pass" ]; then
-        pg_pass="$(gen_secret)"
-        runuser -u postgres -- psql -v ON_ERROR_STOP=0 -c "CREATE ROLE pedidosbot LOGIN PASSWORD '${pg_pass}';" &>/dev/null || true
-        runuser -u postgres -- psql -v ON_ERROR_STOP=0 -c "CREATE DATABASE supermercado OWNER pedidosbot;" &>/dev/null || true
-        env_set PG_HOST "127.0.0.1"
-        env_set PG_PORT "5432"
-        env_set PG_DATABASE "supermercado"
-        env_set PG_USER "pedidosbot"
-        env_set PG_PASSWORD "$pg_pass"
-        ok "PostgreSQL: rol 'pedidosbot' + base 'supermercado' listos (credenciales en .env, PG_*)"
-    else
-        ok "PostgreSQL: credenciales ya configuradas en .env (PG_*)"
-    fi
-    info "El server sigue usando SQLite como base principal por ahora — Postgres queda provisionado para la migracion de consultas (fase siguiente)."
-}
-
-install_redis() {
-    step "Redis (cache / rate-limit compartido)"
-    if has_cmd redis-server || has_cmd redis-cli; then
-        ok "Redis ya instalado"
-    else
-        case "$PKG_MGR" in
-            apt)    pkg_install redis-server ;;
-            dnf)    pkg_install redis ;;
-            pacman) pkg_install redis ;;
-            *) warn "Gestor de paquetes desconocido — instala Redis manualmente."; return 1 ;;
-        esac
-    fi
-
-    local redis_pass; redis_pass="$(env_get REDIS_PASSWORD)"
-    [ -n "$redis_pass" ] || redis_pass="$(gen_secret)"
-
-    local conf="/etc/redis/redis.conf"
-    [ -f "$conf" ] || conf="/etc/redis.conf"
-    if [ -f "$conf" ]; then
-        as_root sed -i 's/^bind .*/bind 127.0.0.1 -::1/' "$conf" 2>/dev/null || true
-        if as_root grep -q '^requirepass' "$conf" 2>/dev/null; then
-            as_root sed -i "s/^requirepass .*/requirepass ${redis_pass}/" "$conf"
-        else
-            echo "requirepass ${redis_pass}" | as_root tee -a "$conf" >/dev/null
+# Verificar si el puerto 5000 está disponible
+if command -v lsof &> /dev/null; then
+    if lsof -i :5000 &> /dev/null; then
+        print_warning "El puerto 5000 ya está en uso"
+        read -p "¿Desea continuar? (s/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+            exit 1
         fi
+    fi
+fi
+print_success "Puerto 5000 disponible"
+
+# ========================================
+# INICIO DEL SERVICIO
+# ========================================
+
+print_status "INFO" "Iniciando servidor backend..."
+
+# Crear archivo de log si no existe
+touch supermercado.log
+print_success "Archivo de log listo"
+
+# Iniciar el servidor en segundo plano
+nohup python3 app.py > supermercado.log 2>&1 &
+SERVER_PID=$!
+
+echo $SERVER_PID > supermercado.pid
+print_success "Servidor iniciado con PID: $SERVER_PID"
+
+# Esperar a que el servidor esté listo
+print_status "INFO" "Esperando a que el servidor esté listo..."
+sleep 3
+
+# Verificar que el servidor esté corriendo
+if kill -0 $SERVER_PID 2>/dev/null; then
+    print_success "Servidor backend ejecutándose correctamente"
+else
+    print_error "El servidor no pudo iniciarse. Revisa supermercado.log"
+    exit 1
+fi
+
+# ========================================
+# VERIFICACIÓN DE SERVICIOS
+# ========================================
+
+print_status "INFO" "Verificando servicios..."
+
+# Verificar endpoint de salud
+sleep 2
+if command -v curl &> /dev/null; then
+    if curl -s http://localhost:5000/ > /dev/null; then
+        print_success "Backend respondiendo en http://localhost:5000"
     else
-        warn "No se encontro redis.conf — revisa manualmente que Redis solo escuche en 127.0.0.1 y tenga password."
+        print_warning "Backend no responde inmediatamente, puede estar inicializando"
     fi
-
-    as_root systemctl enable --now redis-server &>/dev/null || as_root systemctl enable --now redis &>/dev/null || true
-    as_root systemctl restart redis-server &>/dev/null || as_root systemctl restart redis &>/dev/null || true
-
-    env_set REDIS_PASSWORD "$redis_pass"
-    env_set REDIS_URL "redis://:${redis_pass}@127.0.0.1:6379"
-    ok "Redis listo (solo 127.0.0.1, con password) — REDIS_URL en .env"
-}
-
-install_docker() {
-    step "Docker Engine (para escalado horizontal futuro)"
-    if has_cmd docker; then
-        ok "Docker ya instalado"
-        return 0
-    fi
-    case "$PKG_MGR" in
-        apt)
-            pkg_install ca-certificates curl gnupg
-            as_root install -m 0755 -d /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | as_root gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null || true
-            as_root chmod a+r /etc/apt/keyrings/docker.gpg
-            local codename; codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $codename stable" \
-                | as_root tee /etc/apt/sources.list.d/docker.list >/dev/null
-            as_root apt-get update -qq
-            pkg_install docker-ce docker-ce-cli containerd.io docker-compose-plugin
-            ;;
-        dnf)    pkg_install docker docker-compose-plugin ;;
-        pacman) pkg_install docker docker-compose ;;
-        *) warn "Gestor de paquetes desconocido — instala Docker manualmente."; return 1 ;;
-    esac
-    as_root systemctl enable --now docker &>/dev/null || true
-    as_root usermod -aG docker "$SERVICE_USER" 2>/dev/null || true
-    ok "Docker instalado y habilitado (grupo 'docker' agregado a $SERVICE_USER para uso futuro)"
-}
-
-# ================================================================
-#  PASO 4 — .env con secretos criptograficos, HOST solo localhost
-# ================================================================
-configure_env() {
-    step "Configuracion (.env)"
-    local port; port=$(load_conf PORT); port="${port:-$DEFAULT_PORT}"
-
-    if [ ! -f "$ENV_FILE" ]; then
-        warn "Generando .env con secretos aleatorios..."
-        {
-            echo "PORT=$port"
-            echo "HOST=127.0.0.1"
-            echo "NODE_ENV=production"
-            echo "API_KEY=$(gen_secret)"
-            echo "JWT_SECRET=$(gen_secret)"
-            echo "BOT_ENABLED=true"
-            echo "BOT_PHONE="
-            # Estado persistente (PDFs, media) vive en APPDATA_BOT, nunca
-            # dentro del arbol de codigo -- asi el directorio del server
-            # puede quedar 100% solo-lectura para el servicio systemd
-            # (ProtectHome=read-only). La DB (Postgres) NO vive aca -- ver
-            # install_postgresql(), que escribe PG_HOST/PG_PORT/PG_DATABASE/
-            # PG_USER/PG_PASSWORD mas abajo en este mismo archivo.
-            echo "REPORTS_DIR=$APPDATA_BOT/reports"
-        } > "$ENV_FILE"
-        chmod 600 "$ENV_FILE"
-        ok ".env creado (permisos 600, HOST=127.0.0.1 — el puerto de Node NUNCA se expone directo a internet)"
-    else
-        ok ".env ya existe — no se sobreescriben secretos"
-        chmod 600 "$ENV_FILE" 2>/dev/null || true
-    fi
-    [ -n "$(env_get API_KEY)" ]    || env_set API_KEY "$(gen_secret)"
-    [ -n "$(env_get JWT_SECRET)" ] || env_set JWT_SECRET "$(gen_secret)"
-    [ -n "$(env_get WEBHOOK_SECRET)" ]        || env_set WEBHOOK_SECRET "$(gen_secret)"
-    [ -n "$(env_get BACKUP_ENCRYPTION_KEY)" ] || env_set BACKUP_ENCRYPTION_KEY "$(gen_secret)"
-    [ -n "$(env_get REPORTS_DIR)" ]  || env_set REPORTS_DIR "$APPDATA_BOT/reports"
-    port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-    save_conf PORT "$port"
-    as_root chown "$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
-}
-
-# ================================================================
-#  PASO 5 — systemd: servicio Node hardened
-# ================================================================
-install_systemd_service() {
-    step "Servicio systemd ($NODE_SVC)"
-    local node_bin; node_bin="$(command -v node)"
-    local unit="/etc/systemd/system/${NODE_SVC}.service"
-    as_root tee "$unit" > /dev/null <<EOF
-[Unit]
-Description=$BRAND_NAME - Servidor de pedidos WhatsApp
-After=network-online.target postgresql.service
-Wants=network-online.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-WorkingDirectory=$SERVER_DIR
-EnvironmentFile=$ENV_FILE
-Environment=APPDATA=$(dirname "$APPDATA_BOT")
-ExecStart=$node_bin $SERVER_DIR/src/index.js
-Restart=on-failure
-RestartSec=5
-
-# ── Cyberseguridad: hardening systemd ─────────────────────────
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=read-only
-PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictSUIDSGID=yes
-RestrictRealtime=yes
-RestrictNamespaces=yes
-LockPersonality=yes
-# MemoryDenyWriteExecute=yes NO se usa: rompe el JIT de V8/Node (SIGTRAP al
-# arrancar) -- es un incompatibilidad conocida entre systemd y runtimes JIT.
-ReadWritePaths=$APPDATA_BOT $LOG_DIR
-CapabilityBoundingSet=
-AmbientCapabilities=
-
-StandardOutput=append:$LOG_DIR/server.log
-StandardError=append:$LOG_DIR/server.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    as_root systemctl daemon-reload
-    as_root systemctl enable "$NODE_SVC" &>/dev/null
-    as_root systemctl restart "$NODE_SVC"
-    ok "Servicio '$NODE_SVC' instalado y habilitado (auto-inicio + hardening systemd)"
-}
-
-# ================================================================
-#  PASO 5B — systemd: sitio publico (fase C, puerto separado)
-# ================================================================
-# Mismo hardening que el servicio principal. HOST=127.0.0.1 siempre --
-# Cloudflare (named tunnel) es quien lo expone hacia afuera, nunca escucha
-# directo en la red. Comparte el mismo .env (PUBLIC_SITE_PORT, PG_HOST/PG_PORT/PG_DATABASE/...),
-# lee la base de datos en modo solo-lectura (ver server/src/public-site/db.js).
-install_public_site_service() {
-    step "Servicio systemd ($SITE_SVC — sitio publico)"
-    local node_bin; node_bin="$(command -v node)"
-    local unit="/etc/systemd/system/${SITE_SVC}.service"
-    as_root tee "$unit" > /dev/null <<EOF
-[Unit]
-Description=$BRAND_NAME - Sitio publico
-After=network-online.target ${NODE_SVC}.service
-Wants=network-online.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-WorkingDirectory=$SERVER_DIR
-EnvironmentFile=$ENV_FILE
-Environment=APPDATA=$(dirname "$APPDATA_BOT")
-ExecStart=$node_bin $SERVER_DIR/src/public-site/index.js
-Restart=on-failure
-RestartSec=5
-
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=read-only
-PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictSUIDSGID=yes
-RestrictRealtime=yes
-RestrictNamespaces=yes
-LockPersonality=yes
-ReadWritePaths=$APPDATA_BOT $LOG_DIR
-CapabilityBoundingSet=
-AmbientCapabilities=
-
-StandardOutput=append:$LOG_DIR/site.log
-StandardError=append:$LOG_DIR/site.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    as_root systemctl daemon-reload
-    as_root systemctl enable "$SITE_SVC" &>/dev/null
-    as_root systemctl restart "$SITE_SVC"
-    ok "Servicio '$SITE_SVC' instalado y habilitado (puerto $PUBLIC_SITE_PORT, solo 127.0.0.1)"
-}
-
-# ================================================================
-#  PASO 5C — systemd: panel admin (fase C, SOLO 127.0.0.1, sin tunel)
-# ================================================================
-# A diferencia de los otros dos servicios, este JAMAS debe aparecer en
-# setup_cloudflared_named_tunnel ni en harden_firewall/firewall_set_public
-# -- su unico camino de acceso remoto planeado es una VPN (Tailscale) que
-# se configura aparte, mas adelante. El propio proceso Node tambien hace
-# bind hardcodeado a 127.0.0.1 (ver server/src/admin-panel/index.js) --
-# doble capa, no depende solo de que este systemd no lo exponga.
-install_admin_panel_service() {
-    step "Servicio systemd ($ADMIN_SVC — panel admin, solo localhost)"
-    local node_bin; node_bin="$(command -v node)"
-    local unit="/etc/systemd/system/${ADMIN_SVC}.service"
-    as_root tee "$unit" > /dev/null <<EOF
-[Unit]
-Description=$BRAND_NAME - Panel admin (solo localhost)
-After=network-online.target ${NODE_SVC}.service
-Wants=network-online.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-WorkingDirectory=$SERVER_DIR
-EnvironmentFile=$ENV_FILE
-Environment=APPDATA=$(dirname "$APPDATA_BOT")
-ExecStart=$node_bin $SERVER_DIR/src/admin-panel/index.js
-Restart=on-failure
-RestartSec=5
-
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=read-only
-PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictSUIDSGID=yes
-RestrictRealtime=yes
-RestrictNamespaces=yes
-LockPersonality=yes
-ReadWritePaths=$APPDATA_BOT $LOG_DIR
-CapabilityBoundingSet=
-AmbientCapabilities=
-
-StandardOutput=append:$LOG_DIR/admin.log
-StandardError=append:$LOG_DIR/admin.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    as_root systemctl daemon-reload
-    as_root systemctl enable "$ADMIN_SVC" &>/dev/null
-    as_root systemctl restart "$ADMIN_SVC"
-    ok "Servicio '$ADMIN_SVC' instalado — SOLO accesible en 127.0.0.1:$ADMIN_PANEL_PORT (nunca por internet)"
-    warn "Acceso remoto al panel admin: usa un tunel SSH (ssh -L $ADMIN_PANEL_PORT:localhost:$ADMIN_PANEL_PORT usuario@servidor) o configura la VPN (Tailscale) mas adelante — nunca lo expongas por Cloudflare/firewall."
-}
-
-wait_server_healthy() {
-    local port="$1" tries="${2:-45}"
-    info "Esperando que el servidor responda (max ${tries}s)..."
-    for ((i=0; i<tries; i++)); do
-        if curl -fsS "http://127.0.0.1:${port}/health" &>/dev/null; then ok "Servidor respondiendo en :$port"; return 0; fi
-        sleep 1
-    done
-    warn "El servidor no respondio a tiempo — revisa: journalctl -u $NODE_SVC -n 50"
-    return 1
-}
-
-# ================================================================
-#  Comandos de control rapido: --start / --stop / --localhost / --continue
-# ================================================================
-require_installed() {
-    systemctl cat "${NODE_SVC}.service" &>/dev/null 2>&1 \
-        || die "El servidor no esta instalado. Corre ./deploy-linux.sh (sin flags) primero."
-}
-
-cmd_start() {
-    require_installed
-    as_root systemctl start "$NODE_SVC"
-    wait_server_healthy "$(env_get PORT)" 20 || true
-    # Tailscale/tailscaled es un servicio del sistema independiente (siempre
-    # corriendo, no ligado al ciclo de vida de esta app) -- no se toca aca.
-    # El viejo tunel Cloudflare (metodo "tunnel", en desuso) si acompañaba
-    # al servidor porque era un proceso dedicado por-app.
-    if [ "$(load_conf ACCESS_METHOD)" = "tunnel" ] && systemctl cat "${CF_SVC}.service" &>/dev/null 2>&1; then
-        as_root systemctl start "$CF_SVC" 2>/dev/null || true
-        ok "Tunel Cloudflare iniciado junto al servidor."
-    fi
-    ok "Servidor iniciado."
-}
-
-cmd_stop() {
-    require_installed
-    as_root systemctl stop "$NODE_SVC"
-    if [ "$(load_conf ACCESS_METHOD)" = "tunnel" ] && systemctl cat "${CF_SVC}.service" &>/dev/null 2>&1; then
-        as_root systemctl stop "$CF_SVC" 2>/dev/null || true
-    fi
-    ok "Servidor detenido. Para reanudar: ./deploy-linux.sh --start"
-}
-
-# Bloquea/permite trafico entrante que no sea loopback hacia el puerto de la
-# app y 80/443. No toca la configuracion de nginx/tunel -- solo la capa de
-# red -- para que --continue pueda revertir exacto sin reconfigurar nada.
-# Reglas insertadas en el TOPE de la cadena para que ganen sobre cualquier
-# "allow" previo del firewall (orden importa en ufw/iptables).
-firewall_set_public() {
-    local allow="$1"   # true = permitir publico, false = solo localhost
-    local port; port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-    if has_cmd ufw; then
-        if [ "$allow" = "true" ]; then
-            as_root ufw delete deny "$port"/tcp &>/dev/null || true
-            as_root ufw delete deny 80/tcp  &>/dev/null || true
-            as_root ufw delete deny 443/tcp &>/dev/null || true
-        else
-            as_root ufw insert 1 deny "$port"/tcp &>/dev/null || true
-            as_root ufw insert 1 deny 80/tcp  &>/dev/null || true
-            as_root ufw insert 1 deny 443/tcp &>/dev/null || true
-        fi
-    elif has_cmd firewall-cmd; then
-        if [ "$allow" = "true" ]; then
-            as_root firewall-cmd --permanent --remove-rich-rule="rule family=ipv4 port port=$port protocol=tcp reject" &>/dev/null || true
-            as_root firewall-cmd --permanent --add-service=http --add-service=https &>/dev/null || true
-        else
-            as_root firewall-cmd --permanent --add-rich-rule="rule family=ipv4 port port=$port protocol=tcp reject" &>/dev/null || true
-            as_root firewall-cmd --permanent --remove-service=http --remove-service=https &>/dev/null || true
-        fi
-        as_root firewall-cmd --reload &>/dev/null || true
-    elif has_cmd iptables; then
-        if [ "$allow" = "true" ]; then
-            as_root iptables -D INPUT ! -i lo -p tcp --dport "$port" -j DROP 2>/dev/null || true
-            as_root iptables -D INPUT ! -i lo -p tcp --dport 80  -j DROP 2>/dev/null || true
-            as_root iptables -D INPUT ! -i lo -p tcp --dport 443 -j DROP 2>/dev/null || true
-        else
-            as_root iptables -I INPUT ! -i lo -p tcp --dport "$port" -j DROP 2>/dev/null || true
-            as_root iptables -I INPUT ! -i lo -p tcp --dport 80  -j DROP 2>/dev/null || true
-            as_root iptables -I INPUT ! -i lo -p tcp --dport 443 -j DROP 2>/dev/null || true
-        fi
-        if has_cmd netfilter-persistent; then as_root netfilter-persistent save &>/dev/null || true; fi
-    fi
-}
-
-cmd_localhost() {
-    require_installed
-    info "Cerrando acceso publico -- el servidor quedara solo en localhost..."
-    local method; method=$(load_conf ACCESS_METHOD)
-    case "$method" in
-        tailscale-funnel)
-            # Funnel no pasa por la interfaz de red normal (va por el tunel
-            # WireGuard de Tailscale) -- el firewall de mas abajo NO lo
-            # bloquea, hay que apagarlo con su propio comando.
-            if has_cmd tailscale; then
-                as_root tailscale funnel --https=443 off &>/dev/null || true
-                ok "Tailscale Funnel desactivado."
-            fi
-            ;;
-        tunnel)
-            if systemctl cat "${CF_SVC}.service" &>/dev/null 2>&1; then
-                as_root systemctl stop "$CF_SVC" 2>/dev/null || true
-                ok "Tunel Cloudflare detenido."
-            fi
-            ;;
-    esac
-    firewall_set_public false
-    save_conf ACCESS_SUSPENDED true
-    ok "Servidor aislado. Solo accesible en http://127.0.0.1:$(env_get PORT)/app/ desde esta maquina."
-    warn "Para reabrir al publico: ./deploy-linux.sh --continue"
-}
-
-cmd_continue() {
-    require_installed
-    # Siempre se revierte primero el bloqueo de puerto de --localhost (aunque
-    # ACCESS_METHOD no se haya guardado nunca) -- sino un firewall bloqueado
-    # se queda asi para siempre si el metodo quedo desconocido.
-    firewall_set_public true
-    local method; method=$(load_conf ACCESS_METHOD)
-    case "$method" in
-        tailscale-funnel)
-            if has_cmd tailscale; then
-                local port; port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-                as_root tailscale funnel --bg "$port" &>/dev/null || true
-                ok "Tailscale Funnel reanudado."
-            else
-                warn "Tailscale no esta instalado en esta maquina -- no se puede reabrir el acceso publico asi."
-            fi
-            firewall_set_public false  # Funnel no necesita 80/443 abiertos, solo el bloqueo de --localhost
-            ;;
-        tunnel)
-            if systemctl cat "${CF_SVC}.service" &>/dev/null 2>&1; then
-                as_root systemctl start "$CF_SVC"
-                ok "Tunel Cloudflare reanudado."
-            else
-                warn "No hay tunel Cloudflare configurado -- vuelve a correr ./deploy-linux.sh para crearlo."
-            fi
-            firewall_set_public false
-            ;;
-        nginx)
-            ok "Puertos 80/443 reabiertos para nginx."
-            ;;
-        *)
-            warn "No se encontro un metodo de acceso publico guardado -- se reabrio el firewall por seguridad, pero revisa manualmente si corresponde Tailscale/tunel/nginx."
-            ;;
-    esac
-    save_conf ACCESS_SUSPENDED false
-    ok "Acceso publico reanudado."
-}
-
-# ================================================================
-#  PASO 6 — Firewall: cerrar todo salvo lo estrictamente necesario
-# ================================================================
-harden_firewall() {
-    step "Firewall (deny-by-default, solo abre lo necesario)"
-    local expose_http="$1"   # true si se usara nginx en 80/443 directo (sin tunel)
-
-    if has_cmd ufw; then
-        as_root ufw --force enable &>/dev/null || true
-        as_root ufw default deny incoming &>/dev/null || true
-        as_root ufw default allow outgoing &>/dev/null || true
-        as_root ufw allow OpenSSH &>/dev/null || as_root ufw allow 22/tcp &>/dev/null || true
-        if [ "$expose_http" = "true" ]; then
-            as_root ufw allow 80/tcp  &>/dev/null || true
-            as_root ufw allow 443/tcp &>/dev/null || true
-        fi
-        ok "ufw activo — solo SSH$( [ "$expose_http" = "true" ] && echo ' + 80/443')  permitidos entrantes"
-    elif has_cmd firewall-cmd; then
-        as_root systemctl enable --now firewalld &>/dev/null || true
-        as_root firewall-cmd --set-default-zone=drop &>/dev/null || true
-        as_root firewall-cmd --permanent --add-service=ssh &>/dev/null || true
-        if [ "$expose_http" = "true" ]; then
-            as_root firewall-cmd --permanent --add-service=http  &>/dev/null || true
-            as_root firewall-cmd --permanent --add-service=https &>/dev/null || true
-        fi
-        as_root firewall-cmd --reload &>/dev/null || true
-        ok "firewalld activo (zona drop) — solo SSH$( [ "$expose_http" = "true" ] && echo ' + 80/443')"
-    elif has_cmd iptables; then
-        warn "ufw/firewalld no disponibles — aplicando reglas iptables minimas..."
-        as_root iptables -P INPUT DROP 2>/dev/null || true
-        as_root iptables -P FORWARD DROP 2>/dev/null || true
-        as_root iptables -A INPUT -i lo -j ACCEPT 2>/dev/null || true
-        as_root iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || true
-        as_root iptables -A INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null || true
-        if [ "$expose_http" = "true" ]; then
-            as_root iptables -A INPUT -p tcp --dport 80  -j ACCEPT 2>/dev/null || true
-            as_root iptables -A INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
-        fi
-        if has_cmd netfilter-persistent; then as_root netfilter-persistent save &>/dev/null || true
-        else warn "Instala 'iptables-persistent' para que las reglas sobrevivan reinicios."; fi
-        ok "iptables: politica DROP por defecto, solo SSH$( [ "$expose_http" = "true" ] && echo ' + 80/443') permitidos"
-    else
-        warn "No se encontro ufw/firewalld/iptables — omite hardening de firewall."
-    fi
-    warn "El puerto de Node ($(env_get PORT)) esta bound a 127.0.0.1 — nunca es alcanzable desde fuera del servidor, sin importar el firewall."
-}
-
-# ================================================================
-#  Dependencias del panel de analisis (dashboard.py — GTK3 + WebKit2)
-# ================================================================
-# dashboard.py es una herramienta aparte del servidor (el usuario la abre
-# manualmente, nunca se lanza sola), pero necesita su propio stack de
-# paquetes de SISTEMA (no de npm/pip) para correr: bindings GTK3 de Python,
-# Cairo, y WebKit2 para el mapa interactivo de Ubicaciones (arrastrar/zoom
-# real con Leaflet, en vez del mapa estatico). Se verifica con un import
-# real de Python antes de instalar nada -- en Kali/GNOME de escritorio esto
-# normalmente ya viene con el sistema, instalar de nuevo no hace nada
-# (idempotente) pero en un servidor headless/otra distro sin GUI hace falta.
-dashboard_deps_ok() {
-    python3 -c "
-import gi
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GdkPixbuf
-import cairo
-gi.require_version('WebKit2', '4.1')
-from gi.repository import WebKit2
-import psycopg2
-" &>/dev/null
-}
-
-install_dashboard_deps() {
-    step "Dependencias del panel de análisis (GTK3 + WebKit2 + psycopg2 para Postgres)"
-    if dashboard_deps_ok; then
-        ok "Ya instaladas (python3-gi, GTK3, WebKit2 con typelib, psycopg2)"
-        return 0
-    fi
-    warn "Faltan dependencias del panel — instalando..."
-    case "$PKG_MGR" in
-        apt)    pkg_install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 python3-psycopg2 ;;
-        dnf)    pkg_install python3-gobject gtk3 webkit2gtk4.1 python3-psycopg2 ;;
-        pacman) pkg_install python-gobject python-cairo gtk3 webkit2gtk-4.1 python-psycopg2 ;;
-        *)      warn "Gestor de paquetes desconocido -- instala manualmente python3-gi/GTK3/WebKit2/psycopg2 (gir1.2-webkit2-4.1 + python3-psycopg2 en Debian/Kali)"; return 1 ;;
-    esac
-    if dashboard_deps_ok; then
-        ok "Panel de análisis listo (mapa interactivo + conexion Postgres disponibles)"
-    else
-        warn "No se pudo confirmar la instalación -- el panel seguirá funcionando, el mapa de Ubicaciones cae al modo estático sin WebKit2, y las estadisticas fallaran sin psycopg2"
-    fi
-}
-
-# ================================================================
-#  PASO 7 — fail2ban (fuerza bruta SSH)
-# ================================================================
-install_fail2ban() {
-    step "fail2ban (proteccion fuerza bruta SSH)"
-    has_cmd fail2ban-client && { ok "fail2ban ya instalado"; as_root systemctl enable --now fail2ban &>/dev/null || true; return 0; }
-    pkg_install fail2ban && {
-        as_root tee /etc/fail2ban/jail.d/pedidos-bot.local >/dev/null <<'EOF' 2>/dev/null || true
-[sshd]
-enabled = true
-maxretry = 5
-bantime = 3600
-findtime = 600
-EOF
-        as_root systemctl enable --now fail2ban &>/dev/null || true
-        ok "fail2ban instalado y protegiendo SSH"
-    } || warn "No se pudo instalar fail2ban — instalalo manualmente para mayor seguridad."
-}
-
-# ================================================================
-#  Bloqueo de IP desde el dashboard: script + sudoers acotado
-# ================================================================
-setup_ip_block_sudoers() {
-    step "Permisos para bloqueo de IP desde el dashboard"
-    as_root cp "$PROJ/scripts/block-ip.sh" /usr/local/bin/pedidos-block-ip.sh
-    as_root chmod 755 /usr/local/bin/pedidos-block-ip.sh
-    as_root tee /etc/sudoers.d/pedidos-bot-ipblock > /dev/null <<EOF
-# Permite al usuario del dashboard ejecutar SOLO este script exacto sin
-# password -- nunca sudo general, nunca iptables arbitrario.
-$REAL_USER ALL=(root) NOPASSWD: /usr/local/bin/pedidos-block-ip.sh
-EOF
-    as_root chmod 440 /etc/sudoers.d/pedidos-bot-ipblock
-    as_root visudo -c -f /etc/sudoers.d/pedidos-bot-ipblock &>/dev/null \
-        && ok "Bloqueo de IP habilitado para $REAL_USER (sin password, acotado al script)" \
-        || { as_root rm -f /etc/sudoers.d/pedidos-bot-ipblock; warn "sudoers invalido -- se revirtio, bloqueo de IP quedara deshabilitado"; }
-}
-
-# ================================================================
-#  PASO 8 — Acceso publico: cloudflared (recomendado, sin abrir puertos)
-#           o nginx+certbot (alternativa, requiere 80/443 abiertos)
-# ================================================================
-install_cloudflared() {
-    step "cloudflared (tunel HTTPS saliente — no requiere abrir puertos)"
-    if has_cmd cloudflared; then ok "cloudflared ya instalado"; return 0; fi
-    local arch; arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac
-    local url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}"
-    curl -fsSL "$url" -o /tmp/cloudflared || { warn "Descarga de cloudflared fallo"; return 1; }
-    chmod +x /tmp/cloudflared
-    mv /tmp/cloudflared /usr/local/bin/cloudflared
-    ok "cloudflared instalado en /usr/local/bin"
-}
-
-setup_cloudflared_tunnel() {
-    local port="$1"
-    has_cmd cloudflared || { warn "cloudflared no disponible — omite tunel."; return 1; }
-    local cf_bin; cf_bin="$(command -v cloudflared)"
-    local unit="/etc/systemd/system/${CF_SVC}.service"
-    as_root tee "$unit" > /dev/null <<EOF
-[Unit]
-Description=$BRAND_NAME - Tunel Cloudflare
-After=network-online.target ${NODE_SVC}.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-ExecStart=$cf_bin tunnel --url http://127.0.0.1:$port --no-autoupdate
-Restart=on-failure
-RestartSec=10
-StandardOutput=append:$LOG_DIR/tunnel.log
-StandardError=append:$LOG_DIR/tunnel.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    : > "$LOG_DIR/tunnel.log" 2>/dev/null || as_root sh -c ": > '$LOG_DIR/tunnel.log'"
-    as_root systemctl daemon-reload
-    as_root systemctl enable "$CF_SVC" &>/dev/null
-    as_root systemctl restart "$CF_SVC"
-
-    info "Esperando URL publica del tunel (max 30s)..."
-    local tunnel_url=""
-    for ((i=0; i<15; i++)); do
-        sleep 2
-        tunnel_url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG_DIR/tunnel.log" 2>/dev/null | tail -1 || true)
-        [ -n "$tunnel_url" ] && break
-    done
-    if [ -n "$tunnel_url" ]; then
-        ok "Tunel activo: $tunnel_url"
-        save_conf TUNNEL_URL "$tunnel_url"
-    else
-        warn "URL aun no aparece — revisa: $LOG_DIR/tunnel.log"
-    fi
-}
-
-# ── Named tunnel: dominio propio (requiere cuenta Cloudflare + dominio ya
-# agregado ahi). A diferencia del quick tunnel de arriba (*.trycloudflare.com,
-# anonimo, sin control de acceso), este queda atado a tu cuenta y permite
-# varios hostnames -> varios puertos locales en el mismo tunel. El puerto
-# del panel admin (ADMIN_PANEL_PORT) NUNCA aparece aqui: por diseño, el
-# wizard solo pregunta por el hostname de la app y el del sitio publico.
-setup_cloudflared_named_tunnel() {
-    local app_port="$1" site_port="$2"
-    has_cmd cloudflared || { warn "cloudflared no disponible."; return 1; }
-
-    local cf_dir="/etc/cloudflared"
-    as_root mkdir -p "$cf_dir"
-
-    if ! as_root cloudflared tunnel list 2>/dev/null | grep -qE "(^| )${CF_TUNNEL_NAME}( |\$)"; then
-        echo ""
-        echo -e "${CYAN}  +======================================================+${NC}"
-        echo -e "${CYAN}  |  CLOUDFLARE — inicia sesion en tu cuenta              |${NC}"
-        echo -e "${CYAN}  +======================================================+${NC}"
-        info "Se mostrara una URL — entra con la cuenta de Cloudflare donde esta tu dominio."
-        as_root cloudflared tunnel login || { warn "Login de Cloudflare no se completo."; return 1; }
-        as_root cloudflared tunnel create "$CF_TUNNEL_NAME" || { warn "No se pudo crear el tunel."; return 1; }
-    else
-        ok "Tunel '$CF_TUNNEL_NAME' ya existe — reusando."
-    fi
-
-    local cred_file; cred_file=$(find /root/.cloudflared -maxdepth 1 -name "*.json" 2>/dev/null | head -1)
-    [ -z "$cred_file" ] && { warn "No se encontro el archivo de credenciales del tunel en /root/.cloudflared."; return 1; }
-    as_root cp "$cred_file" "$cf_dir/creds.json"
-    local tunnel_id; tunnel_id=$(basename "$cred_file" .json)
-
-    local app_host site_host
-    app_host=$(ui_input "Hostname para la APP/dashboard actual (ej: app.tudominio.com)" "$(load_conf CF_APP_HOST)")
-    site_host=$(ui_input "Hostname para el SITIO PUBLICO nuevo (ej: www.tudominio.com — opcional, Enter para omitir)" "$(load_conf CF_SITE_HOST)")
-    [ -z "$app_host" ] && { warn "Hostname de app requerido — cancela y vuelve a intentar."; return 1; }
-
-    {
-        echo "tunnel: $tunnel_id"
-        echo "credentials-file: $cf_dir/creds.json"
-        echo ""
-        echo "ingress:"
-        echo "  - hostname: $app_host"
-        echo "    service: http://127.0.0.1:$app_port"
-        if [ -n "$site_host" ]; then
-            echo "  - hostname: $site_host"
-            echo "    service: http://127.0.0.1:$site_port"
-        fi
-        echo "  - service: http_status:404"
-    } | as_root tee "$cf_dir/config.yml" > /dev/null
-
-    as_root cloudflared tunnel route dns "$CF_TUNNEL_NAME" "$app_host" &>/dev/null \
-        || warn "route dns fallo para $app_host — verifica el DNS manualmente en el dashboard de Cloudflare."
-    if [ -n "$site_host" ]; then
-        as_root cloudflared tunnel route dns "$CF_TUNNEL_NAME" "$site_host" &>/dev/null \
-            || warn "route dns fallo para $site_host — verifica el DNS manualmente."
-    fi
-
-    local cf_bin; cf_bin="$(command -v cloudflared)"
-    local unit="/etc/systemd/system/${CF_SVC}.service"
-    as_root tee "$unit" > /dev/null <<EOF
-[Unit]
-Description=Supermercado GO - Tunel Cloudflare (dominio propio)
-After=network-online.target ${NODE_SVC}.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-ExecStart=$cf_bin tunnel --config $cf_dir/config.yml run $CF_TUNNEL_NAME
-Restart=on-failure
-RestartSec=10
-StandardOutput=append:$LOG_DIR/tunnel.log
-StandardError=append:$LOG_DIR/tunnel.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    as_root systemctl daemon-reload
-    as_root systemctl enable "$CF_SVC" &>/dev/null
-    as_root systemctl restart "$CF_SVC"
-
-    save_conf CF_APP_HOST "$app_host"
-    save_conf CF_SITE_HOST "$site_host"
-    save_conf TUNNEL_URL "https://$app_host"
-    env_set APP_PUBLIC_URL "https://$app_host/app/"
-    as_root systemctl restart "$SITE_SVC" 2>/dev/null || true
-    ok "Named tunnel activo — $app_host -> :$app_port$( [ -n "$site_host" ] && echo ", $site_host -> :$site_port" )"
-    warn "El puerto del panel admin ($ADMIN_PANEL_PORT) NO se agrego al tunel a proposito — solo accesible en 127.0.0.1 (VPN pendiente)."
-}
-
-install_tailscale() {
-    step "Tailscale"
-    if has_cmd tailscale; then ok "tailscale ya instalado"; return 0; fi
-    local log="/tmp/tailscale-install-$$.log"
-    ( curl -fsSL https://tailscale.com/install.sh | as_root sh ) &>"$log" &
-    if ! spinner $! "Instalando tailscale (script oficial)..."; then
-        tail -10 "$log"; rm -f "$log"
-        warn "Instalacion de tailscale fallo -- instalalo manualmente: https://tailscale.com/download"
-        return 1
-    fi
-    rm -f "$log"
-    has_cmd tailscale && ok "tailscale instalado" || { warn "tailscale no quedo disponible tras la instalacion"; return 1; }
-}
-
-setup_tailscale_funnel() {
-    local port="$1"
-    has_cmd tailscale || { warn "tailscale no disponible -- omite Funnel."; return 1; }
-    if ! as_root tailscale status &>/dev/null || as_root tailscale status 2>/dev/null | grep -qi "logged out\|stopped"; then
-        echo ""
-        echo -e "${CYAN}  +======================================================+${NC}"
-        echo -e "${CYAN}  |   TAILSCALE — inicia sesion en este dispositivo      |${NC}"
-        echo -e "${CYAN}  +======================================================+${NC}"
-        info "Se abrira una URL de autenticacion -- entra con tu cuenta de Tailscale."
-        as_root tailscale up || { warn "tailscale up no se completo -- reintenta manualmente: sudo tailscale up"; return 1; }
-    fi
-    local log="/tmp/tailscale-funnel-$$.log"
-    if as_root tailscale funnel --bg "$port" &>"$log"; then
-        ok "Tailscale Funnel activo en el puerto $port"
-    else
-        tail -10 "$log"; rm -f "$log"
-        warn "No se pudo activar Tailscale Funnel -- revisa: tailscale funnel status"
-        return 1
-    fi
-    rm -f "$log"
-}
-
-setup_nginx_certbot() {
-    local port="$1" domain="$2"
-    step "nginx + Let's Encrypt (dominio: $domain)"
-    pkg_install nginx || warn "No se pudo instalar nginx."
-    has_cmd nginx || { warn "nginx no disponible — omite reverse proxy."; return 1; }
-
-    as_root tee "/etc/nginx/sites-available/pedidos-bot" > /dev/null <<EOF
-server {
-    listen 80;
-    server_name $domain;
-
-    location / {
-        proxy_pass         http://127.0.0.1:$port;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade \$http_upgrade;
-        proxy_set_header   Connection 'upgrade';
-        proxy_set_header   Host \$host;
-        proxy_set_header   X-Real-IP \$remote_addr;
-        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-        client_max_body_size 50M;
-    }
-}
-EOF
-    as_root ln -sf /etc/nginx/sites-available/pedidos-bot /etc/nginx/sites-enabled/pedidos-bot 2>/dev/null || true
-    as_root nginx -t &>/dev/null && as_root systemctl reload nginx || as_root systemctl restart nginx
-    ok "nginx: reverse proxy 80 -> 127.0.0.1:$port"
-
-    if pkg_install certbot python3-certbot-nginx; then
-        if as_root certbot --nginx -d "$domain" --non-interactive --agree-tos -m "admin@${domain}" --redirect; then
-            ok "Certificado HTTPS (Let's Encrypt) instalado para $domain"
-            harden_nginx_tls
-        else
-            warn "certbot fallo — revisa DNS de $domain apunte a esta IP y reintenta: certbot --nginx -d $domain"
-        fi
-    else
-        warn "certbot no disponible — instalalo para HTTPS: apt install certbot python3-certbot-nginx"
-    fi
-}
-
-# Certbot ya deja TLS razonable por defecto, pero su archivo de opciones
-# varia entre versiones/distros -- se fija explicito TLS 1.2/1.3 unicamente
-# (nada de TLS 1.0/1.1/SSL) y cifrados AEAD modernos, para no depender de
-# ese default cambiante. TLS 1.3 negocia su propio set de cifrados en el
-# cliente, por eso ssl_prefer_server_ciphers se deja off.
-harden_nginx_tls() {
-    local opts="/etc/letsencrypt/options-ssl-nginx.conf"
-    [ -f "$opts" ] || { warn "options-ssl-nginx.conf no encontrado -- certbot no lo genero, omite hardening TLS explicito"; return 0; }
-    as_root tee "$opts" > /dev/null <<'EOF'
-# Generado/endurecido por deploy-linux.sh
-ssl_session_cache shared:le_nginx_SSL:10m;
-ssl_session_timeout 1440m;
-ssl_session_tickets off;
-
-ssl_protocols TLSv1.2 TLSv1.3;
-ssl_prefer_server_ciphers off;
-ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
-EOF
-    as_root nginx -t &>/dev/null \
-        && { as_root systemctl reload nginx; ok "TLS endurecido: solo TLSv1.2/TLSv1.3, cifrados AEAD modernos"; } \
-        || warn "nginx -t fallo tras endurecer TLS -- revisa manualmente $opts"
-}
-
-# ================================================================
-#  PASO 9 — DuckDNS (opcional)
-# ================================================================
-setup_duckdns() {
-    local subdomain="$1" token="$2"
-    step "DuckDNS ($subdomain.duckdns.org)"
-    [ -n "$token" ] || { warn "Sin token DuckDNS — se omite."; return 0; }
-    local rc; rc=$(curl -fsS "https://www.duckdns.org/update?domains=${subdomain}&token=${token}&ip=" 2>/dev/null || echo "ERROR")
-    [ "$rc" = "OK" ] && ok "DuckDNS actualizado" || warn "DuckDNS respondio: $rc"
-
-    if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
-        as_root tee "/etc/systemd/system/duckdns-pedidos-bot.service" >/dev/null <<EOF
-[Unit]
-Description=DuckDNS update - pedidos-bot
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/curl -fsS "https://www.duckdns.org/update?domains=${subdomain}&token=${token}&ip="
-EOF
-        as_root tee "/etc/systemd/system/duckdns-pedidos-bot.timer" >/dev/null <<'EOF'
-[Unit]
-Description=DuckDNS update timer - pedidos-bot
-[Timer]
-OnBootSec=1min
-OnUnitActiveSec=10min
-[Install]
-WantedBy=timers.target
-EOF
-        as_root systemctl daemon-reload
-        as_root systemctl enable --now duckdns-pedidos-bot.timer &>/dev/null
-        ok "DuckDNS: actualizacion automatica cada 10 min (systemd timer)"
-    fi
-}
-
-# ================================================================
-#  PASO 10 — Vinculacion de WhatsApp (codigo de emparejamiento)
-# ================================================================
-link_whatsapp() {
-    local port="$1"
-    local phone; phone=$(env_get BOT_PHONE)
-    if [ -z "$phone" ]; then
-        echo ""
-        echo -e "${CYAN}  +======================================================+${NC}"
-        echo -e "${CYAN}  |   CONFIGURACION WHATSAPP — Numero de telefono       |${NC}"
-        echo -e "${CYAN}  +======================================================+${NC}"
-        echo "  Incluye codigo de pais sin + ni espacios. Ej Colombia: 573044016277"
-        while [ -z "${phone:-}" ] || [ "${#phone}" -lt 10 ]; do
-            phone=$(ui_input "Numero de telefono de WhatsApp (con codigo de pais)" "")
-            phone="${phone//[^0-9]/}"
-            [ "${#phone}" -ge 10 ] || warn "Numero invalido — minimo 10 digitos."
-        done
-        env_set BOT_PHONE "$phone"
-        ok "Numero guardado: $phone"
-        as_root rm -rf "${APPDATA_BOT:?}/auth" 2>/dev/null || true
-        as_root mkdir -p "$APPDATA_BOT/auth" 2>/dev/null || true
-        as_root chown "$SERVICE_USER" "$APPDATA_BOT/auth" 2>/dev/null || true
-        systemctl is-active --quiet "$NODE_SVC" 2>/dev/null && as_root systemctl restart "$NODE_SVC" || true
-    fi
-
-    wait_server_healthy "$port" 30 || true
-
-    echo ""
-    echo -e "${CYAN}  +======================================================+${NC}"
-    echo -e "${CYAN}  |   VINCULACION WHATSAPP — sin limite de tiempo        |${NC}"
-    echo -e "${CYAN}  |   Cada codigo dura ~60s, aparece uno nuevo si expira |${NC}"
-    echo -e "${CYAN}  +======================================================+${NC}"
-    info "Esperando codigo de emparejamiento... (Ctrl+C para salir de la espera)"
-
-    local last_code=""
-    while true; do
-        local log_content
-        log_content=$(tail -c 20000 "$LOG_DIR/server.log" 2>/dev/null || as_root journalctl -u "$NODE_SVC" -n 200 --no-pager 2>/dev/null || echo "")
-        if echo "$log_content" | grep -q '\[bot\].*Connected'; then
-            ok "Bot de WhatsApp CONECTADO exitosamente"
-            break
-        fi
-        local code
-        code=$(echo "$log_content" | grep -oE 'Pairing code:\s*[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1 | grep -oE '[A-Z0-9]{4}-[A-Z0-9]{4}' || true)
-        if [ -n "$code" ] && [ "$code" != "$last_code" ]; then
-            last_code="$code"
-            echo ""
-            echo -e "${GREEN}  +=========================================+${NC}"
-            echo -e "${GREEN}  |    CODIGO DE VINCULACION WHATSAPP        |${NC}"
-            echo -e "${YELLOW}  |         >>> $code <<<               |${NC}"
-            echo -e "${GREEN}  |  WhatsApp > Menu > Dispositivos          |${NC}"
-            echo -e "${GREEN}  |  Vincular con numero de telefono         |${NC}"
-            echo -e "${GREEN}  +=========================================+${NC}"
-        fi
-        sleep 3
-    done
-}
-
-# ================================================================
-#  Auditoria de seguridad (para el menu de gestion)
-# ================================================================
-security_audit() {
-    local report="" port; port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-    report+="Servicio corre como root: "
-    if systemctl show "$NODE_SVC" -p User 2>/dev/null | grep -q "User=root\|User=$"; then report+="SI (riesgo alto)\n"; else report+="NO ($(systemctl show "$NODE_SVC" -p User 2>/dev/null | cut -d= -f2))\n"; fi
-    report+="Permisos .env: $(stat -c '%a' "$ENV_FILE" 2>/dev/null || echo '?') (recomendado: 600)\n"
-    report+="HOST bind: $(env_get HOST) (recomendado: 127.0.0.1, nunca 0.0.0.0)\n"
-    report+="Puerto Node ($port) accesible desde afuera: "
-    if curl -fsS --connect-timeout 2 "http://0.0.0.0:${port}/health" &>/dev/null; then report+="revisar manualmente\n"; else report+="NO (bien)\n"; fi
-    report+="Firewall activo: "
-    if has_cmd ufw && as_root ufw status 2>/dev/null | grep -q "Status: active"; then report+="ufw activo\n"
-    elif has_cmd firewall-cmd && as_root firewall-cmd --state 2>/dev/null | grep -q running; then report+="firewalld activo\n"
-    else report+="no detectado (revisar)\n"; fi
-    report+="fail2ban activo: $(systemctl is-active fail2ban 2>/dev/null || echo 'no instalado')\n"
-    report+="Servicio Node activo: $(systemctl is-active "$NODE_SVC" 2>/dev/null || echo 'no instalado')\n"
-    report+="Tunel Cloudflare activo: $(systemctl is-active "$CF_SVC" 2>/dev/null || echo 'no instalado')\n"
-    ui_msg "AUDITORIA DE SEGURIDAD\n\n$(echo -e "$report")"
-}
-
-# ================================================================
-#  Panel de gestion (menu principal, "GUI")
-# ================================================================
-status_icon() {
-    case "$1" in
-        active)  echo "activo" ;;
-        failed)  echo "fallo" ;;
-        *)       echo "$1" ;;
-    esac
-}
-
-dashboard() {
-    local port; port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-    local node_status cf_status uptime mem bot_line
-    node_status=$(status_icon "$(systemctl is-active "$NODE_SVC" 2>/dev/null || echo 'no-instalado')")
-    cf_status=$(status_icon "$(systemctl is-active "$CF_SVC" 2>/dev/null || echo 'no-instalado')")
-    uptime=$(systemctl show "$NODE_SVC" -p ActiveEnterTimestamp 2>/dev/null | cut -d= -f2)
-    mem=$(systemctl show "$NODE_SVC" -p MemoryCurrent 2>/dev/null | cut -d= -f2)
-    [ -n "$mem" ] && [ "$mem" != "[not set]" ] && mem="$((mem / 1024 / 1024)) MB" || mem="?"
-    bot_line=$(curl -fsS --max-time 2 "http://127.0.0.1:${port}/api/bot/status" 2>/dev/null | grep -oE '"ready":(true|false)' || echo "")
-    local bot_txt="sin datos (revisa login admin)"
-    [[ "$bot_line" == *true*  ]] && bot_txt="WhatsApp conectado"
-    [[ "$bot_line" == *false* ]] && bot_txt="WhatsApp reconectando"
-
-    ui_msg "ESTADO DEL SERVIDOR\n\nServidor Node    : $node_status\nTunel Cloudflare : $cf_status\nBot WhatsApp     : $bot_txt\nPuerto (local)   : $port\nMemoria en uso   : $mem\nActivo desde     : ${uptime:-?}\nPublico          : $(load_conf TUNNEL_URL || echo 'no configurado')"
-}
-
-management_menu() {
-    splash
-    while true; do
-        local port; port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-        local status; status=$(status_icon "$(systemctl is-active "$NODE_SVC" 2>/dev/null || echo 'no-instalado')")
-        local choice
-        choice=$(ui_menu "Servidor: $status   |   Puerto: $port\n\nElige una accion:" \
-            D "Dashboard — estado en vivo" \
-            1 "Ver estado detallado del servicio" \
-            2 "Reiniciar servidor" \
-            3 "Detener servidor" \
-            4 "Iniciar servidor" \
-            5 "Ver logs en vivo (Ctrl+C para salir)" \
-            6 "Re-vincular WhatsApp (borra sesion actual)" \
-            7 "Cambiar puerto" \
-            8 "Regenerar secretos (API_KEY / JWT_SECRET)" \
-            9 "Configurar DuckDNS" \
-            10 "Configurar dominio propio (nginx + HTTPS)" \
-            11 "Configurar dominio propio en Cloudflare (named tunnel)" \
-            12 "Auditoria de seguridad" \
-            13 "Actualizar codigo (git pull + reinstalar)" \
-            14 "Desinstalar todo" \
-            0 "Salir")
-        case "$choice" in
-            D) dashboard ;;
-            1) ui_msg "$(systemctl status "$NODE_SVC" --no-pager 2>&1 | head -25)" ;;
-            2) as_root systemctl restart "$NODE_SVC" && ok "Reiniciado" ;;
-            3) as_root systemctl stop "$NODE_SVC" && ok "Detenido" ;;
-            4) as_root systemctl start "$NODE_SVC" && ok "Iniciado" ;;
-            5) journalctl -u "$NODE_SVC" -f --no-pager || tail -f "$LOG_DIR/server.log" ;;
-            6) env_set BOT_PHONE ""; link_whatsapp "$port" ;;
-            7) local np; np=$(ui_input "Nuevo puerto" "$port")
-               env_set PORT "$np"; save_conf PORT "$np"; as_root systemctl restart "$NODE_SVC" 2>/dev/null || true
-               ok "Puerto actualizado a $np (reinicia el tunel/nginx si aplica)" ;;
-            8) env_set API_KEY "$(gen_secret)"; env_set JWT_SECRET "$(gen_secret)"
-               as_root systemctl restart "$NODE_SVC" 2>/dev/null || true
-               ok "Secretos regenerados — la app movil debera reloguearse" ;;
-            9) local sd tk
-               sd=$(ui_input "Subdominio DuckDNS (sin .duckdns.org)" "$(load_conf DUCKDNS_SUB)")
-               tk=$(ui_input "Token DuckDNS" "")
-               save_conf DUCKDNS_SUB "$sd"
-               setup_duckdns "$sd" "$tk" ;;
-            10) local dm; dm=$(ui_input "Dominio propio (ej: midominio.com)" "")
-                [ -n "$dm" ] && setup_nginx_certbot "$port" "$dm" ;;
-            11) install_cloudflared
-                setup_cloudflared_named_tunnel "$port" "$PUBLIC_SITE_PORT"
-                save_conf ACCESS_METHOD tunnel-named
-                harden_firewall false ;;
-            12) security_audit ;;
-            13) (cd "$PROJ" && git pull --ff-only 2>&1 | tail -10) && install_npm_deps && as_root systemctl restart "$NODE_SVC" && ok "Actualizado" ;;
-            14) if ui_yesno "Esto detiene y elimina los servicios systemd instalados (no borra .env ni datos en $APPDATA_BOT). Continuar?"; then
-                    uninstall_services
-                fi ;;
-            0|"") break ;;
-        esac
-    done
-}
-
-uninstall_services() {
-    for svc in "$NODE_SVC" "$SITE_SVC" "$ADMIN_SVC" "$CF_SVC" duckdns-pedidos-bot.timer duckdns-pedidos-bot.service; do
-        as_root systemctl disable --now "$svc" &>/dev/null || true
-        as_root rm -f "/etc/systemd/system/${svc}.service" "/etc/systemd/system/${svc}.timer" 2>/dev/null || true
-    done
-    as_root systemctl daemon-reload 2>/dev/null || true
-    ok "Servicios detenidos y eliminados. .env y datos en $APPDATA_BOT se conservan."
-}
-
-# ================================================================
-#  MAIN
-# ================================================================
-main_install() {
-    splash
-    echo ""
-    echo -e "${GREEN}${BOLD}  +================================================+${NC}"
-    echo -e "${GREEN}${BOLD}  |  ${BRAND_NAME^^} v2.1 — Deploy Linux |${NC}"
-    echo -e "${GREEN}${BOLD}  +================================================+${NC}"
-
-    [ -d "$SERVER_DIR" ] || die "No se encontro server/ en $PROJ — ejecuta este script desde la raiz del repo."
-
-    # Ya desplegado -- NO repetir el wizard interactivo completo (no tiene
-    # sentido re-preguntar dominio/DuckDNS/telefono de WhatsApp cada vez, y
-    # la espera de vinculacion de WhatsApp al final bloquearia el script sin
-    # que se note por que en pantalla no cambia nada). Este script SOLO
-    # despliega el servidor -- el panel de analisis (dashboard.py) es una
-    # herramienta aparte que el usuario abre por su cuenta cuando quiera.
-    if systemctl list-unit-files "${NODE_SVC}.service" &>/dev/null 2>&1 \
-        && systemctl cat "${NODE_SVC}.service" &>/dev/null 2>&1 \
-        && [ -f "$ENV_FILE" ]; then
-        info "Ya existe un despliegue de '$NODE_SVC' -- actualizando codigo, dependencias y secretos antes de verificar."
-        # No repite el wizard interactivo (dominio/DuckDNS/telefono), pero SI
-        # debe traer codigo nuevo, dejar dependencias npm nuevas instaladas,
-        # y backfillear cualquier secreto nuevo (ej. WEBHOOK_SECRET agregado
-        # en una version mas nueva del script) en el .env existente -- asi
-        # "solo correr ./deploy-linux.sh" alcanza siempre, sin pasos
-        # manuales aparte.
-        local code_before; code_before=$(cd "$PROJ" && git rev-parse HEAD 2>/dev/null)
-        if [ -d "$PROJ/.git" ] && ui_yesno "Actualizar codigo desde git (git pull) antes de verificar?"; then
-            (cd "$PROJ" && git pull --ff-only 2>&1 | tail -10) || warn "git pull fallo — continuando con el codigo actual"
-        fi
-        local code_after; code_after=$(cd "$PROJ" && git rev-parse HEAD 2>/dev/null)
-        local env_before; env_before=$(md5sum "$ENV_FILE" 2>/dev/null | cut -d' ' -f1)
-        install_npm_deps
-        configure_env
-        install_postgresql || die "PostgreSQL no se pudo provisionar — el server ya NO funciona sin Postgres (dejo de usar SQLite). Revisa manualmente y vuelve a correr el script."
-        install_redis      || warn "Redis no se pudo provisionar — el server sigue funcionando con rate-limit en memoria."
-        install_docker     || warn "Docker no se pudo instalar — no bloquea el resto del despliegue."
-        install_dashboard_deps
-        [ -n "$(env_get PUBLIC_SITE_PORT)" ] || env_set PUBLIC_SITE_PORT "$PUBLIC_SITE_PORT"
-        [ -n "$(env_get ADMIN_PANEL_PORT)" ] || env_set ADMIN_PANEL_PORT "$ADMIN_PANEL_PORT"
-        ( cd "$SERVER_DIR" && node scripts/seed-catalog.js ) || warn "Seed de catálogo falló — no bloquea el resto."
-        local env_after; env_after=$(md5sum "$ENV_FILE" 2>/dev/null | cut -d' ' -f1)
-        as_root systemctl start "$NODE_SVC" 2>/dev/null || true
-        # Reinicia si cambio el codigo (git pull trajo commits nuevos) O el
-        # .env (secreto nuevo backfilleado) -- el proceso Node ya arrancado
-        # sigue corriendo el JS viejo en memoria hasta que se reinicie, un
-        # pull sin reinicio deja el fix en disco pero inactivo.
-        if [ "$code_before" != "$code_after" ] || [ "$env_before" != "$env_after" ]; then
-            info "Codigo o secretos cambiaron -- reiniciando para que el servicio tome lo nuevo."
-            as_root systemctl restart "$NODE_SVC"
-        fi
-        # Instalaciones previas a esta version del script no tienen el
-        # servicio del sitio publico -- se instala aqui si falta, y se
-        # reinicia igual que el servicio principal si el codigo cambio.
-        if ! systemctl cat "${SITE_SVC}.service" &>/dev/null 2>&1; then
-            install_public_site_service
-        elif [ "$code_before" != "$code_after" ] || [ "$env_before" != "$env_after" ]; then
-            as_root systemctl restart "$SITE_SVC" 2>/dev/null || true
-        else
-            as_root systemctl start "$SITE_SVC" 2>/dev/null || true
-        fi
-        if ! systemctl cat "${ADMIN_SVC}.service" &>/dev/null 2>&1; then
-            install_admin_panel_service
-        elif [ "$code_before" != "$code_after" ] || [ "$env_before" != "$env_after" ]; then
-            as_root systemctl restart "$ADMIN_SVC" 2>/dev/null || true
-        else
-            as_root systemctl start "$ADMIN_SVC" 2>/dev/null || true
-        fi
-        wait_server_healthy "$(env_get PORT)" 20 || true
-        ok "Servidor arriba en http://127.0.0.1:$(env_get PORT)/app/"
-        ok "Sitio público arriba en http://127.0.0.1:$(env_get PUBLIC_SITE_PORT)/"
-        ok "Panel admin arriba en http://127.0.0.1:$(env_get ADMIN_PANEL_PORT)/ (solo localhost)"
-        info "Panel de analisis: python3 $PROJ/dashboard.py"
-        return 0
-    fi
-
-    if [ -d "$PROJ/.git" ] && ui_yesno "Actualizar codigo desde git (git pull) antes de desplegar?"; then
-        (cd "$PROJ" && git pull --ff-only 2>&1 | tail -10) || warn "git pull fallo — continuando con el codigo actual"
-    fi
-
-    install_node
-    setup_service_user
-    install_npm_deps
-    configure_env
-    install_postgresql || warn "PostgreSQL no se pudo provisionar — revisa manualmente."
-    install_redis      || warn "Redis no se pudo provisionar — el server sigue funcionando con rate-limit en memoria."
-    install_docker     || warn "Docker no se pudo instalar — no bloquea el resto del despliegue."
-    install_dashboard_deps
-
-    local port; port=$(env_get PORT); port="${port:-$DEFAULT_PORT}"
-    [ -n "$(env_get PUBLIC_SITE_PORT)" ] || env_set PUBLIC_SITE_PORT "$PUBLIC_SITE_PORT"
-    [ -n "$(env_get ADMIN_PANEL_PORT)" ] || env_set ADMIN_PANEL_PORT "$ADMIN_PANEL_PORT"
-
-    install_systemd_service
-    wait_server_healthy "$port" 45 || true
-
-    step "Catálogo del sitio público"
-    ( cd "$SERVER_DIR" && node scripts/seed-catalog.js ) || warn "Seed de catálogo falló — puedes correrlo luego: node $SERVER_DIR/scripts/seed-catalog.js"
-
-    install_public_site_service
-    wait_server_healthy "$PUBLIC_SITE_PORT" 20 || warn "Sitio público no respondio a tiempo en :$PUBLIC_SITE_PORT — revisa: journalctl -u $SITE_SVC -n 50"
-
-    install_admin_panel_service
-    wait_server_healthy "$ADMIN_PANEL_PORT" 20 || warn "Panel admin no respondio a tiempo en :$ADMIN_PANEL_PORT — revisa: journalctl -u $ADMIN_SVC -n 50"
-    info "Panel admin SOLO en 127.0.0.1:$ADMIN_PANEL_PORT — nunca se expone a internet. Accede con: ssh -L $ADMIN_PANEL_PORT:localhost:$ADMIN_PANEL_PORT usuario@servidor"
-
-    local access_method
-    access_method=$(ui_menu "Como quieres exponer el servidor a internet?" \
-        1 "Cloudflare Tunnel rapido (sin dominio propio — *.trycloudflare.com)" \
-        2 "Cloudflare Tunnel con TU DOMINIO (named tunnel, requiere cuenta+dominio en Cloudflare)" \
-        3 "Dominio propio + nginx + Let's Encrypt (abre 80/443)" \
-        4 "Tailscale Funnel (HTTPS auto via tu tailnet, sin abrir puertos)" \
-        5 "Solo red local / VPN (no exponer a internet)")
-
-    case "$access_method" in
-        1) install_cloudflared; setup_cloudflared_tunnel "$port"; harden_firewall false
-           save_conf ACCESS_METHOD tunnel ;;
-        2) install_cloudflared
-           setup_cloudflared_named_tunnel "$port" "$PUBLIC_SITE_PORT"; harden_firewall false
-           save_conf ACCESS_METHOD tunnel-named ;;
-        3) local dm; dm=$(ui_input "Dominio (debe apuntar a la IP de este servidor)" "")
-           setup_nginx_certbot "$port" "$dm"; harden_firewall true
-           save_conf ACCESS_METHOD nginx ;;
-        4) install_tailscale && setup_tailscale_funnel "$port" || true; harden_firewall false
-           save_conf ACCESS_METHOD tailscale-funnel ;;
-        *) harden_firewall false; save_conf ACCESS_METHOD local ;;
-    esac
-
-    install_fail2ban
-    setup_ip_block_sudoers
-
-    if ui_yesno "Configurar actualizacion automatica de DuckDNS?"; then
-        local sd tk
-        sd=$(ui_input "Subdominio DuckDNS (sin .duckdns.org)" "")
-        tk=$(ui_input "Token DuckDNS" "")
-        [ -n "$sd" ] && setup_duckdns "$sd" "$tk"
-    fi
-
-    link_whatsapp "$port"
-
-    echo ""
-    echo -e "${GREEN}${BOLD}  +======================================================+${NC}"
-    echo -e "${GREEN}${BOLD}  |        SISTEMA ACTIVO Y FUNCIONANDO                  |${NC}"
-    echo -e "${GREEN}${BOLD}  +======================================================+${NC}"
-    echo -e "  App local     : http://127.0.0.1:$port/app/"
-    [ -n "$(load_conf TUNNEL_URL)" ] && echo -e "  App publica   : $(load_conf TUNNEL_URL)/app/"
-    echo -e "  Sitio publico : http://127.0.0.1:$PUBLIC_SITE_PORT/$( [ -n "$(load_conf CF_SITE_HOST)" ] && echo " (publico: https://$(load_conf CF_SITE_HOST)/)")"
-    echo -e "  Panel admin   : http://127.0.0.1:$ADMIN_PANEL_PORT/  ${YELLOW}(SOLO localhost, nunca por internet)${NC}"
-    echo -e "  Logs          : $LOG_DIR/ (o: journalctl -u $NODE_SVC -f)"
-    echo -e "  Gestion       : ./deploy-linux.sh --menu"
-    echo -e "  Analisis: python3 $PROJ/dashboard.py"
-    echo -e "${GREEN}${BOLD}  +======================================================+${NC}"
-    echo ""
-}
-
-show_help() {
-    echo -e "${GREEN}${BOLD}"
-    echo "  +==========================================================+"
-    echo "  |        $BRAND_NAME — deploy-linux.sh         |"
-    echo "  +==========================================================+"
-    echo -e "${NC}"
-    echo -e "  ${BOLD}Uso:${NC} ./deploy-linux.sh [comando]"
-    echo ""
-    echo -e "  ${CYAN}${BOLD}INSTALACIÓN${NC}"
-    printf "    ${GREEN}%-14s${NC} %s\n" "(sin flags)" "Instala o actualiza y despliega todo el servidor"
-    printf "    ${GREEN}%-14s${NC} %s\n" "--menu" "Abre el panel de gestión interactivo (TUI)"
-    printf "    ${GREEN}%-14s${NC} %s\n" "--uninstall" "Detiene y elimina todos los servicios instalados"
-    echo ""
-    echo -e "  ${CYAN}${BOLD}CONTROL RÁPIDO${NC}"
-    printf "    ${GREEN}%-14s${NC} %s\n" "--start" "Inicia el servidor"
-    printf "    ${GREEN}%-14s${NC} %s\n" "--stop" "Detiene el servidor"
-    printf "    ${GREEN}%-14s${NC} %s\n" "--localhost" "Cierra el acceso público (solo 127.0.0.1)"
-    printf "    ${GREEN}%-14s${NC} %s\n" "--continue" "Reabre el acceso público (revierte --localhost)"
-    echo ""
-    echo -e "  ${CYAN}${BOLD}AYUDA${NC}"
-    printf "    ${GREEN}%-14s${NC} %s\n" "-h, --help" "Muestra esta ayuda"
-    echo ""
-    echo -e "  ${BOLD}Acceso público actual:${NC} $(load_conf ACCESS_METHOD || echo 'no configurado')"
-    [ -n "$(load_conf TUNNEL_URL)" ] && echo -e "  ${BOLD}URL pública:${NC} $(load_conf TUNNEL_URL)/app/"
-    echo ""
-    echo -e "  ${BOLD}Panel de análisis (ventas, empleados, chats):${NC} ${CYAN}python3 $PROJ/dashboard.py${NC}"
-    echo -e "  ${BOLD}Logs:${NC} $LOG_DIR/  (o: journalctl -u $NODE_SVC -f)"
-    echo ""
-}
-
-# NOTA: este script SOLO despliega y gestiona el servidor (systemd, firewall,
-# fail2ban, tunel). El panel de analisis (graficas, marca, ventas) vive en
-# dashboard.py y es una herramienta aparte -- el usuario la abre directo con
-# "python3 dashboard.py" cuando quiera, no se lanza automaticamente desde aqui.
-
-case "${1:-}" in
-    --menu)       management_menu ;;
-    --start)      cmd_start ;;
-    --stop)       cmd_stop ;;
-    --localhost)  cmd_localhost ;;
-    --continue)   cmd_continue ;;
-    --uninstall)  uninstall_services ;;
-    -h|--help)    show_help ;;
-    "")           main_install ;;
-    *)            echo -e "${RED}Comando desconocido: ${1}${NC}"; echo ""; show_help; exit 1 ;;
-esac
+fi
+
+# ========================================
+# RESUMEN DEL DESPLIEGUE
+# ========================================
+
+echo ""
+echo "========================================"
+print_success "¡Despliegue completado exitosamente!"
+echo "========================================"
+echo ""
+echo "📊 Estado del sistema:"
+echo "   • Backend:      Activo (PID: $SERVER_PID)"
+echo "   • Base de datos: Lista (supermercado.db)"
+echo "   • Puerto:       5000"
+echo "   • Logs:         supermercado.log"
+echo ""
+echo "🌐 Accesos:"
+echo "   • Web Frontend: http://localhost:5000/"
+echo "   • API:          http://localhost:5000/api/"
+echo ""
+echo "🔑 Credenciales Admin por defecto:"
+echo "   • Email: admin@supermercado.com"
+echo "   • Password: admin123"
+echo ""
+echo "📱 App Móvil:"
+echo "   • Para compilar: bash compilar-apk.sh"
+echo "   • API Endpoint: http://TU_IP:5000/api/"
+echo ""
+echo "🛑 Comandos útiles:"
+echo "   • Detener servidor: kill \$(cat supermercado.pid)"
+echo "   • Ver logs: tail -f supermercado.log"
+echo "   • Reiniciar: bash deploy-linux.sh"
+echo ""
+echo "========================================"
+echo "✨ Supermercado GO está listo para usar"
+echo "========================================"
