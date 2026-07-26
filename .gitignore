@@ -1,33 +1,51 @@
-node_modules/
-.env
-auth/
-*.log
-logs/
-.superpowers/
-daemon/
-*.msi
+```
+# Database files
 *.db
-*.db-shm
-*.db-wal
-reports/
-# server/src/webapp/ -- ahora commiteado (Flutter web build)
-.flutter-plugins
-.flutter-plugins-dependencies
-android-app/.dart_tool/
-android-app/build/
-android-app/debug-symbols/
-installer/node_modules/
-.pids.json
-.wwebjs_auth/
-*.exe
-*.apk
-.claude/
 
-# Runtime PID files
-*.pid
-logs/
+# Environment files
+.env
+.env.local
+.env.*
+
+# Dependencies
+node_modules/
+venv/
+.venv/
 __pycache__/
-.deploy-config
+*.egg-info/
 
-# Specs/planes internos (brainstorming/writing-plans) -- no se publican
-docs/
+# Build artifacts
+dist/
+build/
+target/
+*.pyc
+*.pyo
+*.pyd
+
+# Mobile app build files
+.mobile_app/build/
+.mobile_app/.dart_tool/
+.mobile_app/ios/.symlinks/
+.mobile_app/android/.gradle/
+.mobile_app/android/app/build/
+
+# Web frontend build files
+web_frontend/dist/
+web_frontend/build/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+```

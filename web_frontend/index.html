@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supermercado GO - Login</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Fondo con imágenes de supermercado -->
+    <div class="background-container">
+        <div class="bg-image bg-image-1"></div>
+        <div class="bg-image bg-image-2"></div>
+        <div class="bg-overlay"></div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div class="login-container">
+        <!-- Formulario de Login -->
+        <div class="form-card login-form active" id="loginForm">
+            <div class="card-header">
+                <div class="logo">
+                    <span class="logo-icon">🛒</span>
+                    <h1>Supermercado GO</h1>
+                </div>
+                <p class="subtitle">Inicia sesión en tu cuenta</p>
+            </div>
+            
+            <form id="loginFormElement">
+                <div class="input-group">
+                    <label for="loginEmail">Correo electrónico</label>
+                    <input type="email" id="loginEmail" placeholder="tu@email.com" required>
+                    <span class="input-icon">📧</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="loginPassword">Contraseña</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    <span class="input-icon toggle-password" onclick="togglePassword('loginPassword')">👁️</span>
+                </div>
+                
+                <div class="form-options">
+                    <a href="#" class="forgot-link" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</a>
+                </div>
+                
+                <button type="submit" class="btn-primary">
+                    <span>Iniciar Sesión</span>
+                    <span class="btn-icon">→</span>
+                </button>
+            </form>
+            
+            <div class="form-footer">
+                <p>¿No tienes cuenta? <a href="#" onclick="showRegister()">Regístrate aquí</a></p>
+            </div>
+        </div>
+
+        <!-- Formulario de Registro -->
+        <div class="form-card register-form" id="registerForm">
+            <div class="card-header">
+                <div class="logo">
+                    <span class="logo-icon">🛒</span>
+                    <h1>Crear Cuenta</h1>
+                </div>
+                <p class="subtitle">Únete a Supermercado GO</p>
+            </div>
+            
+            <form id="registerFormElement">
+                <div class="input-group">
+                    <label for="registerNombre">Nombre completo</label>
+                    <input type="text" id="registerNombre" placeholder="Tu nombre" required>
+                    <span class="input-icon">👤</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerEmail">Correo electrónico</label>
+                    <input type="email" id="registerEmail" placeholder="tu@email.com" required>
+                    <span class="input-icon">📧</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerTelefono">Teléfono</label>
+                    <input type="tel" id="registerTelefono" placeholder="+57 300 123 4567" required>
+                    <span class="input-icon">📱</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerPassword">Contraseña</label>
+                    <input type="password" id="registerPassword" placeholder="Mínimo 6 caracteres" required minlength="6">
+                    <span class="input-icon toggle-password" onclick="togglePassword('registerPassword')">👁️</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerConfirmPassword">Confirmar contraseña</label>
+                    <input type="password" id="registerConfirmPassword" placeholder="Repite tu contraseña" required>
+                    <span class="input-icon toggle-password" onclick="togglePassword('registerConfirmPassword')">👁️</span>
+                </div>
+                
+                <button type="submit" class="btn-primary">
+                    <span>Crear Cuenta</span>
+                    <span class="btn-icon">→</span>
+                </button>
+            </form>
+            
+            <div class="form-footer">
+                <p>¿Ya tienes cuenta? <a href="#" onclick="showLogin()">Inicia sesión</a></p>
+            </div>
+        </div>
+
+        <!-- Formulario de Recuperación -->
+        <div class="form-card forgot-form" id="forgotForm">
+            <div class="card-header">
+                <div class="logo">
+                    <span class="logo-icon">🔐</span>
+                    <h1>Recuperar Cuenta</h1>
+                </div>
+                <p class="subtitle">Te enviaremos un código de verificación</p>
+            </div>
+            
+            <form id="forgotFormElement">
+                <div class="input-group">
+                    <label for="forgotEmail">Correo electrónico</label>
+                    <input type="email" id="forgotEmail" placeholder="tu@email.com" required>
+                    <span class="input-icon">📧</span>
+                </div>
+                
+                <button type="submit" class="btn-primary">
+                    <span>Enviar Código</span>
+                    <span class="btn-icon">📤</span>
+                </button>
+            </form>
+            
+            <div class="form-footer">
+                <p><a href="#" onclick="showLogin()">← Volver al login</a></p>
+            </div>
+        </div>
+
+        <!-- Formulario de Verificación OTP -->
+        <div class="form-card verify-form" id="verifyForm">
+            <div class="card-header">
+                <div class="logo">
+                    <span class="logo-icon">✉️</span>
+                    <h1>Verificar Código</h1>
+                </div>
+                <p class="subtitle">Ingresa el código de 6 dígitos</p>
+            </div>
+            
+            <form id="verifyFormElement">
+                <div class="otp-inputs">
+                    <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" required>
+                    <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" required>
+                    <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" required>
+                    <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" required>
+                    <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" required>
+                    <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" required>
+                </div>
+                <input type="hidden" id="verifyEmail">
+                
+                <button type="submit" class="btn-primary">
+                    <span>Verificar</span>
+                    <span class="btn-icon">✓</span>
+                </button>
+                
+                <p class="resend-text">¿No recibiste el código? <a href="#" onclick="resendCode()">Reenviar</a></p>
+            </form>
+            
+            <div class="form-footer">
+                <p><a href="#" onclick="showLogin()">← Volver al login</a></p>
+            </div>
+        </div>
+
+        <!-- Formulario de Reset Password -->
+        <div class="form-card reset-form" id="resetForm">
+            <div class="card-header">
+                <div class="logo">
+                    <span class="logo-icon">🔑</span>
+                    <h1>Nueva Contraseña</h1>
+                </div>
+                <p class="subtitle">Crea una contraseña segura</p>
+            </div>
+            
+            <form id="resetFormElement">
+                <div class="input-group">
+                    <label for="resetPassword">Nueva contraseña</label>
+                    <input type="password" id="resetPassword" placeholder="Mínimo 6 caracteres" required minlength="6">
+                    <span class="input-icon toggle-password" onclick="togglePassword('resetPassword')">👁️</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="resetConfirmPassword">Confirmar contraseña</label>
+                    <input type="password" id="resetConfirmPassword" placeholder="Repite tu contraseña" required>
+                    <span class="input-icon toggle-password" onclick="togglePassword('resetConfirmPassword')">👁️</span>
+                </div>
+                
+                <input type="hidden" id="resetEmail">
+                <input type="hidden" id="resetCode">
+                
+                <button type="submit" class="btn-primary">
+                    <span>Cambiar Contraseña</span>
+                    <span class="btn-icon">✓</span>
+                </button>
+            </form>
+            
+            <div class="form-footer">
+                <p><a href="#" onclick="showLogin()">← Volver al login</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notificaciones Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
