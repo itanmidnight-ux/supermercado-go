@@ -1,51 +1,55 @@
 ```
-# Database files
-*.db
-
-# Environment files
-.env
-.env.local
-.env.*
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+*.class
+*.exe
+*.dll
+*.so
+*.a
+*.out
 
 # Dependencies
 node_modules/
 venv/
 .venv/
-__pycache__/
-*.egg-info/
+.env
+.env.local
+.env.*
 
-# Build artifacts
+# Build outputs
 dist/
 build/
 target/
-*.pyc
-*.pyo
-*.pyd
+.gradle/
 
-# Mobile app build files
-.mobile_app/build/
-.mobile_app/.dart_tool/
-.mobile_app/ios/.symlinks/
-.mobile_app/android/.gradle/
-.mobile_app/android/app/build/
-
-# Web frontend build files
-web_frontend/dist/
-web_frontend/build/
+# Logs and temp files
+*.log
+*.tmp
+*.swp
 
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
+
+# Mobile app specific
+mobile_app/build/
+mobile_app/.dart_tool/
+mobile_app/*.apk
+mobile_app/*.ipa
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# MyPy cache
+.mypy_cache/
+.pytest_cache/
 
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-
-# Temporary files
-*.tmp
 ```

@@ -21,7 +21,7 @@ echo "✓ Flutter encontrado: $(flutter --version | head -n 1)"
 echo ""
 
 # Navegar al directorio del proyecto móvil
-cd "$(dirname "$0")/mobile_app" || exit 1
+cd "$(dirname "$0")/android-app" || exit 1
 
 echo "📁 Directorio: $(pwd)"
 echo ""
