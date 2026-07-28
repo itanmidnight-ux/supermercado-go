@@ -4765,6 +4765,7 @@ class SecurityModule:
         else:
             self.card_user.set_value(user or '—')
             issues += 1
+        self._set_card_pill(self.card_user, ok_user)
         lines.append(f"• Servicio corre como: {user or '?'} " +
                      ("✓ (OK, no-root)" if ok_user else "✗ (RIESGO: root)"))
 
@@ -4777,6 +4778,7 @@ class SecurityModule:
         self.card_env.set_value(perms)
         if not ok_env:
             issues += 1
+        self._set_card_pill(self.card_env, ok_env)
         lines.append(f"• Permisos .env: {perms} " +
                      ("✓" if ok_env else "(recomendado: 600)"))
 
@@ -4786,6 +4788,7 @@ class SecurityModule:
         self.card_bind.set_value(host)
         if not ok_bind:
             issues += 1
+        self._set_card_pill(self.card_bind, ok_bind)
         lines.append(f"• HOST bind: {host} " +
                      ("✓" if ok_bind else "(expuesto a la red — revisa firewall)"))
 
@@ -4807,6 +4810,7 @@ class SecurityModule:
         self.card_fw.set_value(fw.upper() if fw != 'ninguno' else 'NINGUNO')
         if fw == 'ninguno':
             issues += 1
+        self._set_card_pill(self.card_fw, fw != 'ninguno' and fw_active)
         lines.append(f"• Firewall: {fw} " +
                      ("(activo)" if fw_active else "(inactivo o no instalado)" if fw != 'ninguno' else "✗ (NINGUNO)"))
 
@@ -4815,6 +4819,7 @@ class SecurityModule:
         self.card_f2b.set_value(f2b.upper())
         if f2b != 'active':
             issues += 1
+        self._set_card_pill(self.card_f2b, f2b == 'active')
         lines.append(f"• fail2ban: {f2b}")
 
         lines.append("")
@@ -4835,8 +4840,13 @@ class SecurityModule:
         self.parent.set_badge('security', issues)
 
     def _set_card_pill(self, card, ok):
-        """(Reservado para futuras mejoras visuales)"""
-        pass
+        """Colorea el valor de una StatCard segun pass/fail (verde/rojo) --
+        antes había que leer el textview de abajo para saber si algo estaba
+        mal, ahora se ve de un vistazo igual que el resto del dashboard."""
+        ctx = card.value_lbl.get_style_context()
+        ctx.remove_class('pill-success')
+        ctx.remove_class('pill-danger')
+        ctx.add_class('pill-success' if ok else 'pill-danger')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
