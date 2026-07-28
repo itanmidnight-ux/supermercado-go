@@ -141,6 +141,23 @@
   color: var(--fg-muted);
 }
 
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-sm);
+}
+
+.site-footer__links a {
+  color: var(--fg-dim);
+  text-decoration: none;
+}
+
+.site-footer__links a:hover {
+  color: var(--highlight);
+  text-decoration: underline;
+}
+
 .site-footer__copy {
   width: 100%;
   margin-top: var(--sp-6);
