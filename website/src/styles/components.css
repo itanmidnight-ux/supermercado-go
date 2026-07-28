@@ -1,0 +1,201 @@
+/* Componentes base reusables. Sin contenido específico de página --
+   estructura + estados (hover/active/loading) solamente. */
+
+/* ── Botones ─────────────────────────────────────────────── */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-6);
+  border: none;
+  border-radius: var(--radius-full);
+  font-family: var(--font-heading);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out);
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+/* ripple sutil: círculo que crece desde el centro al click */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 0%, transparent 60%);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  z-index: -1;
+}
+
+.btn:active::after {
+  opacity: 1;
+  transform: scale(1.4);
+  transition: none;
+}
+
+/* Primario: usado para conversión (agregar al carrito, comprar) -- lleva
+   el verde-lima exclusivo del sitio, no el ámbar de marca. */
+.btn-primary {
+  background: var(--highlight);
+  color: #0a0a0f;
+  box-shadow: 0 0 0 rgba(198, 255, 61, 0);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-glow-highlight);
+}
+
+/* Secundario: CTAs de marca (ver más, navegación) */
+.btn-secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1.5px solid var(--surface-3);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  transform: translateY(-2px);
+  box-shadow: 0 0 16px rgba(61, 139, 253, 0.25);
+}
+
+/* ── Card de producto ────────────────────────────────────── */
+.product-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out);
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--highlight);
+  box-shadow: var(--shadow-md);
+}
+
+.product-card__media {
+  aspect-ratio: 1 / 1;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.product-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.product-card:hover .product-card__media img {
+  transform: scale(1.06);
+}
+
+.product-card__body {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.product-card__name {
+  font-family: var(--font-heading);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.product-card__price {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--highlight);
+}
+
+.product-card__footer {
+  margin-top: auto;
+  padding: 0 var(--sp-4) var(--sp-4);
+}
+
+/* ── Badge ───────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge--oferta {
+  background: var(--highlight);
+  color: #0a0a0f;
+  box-shadow: var(--shadow-glow-highlight);
+}
+
+.badge--nuevo {
+  background: var(--accent-blue);
+  color: var(--fg);
+}
+
+.badge--agotado {
+  background: var(--surface-3);
+  color: var(--fg-dim);
+}
+
+/* ── Loading skeleton ────────────────────────────────────── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton--card {
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton--text {
+  height: 1em;
+  margin: var(--sp-2) 0;
+  border-radius: var(--radius-sm);
+}

@@ -1,6 +1,6 @@
 # Supermercado GO 🛒
 
-Sistema integral para supermercado: sitio web PWA + app Flutter + panel admin + bot WhatsApp.
+Sistema integral para supermercado: sitio web + app Android + panel admin + bot WhatsApp.
 
 ## Stack
 
@@ -8,16 +8,21 @@ Sistema integral para supermercado: sitio web PWA + app Flutter + panel admin + 
 |------|-----------|
 | Backend | Node.js 20 + Express |
 | Base de datos | PostgreSQL 18 |
-| App móvil | Flutter 3.44 (Android + PWA web) |
+| Sitio web | Vite + TypeScript + GSAP/ScrollTrigger + Lenis (sin framework, sin Flutter) |
+| App móvil | Flutter 3.44 (solo Android) |
 | Panel admin | EJS + Express (localhost:3002) |
 | Bot WhatsApp | @whiskeysockets/baileys v6 |
 | Parser NLU | @nlpjs/basic (sin LLM) |
+
+El sitio web y la app Android son proyectos separados: el sitio (`website/`) es HTML/CSS/TS
+real servido directo por Express, la app (`android-app/`) es Flutter nativo solo para Android.
+Ambos consumen la misma API REST.
 
 ## Requisitos
 
 - Node.js 20+
 - PostgreSQL 16+
-- Flutter 3.44+ (solo para compilar app)
+- Flutter 3.44+ (solo para compilar la app Android)
 - Python 3.10+ (solo para dashboard.py)
 
 ## Inicio rápido
@@ -27,9 +32,9 @@ Sistema integral para supermercado: sitio web PWA + app Flutter + panel admin + 
 bash deploy-linux.sh --start
 
 # 2. Abrir en navegador
-# App web:   http://localhost:50000/app/
+# Sitio web:   http://localhost:50000/
 # Panel admin: http://localhost:3002/login
-# API:       http://localhost:50000/api/
+# API:         http://localhost:50000/api/
 ```
 
 Acceder al panel admin con: `admin@supermercado.go` / `admin123`
@@ -51,10 +56,16 @@ El script configura .env, instala dependencias, inicia PostgreSQL, libera el pue
 ./compilar-apk.sh            # Compila APK desde android-app/
 ```
 
-## Compilar web (Flutter → PWA)
+## Compilar sitio web
 
 ```bash
-./compilar-web.sh            # Compila y copia a server/src/webapp/
+./compilar-web.sh            # npm install + vite build en website/, copia a server/src/website/
+```
+
+Desarrollo local del sitio (con hot-reload, sin pasar por Express):
+
+```bash
+cd website && npm install && npm run dev
 ```
 
 ## Estructura
@@ -64,19 +75,20 @@ supermercado-go/
 ├── server/            # Backend Node.js + Express
 │   ├── src/
 │   │   ├── index.js           # Entry point
-│   │   ├── app.js             # Express app (rutas API, CORS, rate-limit)
+│   │   ├── app.js             # Express app (rutas API, sitio web, CORS, rate-limit)
 │   │   ├── db/                # PostgreSQL (schema, migrations, seed)
 │   │   ├── routes/            # API REST (auth, products, orders, cart...)
 │   │   ├── middleware/        # JWT, roles, rate-limit, seguridad
 │   │   ├── services/          # Lógica de negocio (bot, email, PDF)
 │   │   ├── utils/             # Cache, logger, storage, sanitize
 │   │   ├── admin-panel/       # Panel admin (EJS + Express, puerto 3002)
-│   │   └── webapp/            # Flutter web compilado (PWA)
-│   └── test/                  # Tests Jest (137 tests)
-├── android-app/       # App Flutter principal (Android + Web)
+│   │   └── website/           # Sitio web compilado (generado por website/, ver compilar-web.sh)
+│   └── test/                  # Tests Jest
+├── website/           # Fuente del sitio web (Vite + TS, sin framework)
+├── android-app/       # App Flutter (solo Android)
 ├── deploy-linux.sh    # Script de despliegue
 ├── compilar-apk.sh    # Script de compilación APK (Android)
-├── compilar-web.sh    # Script de compilación Web (PWA)
+├── compilar-web.sh    # Script de compilación del sitio web
 └── dashboard.py       # Dashboard de control (GTK)
 ```
 

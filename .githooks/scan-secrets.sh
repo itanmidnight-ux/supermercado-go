@@ -29,20 +29,28 @@ PATTERNS=(
 found=0
 diff_input="$(cat)"
 
+# Solo lineas agregadas (+), no las de contexto/borradas ni el header +++.
+# Filtro UNA sola vez (no por patron) -- con diffs grandes (miles de lineas,
+# ej. un bundle nuevo), hacerlo dentro del loop de patrones dispara un
+# subproceso por linea por patron y se vuelve impracticamente lento.
+added_lines="$(echo "$diff_input" | grep -E '^\+[^+]' || true)"
+
 for pat in "${PATTERNS[@]}"; do
+    [ -z "$added_lines" ] && continue
+    # Un solo grep por patron sobre TODO el diff -- filtra a las pocas lineas
+    # que matchean antes de hacer cualquier trabajo por-linea (allowlist,
+    # impresion), en vez de evaluar cada linea agregada una por una.
+    matching_lines="$(grep -E -- "$pat" <<< "$added_lines" || true)"
+    [ -z "$matching_lines" ] && continue
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        # Solo lineas agregadas (+), no las de contexto/borradas ni el header +++
-        case "$line" in
-            '+++'*) continue ;;
-        esac
-        match=$(echo "$line" | grep -oE -- "$pat" || true)
+        match=$(grep -oE -- "$pat" <<< "$line" || true)
         [ -z "$match" ] && continue
-        if echo "$match" | grep -qiE "$ALLOWLIST_RE"; then continue; fi
+        if grep -qiE "$ALLOWLIST_RE" <<< "$match"; then continue; fi
         echo "BLOQUEADO: patron '$pat' -> '$match'"
         echo "  linea: ${line#+}"
         found=1
-    done < <(echo "$diff_input" | grep -E '^\+[^+]')
+    done <<< "$matching_lines"
 done
 
 if [ "$found" = "1" ]; then

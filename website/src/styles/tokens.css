@@ -1,0 +1,121 @@
+/* Design tokens — Supermercado GO website.
+   Paleta heredada de dashboard.py / admin-panel (coherencia de marca entre
+   dashboard, app y sitio). --highlight es el ÚNICO color nuevo del sitio:
+   verde-lima eléctrico, reservado SOLO para glow/hover/conversión (CTA
+   "Agregar al carrito", badges de oferta) -- no usar como color de marca. */
+:root {
+  /* Color — marca */
+  --bg: #0a0a0f;
+  --surface: #121212;
+  --surface-2: #1a1b1e;
+  --surface-3: #2a2d33;
+  --fg: #ffffff;
+  --fg-muted: #c2c6cc;
+  --fg-dim: #8a9099;
+  --brand: #D4800A;
+  --brand-dark: #1a3a0e;
+  --accent-blue: #3D8BFD;
+
+  /* Color — exclusivo del sitio, no usar en dashboard/app */
+  --highlight: #C6FF3D;
+  --highlight-glow: rgba(198, 255, 61, 0.45);
+
+  /* Estado */
+  --success: #3ecf6b;
+  --warning: #f5a524;
+  --danger: #e5484d;
+
+  /* Tipografía */
+  --font-heading: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-base: 1rem;
+  --fs-md: 1.125rem;
+  --fs-lg: 1.5rem;
+  --fs-xl: 2rem;
+  --fs-2xl: 2.75rem;
+  --fs-3xl: 3.75rem;
+
+  --lh-tight: 1.1;
+  --lh-normal: 1.5;
+  --lh-loose: 1.75;
+
+  /* Spacing (escala 4px) */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-8: 3rem;
+  --sp-10: 4rem;
+  --sp-12: 6rem;
+  --sp-16: 8rem;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  /* Shadow */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-glow-brand: 0 0 24px rgba(212, 128, 10, 0.35);
+  --shadow-glow-highlight: 0 0 28px var(--highlight-glow);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 0.15s;
+  --dur-base: 0.3s;
+  --dur-slow: 0.6s;
+
+  /* Layout */
+  --container-max: 1280px;
+  --header-h: 72px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--sp-4);
+}
+
+a {
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+.container {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--sp-5);
+}

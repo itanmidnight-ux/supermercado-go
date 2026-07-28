@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catálogo — Supermercado GO</title>
+    <meta name="description" content="Catálogo completo de Supermercado GO: buscá, filtrá por categoría y ordená productos." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main class="container catalog">
+      <section class="catalog__head" data-reveal="up">
+        <h1 class="catalog__title">Catálogo</h1>
+        <p class="catalog__subtitle">Todo lo que necesitás, a un clic.</p>
+      </section>
+
+      <section class="catalog__controls" data-reveal="up">
+        <div class="catalog__search">
+          <span class="catalog__search-icon" aria-hidden="true">🔎</span>
+          <input
+            type="search"
+            class="catalog__search-input"
+            id="catalog-search"
+            placeholder="Buscar productos..."
+            aria-label="Buscar productos"
+          />
+        </div>
+
+        <div class="catalog__sort">
+          <label for="catalog-sort" class="catalog__sort-label">Ordenar por</label>
+          <select id="catalog-sort" class="catalog__sort-select">
+            <option value="destacados">Destacados primero</option>
+            <option value="nombre">Nombre (A-Z)</option>
+            <option value="precio-asc">Precio: menor a mayor</option>
+            <option value="precio-desc">Precio: mayor a menor</option>
+          </select>
+        </div>
+      </section>
+
+      <div class="catalog__chips" id="catalog-chips" role="group" aria-label="Filtrar por categoría"></div>
+
+      <section class="catalog__grid" id="catalog-grid" aria-live="polite"></section>
+
+      <p class="catalog__empty" id="catalog-empty" hidden>
+        <span aria-hidden="true">🛒</span> No encontramos productos con esos filtros.
+      </p>
+
+      <p class="catalog__error" id="catalog-error" hidden>
+        <span aria-hidden="true">⚠️</span> No pudimos cargar el catálogo. Probá de nuevo en un momento.
+      </p>
+    </main>
+
+    <div id="site-footer"></div>
+
+    <script type="module" src="/src/scripts/catalogo.ts"></script>
+  </body>
+</html>
