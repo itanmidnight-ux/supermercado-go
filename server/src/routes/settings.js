@@ -5,15 +5,21 @@ const { adminAuth, clientAuth } = require('../middleware/auth');
 const { getDB } = require('../db/database');
 const { settingsCache } = require('../utils/memoryCache');
 
-// GET /api/settings/public — nombre/logo/colores de marca, sin auth. Lo
-// necesita la pantalla de login (todavía no hay sesión ahí) para mostrar
-// la marca real configurada en vez de quedarse con el fallback fijo del
-// código -- nada de esto es sensible (a diferencia de nequi_phone, emails,
-// dominios, etc. que solo se devuelven autenticado).
+// GET /api/settings/public — marca + contacto público, sin auth. Un
+// supermercado real necesita mostrar teléfono/dirección/horario a
+// cualquier visitante (es información de vidriera, no un secreto) -- lo
+// único que se sigue reservando para clientes autenticados es lo
+// realmente sensible: nequi_phone/nequi_name (cuenta de pago personal,
+// no se expone a scraping anónimo) y cualquier dato de dominio/admin.
 router.get('/public', async (req, res, next) => {
   try {
     const settings = await settingsCache.wrap('public', 60_000, async () => {
-      const keys = ['theme_name', 'theme_primary', 'theme_accent', 'theme_logo_url'];
+      const keys = [
+        'theme_name', 'theme_primary', 'theme_accent', 'theme_logo_url',
+        'empresa_nombre', 'empresa_descripcion', 'horario_atencion',
+        'contact_phone', 'contact_email', 'contact_address',
+        'contact_instagram', 'contact_facebook',
+      ];
       const { rows } = await getDB().query('SELECT key, value FROM settings WHERE key = ANY($1)', [keys]);
       const out = {};
       rows.forEach(r => { out[r.key] = r.value; });

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Producto — Supermercado GO</title>
+    <meta name="description" content="Detalle de producto en Supermercado GO." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main class="container product-page">
+      <nav class="product-breadcrumb" id="product-breadcrumb" aria-label="Ruta de navegación"></nav>
+
+      <div class="product-detail product-detail--loading" id="product-loading">
+        <div class="product-gallery">
+          <div class="skeleton skeleton--card" style="aspect-ratio: 1 / 1;"></div>
+        </div>
+        <div class="product-info">
+          <div class="skeleton skeleton--text" style="width: 30%;"></div>
+          <div class="skeleton skeleton--text" style="width: 70%; height: 2em;"></div>
+          <div class="skeleton skeleton--text" style="width: 40%; height: 2.5em;"></div>
+          <div class="skeleton skeleton--text" style="width: 100%;"></div>
+          <div class="skeleton skeleton--text" style="width: 90%;"></div>
+          <div class="skeleton skeleton--card" style="height: 3.5rem; margin-top: var(--sp-5);"></div>
+        </div>
+      </div>
+
+      <p class="product-error" id="product-error" hidden>
+        <span aria-hidden="true">⚠️</span> No encontramos este producto.
+        <a href="/catalogo.html" class="product-error__link">Volver al catálogo</a>
+      </p>
+
+      <section class="product-detail" id="product-detail" hidden>
+        <div class="product-gallery" id="product-gallery">
+          <div class="product-gallery__main" id="gallery-main">
+            <img id="gallery-main-img" alt="" hidden />
+            <div class="product-gallery__placeholder" id="gallery-placeholder">
+              <span aria-hidden="true">🛒</span>
+            </div>
+          </div>
+          <div class="product-gallery__thumbs" id="gallery-thumbs"></div>
+        </div>
+
+        <div class="product-info">
+          <p class="product-info__category" id="product-category"></p>
+          <h1 class="product-info__name" id="product-name"></h1>
+          <div class="product-info__badges" id="product-badges"></div>
+          <p class="product-info__price" id="product-price"></p>
+          <p class="product-info__description" id="product-description"></p>
+
+          <div class="product-buybox" id="product-buybox">
+            <div class="product-qty" id="product-qty">
+              <button type="button" class="product-qty__btn" id="qty-minus" aria-label="Restar cantidad">−</button>
+              <input type="number" class="product-qty__input" id="qty-input" value="1" min="1" readonly aria-label="Cantidad" />
+              <button type="button" class="product-qty__btn" id="qty-plus" aria-label="Sumar cantidad">+</button>
+            </div>
+
+            <button class="btn btn-primary product-add-btn" id="add-to-cart-btn" type="button">
+              <span id="add-btn-label">Agregar al carrito</span>
+            </button>
+          </div>
+
+          <p class="product-stock-hint" id="stock-hint" hidden></p>
+        </div>
+      </section>
+
+      <section class="product-reviews" id="product-reviews" data-reveal="up">
+        <h2>Reseñas</h2>
+        <div class="reviews-summary" id="reviews-summary"></div>
+        <div class="reviews-list" id="reviews-list"></div>
+      </section>
+
+      <section class="product-related" id="product-related" hidden>
+        <h2>También te puede interesar</h2>
+        <div class="product-related__grid" id="related-grid"></div>
+      </section>
+    </main>
+
+    <div id="site-footer"></div>
+
+    <script type="module" src="/src/scripts/producto.ts"></script>
+  </body>
+</html>

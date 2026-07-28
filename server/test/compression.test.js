@@ -13,9 +13,17 @@ const app = require('../src/app');
 beforeAll(async () => { await initDB(); });
 afterAll(async () => { await teardownTestSchema(); });
 
-test('respuestas grandes de /app se sirven comprimidas con gzip', async () => {
+test('respuestas grandes del sitio web se sirven comprimidas con gzip', async () => {
+  // El bundle de layout (header/footer/animaciones, compartido por todas las
+  // páginas) es el asset más grande del sitio -- suficiente para superar el
+  // umbral de compression(). El hash del nombre cambia en cada build, así
+  // que se descubre el path real desde el index en vez de hardcodearlo.
+  const index = await request(app).get('/');
+  const match = index.text.match(/\/assets\/layout-[\w-]+\.js/);
+  expect(match).toBeTruthy();
+
   const res = await request(app)
-    .get('/app/main.dart.js')
+    .get(match[0])
     .set('Accept-Encoding', 'gzip');
   expect(res.status).toBe(200);
   expect(res.headers['content-encoding']).toBe('gzip');

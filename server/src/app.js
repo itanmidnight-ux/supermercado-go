@@ -20,35 +20,14 @@ const { ipActivityMiddleware, startIpActivityFlusher } = require('./middleware/i
 app.use(ipActivityMiddleware);
 if (process.env.NODE_ENV !== 'test') startIpActivityFlusher();
 
-// ── Flutter web ANTES de helmet ──────────────────────────────
-// CSP y los headers cross-origin quedan fuera de helmet aca a proposito:
-// CanvasKit (el renderer de Flutter web) carga .wasm y Web Workers via
-// blob: -- una CSP generica los bloquea, y COOP/COEP/CORP ya se fijan a
-// mano abajo con los valores exactos que CanvasKit necesita. El resto de
-// proteccion de helmet (HSTS, nosniff, X-Frame-Options, oculta
-// X-Powered-By, etc.) si aplica: no afecta la carga de assets.
-const appSecurityHeaders = helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: false,
-  crossOriginResourcePolicy: false,
-});
-
-app.use('/app', (req, res, next) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Cross-Origin-Opener-Policy',   'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-}, appSecurityHeaders, express.static(path.join(__dirname, 'webapp')));
-
-// ── Seguridad para el resto (API) ────────────────────────────
+// ── Seguridad global (API + sitio web) ───────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
       scriptSrc:   ["'self'", "'unsafe-inline'"],
-      styleSrc:    ["'self'", "'unsafe-inline'"],
+      styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
       imgSrc:      ["'self'", "data:", "https:"],
       connectSrc:  ["'self'"],
       frameSrc:    ["'none'"],
@@ -63,12 +42,20 @@ app.use(helmet({
   },
 }));
 
+// ── Sitio web (server/src/website, generado por website/ vía Vite --
+// ver compilar-web.sh) servido en la raíz. Reemplaza la app Flutter Web
+// que vivía en /app -- Android sigue siendo Flutter (android-app/), pero
+// el sitio público ahora es HTML/CSS/JS real, sin Flutter.
+app.use(express.static(path.join(__dirname, 'website')));
+
 // ── CORS restrictivo ─────────────────────────────────────────
 // Ningun dominio real va hardcodeado aqui -- cada instalacion configura el
 // suyo desde la pestaña Configuracion del dashboard (settings.server_domain /
 // settings.extra_domains, tabla `settings`) o via env SERVER_DOMAIN como
 // respaldo. Cache corto para no golpear la DB en cada request.
-const LOCAL_DEV_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const LOCAL_DEV_ORIGINS = [
+  'http://localhost:3000', 'http://127.0.0.1:3000',
+];
 let originsCache = { at: 0, list: [] };
 const ORIGINS_CACHE_MS = 5000;
 
@@ -153,20 +140,11 @@ app.use('/api/staff-locations', require('./routes/staffLocations'));
 app.use('/api/payments', require('./routes/payments'));
 
 app.get('/health',  (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-app.get('/preview', (req, res) => res.sendFile(path.join(__dirname, 'preview.html')));
-
-// Raiz -> redirige a /app/
-app.get('/', (req, res) => res.redirect(301, '/app/'));
-
-// SPA fallback: /app/* sin archivo -> index.html (Flutter router)
-app.get('/app/*', (req, res) => {
-  const index = path.join(__dirname, 'webapp', 'index.html');
-  if (require('fs').existsSync(index)) {
-    res.sendFile(index);
-  } else {
-    res.status(503).send('App en construccion. API disponible en /api/');
-  }
+app.get('/cache-stats', (req, res) => {
+  const { allStats } = require('./utils/memoryCache');
+  res.json(allStats());
 });
+app.get('/preview', (req, res) => res.sendFile(path.join(__dirname, 'preview.html')));
 
 // ── Error handler global ──────────────────────────────────────
 app.use((err, req, res, next) => {
