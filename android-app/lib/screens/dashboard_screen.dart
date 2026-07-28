@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../services/location_tracker_service.dart';
+import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../widgets/order_card.dart';
 import '../widgets/company_header.dart';
@@ -55,7 +56,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   // real del sistema -- transparencia + requisito de Google Play para
   // ubicacion en segundo plano.
   Future<void> _setupLocationTracking() async {
-    if (!['worker', 'admin'].contains(ApiService.currentRole)) return;
+    final role = context.read<AppProvider>().currentRole;
+    if (!['worker', 'admin'].contains(role)) return;
     if (await LocationTrackerService.hasGivenConsent()) {
       await LocationTrackerService.start();
       return;
@@ -279,6 +281,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     final content = IndexedStack(index: safeTab, children: [
       // PEDIDOS (all roles)
       Column(children: [
+        // Hero stat cards (admin/worker only) - resumen ejecutivo rápido
+        if (provider.isAdmin || provider.currentRole == 'worker')
+          _HeroStats(provider: provider, scheme: scheme),
+
         SizedBox(
           height: 44,
           child: ListView(
@@ -357,7 +363,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         selectedIndex: safeTab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         labelType: NavigationRailLabelType.all,
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         indicatorColor: scheme.primary.withValues(alpha: 0.16),
         destinations: _navDestinations(provider, scheme)
             .map((d) => NavigationRailDestination(
@@ -376,7 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return NavigationBar(
       selectedIndex: safeTab,
       onDestinationSelected: (i) => setState(() => _tab = i),
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
       indicatorColor: scheme.primary.withValues(alpha: 0.16),
       destinations: _navDestinations(provider, scheme)
           .map((d) => NavigationDestination(
@@ -421,4 +427,119 @@ class _NavItem {
   final String label;
   const _NavItem(
       {required this.icon, required this.selectedIcon, required this.label});
+}
+
+// ── Hero stat cards (futurista) ────────────────────────────────
+class _HeroStats extends StatelessWidget {
+  final AppProvider provider;
+  final ColorScheme scheme;
+
+  const _HeroStats({required this.provider, required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = provider.orders.where((o) => o.status == 'pending').length;
+    final claimed = provider.orders.where((o) => o.status == 'claimed').length;
+    final enCamino = provider.orders.where((o) => o.status == 'en_camino').length;
+    final total = provider.orders.length;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            scheme.primary.withValues(alpha: 0.08),
+            scheme.secondary.withValues(alpha: 0.06),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          _MiniStat(
+            icon: Icons.inbox_rounded,
+            color: AppTheme.warningColor,
+            label: 'Pendientes',
+            value: pending.toString(),
+          ),
+          _MiniStat(
+            icon: Icons.shopping_basket_rounded,
+            color: scheme.secondary,
+            label: 'Reclamados',
+            value: claimed.toString(),
+          ),
+          _MiniStat(
+            icon: Icons.local_shipping_rounded,
+            color: scheme.primary,
+            label: 'En camino',
+            value: enCamino.toString(),
+          ),
+          _MiniStat(
+            icon: Icons.bar_chart_rounded,
+            color: scheme.tertiary,
+            label: 'Total',
+            value: total.toString(),
+            last: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final bool last;
+
+  const _MiniStat({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    this.last = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final target = int.tryParse(value) ?? 0;
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              // Cuenta ascendente animada en vez de un Text estatico -- el
+              // sitio web ya tiene este tipo de "vida" en sus stats, la app
+              // no tenia ninguna animacion a nivel de widget.
+              TweenAnimationBuilder<int>(
+                tween: IntTween(begin: 0, end: target),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutCubic,
+                builder: (context, animatedValue, child) => Text(
+                    animatedValue.toString(),
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: color)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
 }

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/product.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/futuristic_modal.dart';
 
@@ -57,10 +58,13 @@ class _InventarioScreenState extends State<InventarioScreen> {
 
     return Column(children: [
       Container(
-        color: Colors.white,
+        color: scheme.surface,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
         child: TextField(
           controller: _searchCtrl,
+          // Sin fillColor/border propios: hereda el inputDecorationTheme
+          // central de AppTheme (antes lo pisaba con un gris fijo distinto
+          // al resto de los campos de la app).
           decoration: InputDecoration(
             hintText: 'Buscar producto en el inventario...',
             prefixIcon: Icon(Icons.search_rounded, color: scheme.primary),
@@ -69,11 +73,6 @@ class _InventarioScreenState extends State<InventarioScreen> {
                     icon: const Icon(Icons.close_rounded),
                     onPressed: () => _searchCtrl.clear())
                 : null,
-            filled: true,
-            fillColor: const Color(0xFFF5F5F5),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none),
           ),
         ),
       ),
@@ -154,7 +153,7 @@ class _InventoryTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -210,13 +209,17 @@ class _InventoryTile extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
+                  // Colores semanticos centralizados (AppTheme.error/warning/
+                  // successColor) en vez de shades de Material sueltos --
+                  // mismo verde/naranja/rojo que usa el resto de la app para
+                  // "ok/alerta/critico".
                   color: stock == null
                       ? Colors.grey.shade100
                       : (stock == 0
-                          ? Colors.red.shade50
+                          ? AppTheme.errorColor.withValues(alpha: 0.1)
                           : lowStock
-                              ? Colors.orange.shade50
-                              : Colors.green.shade50),
+                              ? AppTheme.warningColor.withValues(alpha: 0.1)
+                              : AppTheme.successColor.withValues(alpha: 0.1)),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -227,10 +230,10 @@ class _InventoryTile extends StatelessWidget {
                     color: stock == null
                         ? Colors.grey.shade600
                         : (stock == 0
-                            ? Colors.red.shade700
+                            ? AppTheme.errorColor
                             : lowStock
-                                ? Colors.orange.shade800
-                                : Colors.green.shade700),
+                                ? AppTheme.warningColor
+                                : AppTheme.successColor),
                   ),
                 ),
               ),
@@ -375,14 +378,11 @@ class _InventoryDetailModalState extends State<_InventoryDetailModal> {
                   child: TextField(
                 controller: _priceCtrl,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
+                // Sin fillColor/border propios: hereda el inputDecorationTheme
+                // central (antes cada campo pisaba con un gris distinto).
+                decoration: const InputDecoration(
                     labelText: 'Precio',
-                    prefixText: '\$',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAF8),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade200))),
+                    prefixText: '\$'),
               )),
               const SizedBox(width: 12),
               Expanded(
@@ -390,14 +390,9 @@ class _InventoryDetailModalState extends State<_InventoryDetailModal> {
                 controller: _stockCtrl,
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                     labelText: 'Cantidad',
-                    suffixText: 'uds',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAF8),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade200))),
+                    suffixText: 'uds'),
               )),
             ]),
             if (_error != null)

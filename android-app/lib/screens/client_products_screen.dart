@@ -129,7 +129,8 @@ class _ClientProductsScreenState extends State<ClientProductsScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final cols = size.width > 600 ? 3 : 2;
+    final isDesktop = size.width >= 1024;
+    final cols = isDesktop ? 4 : size.width < 480 ? 2 : size.width < 768 ? 3 : 4;
     final scheme = Theme.of(context).colorScheme;
     return Column(children: [
       // Search bar
@@ -212,53 +213,65 @@ class _ClientProductsScreenState extends State<ClientProductsScreen>
                   : RefreshIndicator(
                       onRefresh: _load,
                       color: scheme.primary,
-                      child: CustomScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        slivers: [
-                          // Featured banner
-                          if (_all.any((p) => p.favorite) &&
-                              _category == 'Todos' &&
-                              _searchCtrl.text.isEmpty)
-                            SliverToBoxAdapter(child: _featuredSection()),
-                          // Grid
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(12, 8, 12,
-                                MediaQuery.of(context).padding.bottom + 80),
-                            sliver: SliverGrid(
-                              delegate: SliverChildBuilderDelegate(
-                                (_, i) => _ProductCard(
-                                  product: _filtered[i],
-                                  description:
-                                      _productDescription(_filtered[i]),
-                                  onTap: () async {
-                                    await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) => ClientProductDetail(
-                                                  product: _filtered[i],
-                                                  description:
-                                                      _productDescription(
-                                                          _filtered[i]),
-                                                )));
-                                  },
-                                  onLongPress: () => showProductPreviewModal(
-                                      context,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1280),
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              // Featured banner
+                              if (_all.any((p) => p.favorite) &&
+                                  _category == 'Todos' &&
+                                  _searchCtrl.text.isEmpty)
+                                SliverToBoxAdapter(child: _featuredSection()),
+                              // Grid
+                              SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                    isDesktop ? 24 : 12,
+                                    8,
+                                    isDesktop ? 24 : 12,
+                                    MediaQuery.of(context).padding.bottom + 80),
+                                sliver: SliverGrid(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (_, i) => _ProductCard(
                                       product: _filtered[i],
                                       description:
-                                          _productDescription(_filtered[i])),
+                                          _productDescription(_filtered[i]),
+                                      onTap: () async {
+                                        await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (_) =>
+                                                    ClientProductDetail(
+                                                      product: _filtered[i],
+                                                      description:
+                                                          _productDescription(
+                                                              _filtered[i]),
+                                                    )));
+                                      },
+                                      onLongPress: () =>
+                                          showProductPreviewModal(
+                                              context,
+                                              product: _filtered[i],
+                                              description:
+                                                  _productDescription(
+                                                      _filtered[i])),
+                                    ),
+                                    childCount: _filtered.length,
+                                  ),
+                                  gridDelegate:
+                                      SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 280,
+                                    crossAxisSpacing: isDesktop ? 16 : 10,
+                                    mainAxisSpacing: isDesktop ? 16 : 10,
+                                    childAspectRatio:
+                                        isDesktop ? 0.78 : cols > 3 ? 0.75 : 0.68,
+                                  ),
                                 ),
-                                childCount: _filtered.length,
                               ),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: cols,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
-                                childAspectRatio: 0.68,
-                              ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     )),
     ]);
@@ -392,7 +405,9 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final card = Container(
+    final card = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: _radius,
@@ -482,6 +497,7 @@ class _ProductCard extends StatelessWidget {
           ]),
         ),
       ]),
+    ),
     );
 
     return LongPressPreviewDetector(

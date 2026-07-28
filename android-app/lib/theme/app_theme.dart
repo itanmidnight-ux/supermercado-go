@@ -61,7 +61,13 @@ class AppTheme {
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: primary,
-        foregroundColor: Colors.white,
+        // Antes blanco fijo -- si el admin elige un theme_primary claro/pastel
+        // en Configuración, el texto blanco pierde legibilidad. Se adapta al
+        // brillo real del color de marca en vez de asumir que siempre es oscuro.
+        foregroundColor:
+            ThemeData.estimateBrightnessForColor(primary) == Brightness.dark
+                ? Colors.white
+                : Colors.black,
         elevation: 0,
         centerTitle: false,
       ),
@@ -76,7 +82,10 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: Colors.white,
+          foregroundColor:
+              ThemeData.estimateBrightnessForColor(primary) == Brightness.dark
+                  ? Colors.white
+                  : Colors.black,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -119,6 +128,19 @@ class AppTheme {
           TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
         },
       ),
+    );
+  }
+
+  /// Decoración reusable para Containers "premium" fuera de Card -- mismo
+  /// radio (22) + borde sutil (12% alpha del primary) que ya usa cardTheme,
+  /// para que las screens dejen de reinventar radios/bordes sueltos (10, 14,
+  /// 16 mezclados) con BoxDecoration manual.
+  static BoxDecoration cardDecoration(BuildContext context, {Color? color}) {
+    final scheme = Theme.of(context).colorScheme;
+    return BoxDecoration(
+      color: color ?? scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: scheme.primary.withValues(alpha: 0.12)),
     );
   }
 }
