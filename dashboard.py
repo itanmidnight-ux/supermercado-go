@@ -40,13 +40,22 @@ except Exception:
     HAS_WEBKIT = False
 
 # ─── Configuración de rutas y servicios ─────────────────────────────────────────
-SERVICE         = os.environ.get('DEPLOY_SERVICE', 'pedidos-bot')
-CF_SVC          = os.environ.get('DEPLOY_CF_SVC', 'pedidos-bot-tunnel')
-SERVICE_USER    = os.environ.get('DEPLOY_SERVICE_USER', 'pedidos-bot')
+SERVICE         = os.environ.get('DEPLOY_SERVICE', 'supermercado-go')
+CF_SVC          = os.environ.get('DEPLOY_CF_SVC', 'supermercado-go-tunnel')
+SERVICE_USER    = os.environ.get('DEPLOY_SERVICE_USER', 'supermercado-go')
 PROJ            = os.environ.get('DEPLOY_PROJ', os.path.dirname(os.path.abspath(__file__)))
 ENV_FILE        = os.path.join(PROJ, 'server', '.env')
-LOG_DIR         = os.environ.get('DEPLOY_LOG_DIR', '/var/log/pedidos-bot')
+LOG_DIR         = os.environ.get('DEPLOY_LOG_DIR', '/var/log/supermercado-go')
+PIDFILE         = os.path.join(PROJ, '.server.pid')
 # API_BASE se define después de env_get() más abajo
+
+# ─── Helper: fade-in animado para switch_module ──────────────────────────────
+def _fade_in_step(widget, state):
+    state[0] = min(1.0, state[0] + 0.1)
+    widget.set_opacity(state[0])
+    if state[0] < 1.0:
+        GLib.timeout_add(20, lambda: _fade_in_step(widget, state) or False)
+    return False
 
 # ─── Paleta de marca (para el módulo Marca) ─────────────────────────────────────
 PRIMARY_DEFAULT = '#2D5016'
@@ -64,10 +73,10 @@ PRESETS = [
 # Fondo negro, texto blanco, bordes de card/box siempre visibles (BORDER
 # claro sobre SURFACE oscuro). Acentos aclarados respecto al tema claro
 # original para mantener contraste legible sobre negro.
-BG          = '#000000'   # window background
+BG          = '#0a0a0f'   # window background (slightly lighter for depth)
 SURFACE     = '#121212'   # cards, contenido
 SURFACE_2   = '#1a1b1e'   # sidebar, hover, elevated
-SURFACE_3   = '#27292d'   # active, pressed
+SURFACE_3   = '#2a2d33'   # active, pressed
 BORDER      = '#3d4046'   # 1px borders — visible sobre negro/superficie
 BORDER_SOFT = '#26282c'   # subtle dividers
 FG          = '#ffffff'   # primary text
@@ -76,7 +85,7 @@ FG_DIM      = '#8a9099'   # tertiary / labels
 ON_BRAND    = '#1a1408'   # texto sobre fondos color BRAND (ámbar) — contraste
 ACCENT      = '#3D8BFD'   # azul corporativo aclarado (acciones primarias)
 BRAND       = '#D4800A'   # acento de marca (highlights, indicadores activos)
-BRAND_DARK  = '#2D5016'   # primario de marca (presets, preview)
+BRAND_DARK  = '#1a3a0e'   # primario de marca (presets, preview)
 SUCCESS     = '#2fbf71'   # estados activos / OK
 WARNING     = '#f0b429'   # advertencias / acciones sensibles
 DANGER      = '#e5484d'   # errores / cancelados / crítico
@@ -86,13 +95,6 @@ INFO        = '#3D8BFD'   # info / charts secundarios
 # Esquinas 6-10px, padding generoso, transiciones 150-200ms, sombras suaves
 # de elevación en cards (soportadas en GTK3 3.22+), jerarquía tipográfica clara.
 CSS = f"""
-/* Reset universal -- el tema del sistema (Kali-Dark) mete gradientes,
-   sombras y text-shadow propios en botones/headerbar/entries que una
-   simple background-color no tapa (background-image se dibuja ENCIMA
-   del background-color). Sin este reset se ve un remanente oscuro
-   detrás de cada widget aunque el color de fondo ya sea claro. Los
-   pocos casos que sí quieren sombra/gradiente (stat-card, bot-frame,
-   etc.) la redeclaran explícitamente más abajo y ganan por especificidad. */
 * {{
     font-family: 'Cantarell', 'Inter', 'Fira Sans', 'Segoe UI', sans-serif;
     color: {FG};
@@ -101,22 +103,21 @@ CSS = f"""
     text-shadow: none;
 }}
 .mono {{ font-family: 'Fira Code', 'JetBrains Mono', 'DejaVu Sans Mono', monospace; }}
-
 window, .background {{ background-color: {BG}; }}
 
 /* ─── Header bar ─────────────────────────────────── */
 headerbar {{
-    background-color: {SURFACE};
-    border-bottom: 1px solid {BORDER};
-    box-shadow: none;
-    padding: 4px 10px;
+    background: linear-gradient(180deg, {SURFACE} 0%, {SURFACE_2} 100%);
+    border-bottom: 2px solid {BRAND};
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    padding: 6px 14px;
 }}
-headerbar:backdrop {{ background-color: {SURFACE}; }}
+headerbar:backdrop {{ background: {SURFACE}; }}
 headerbar .title {{
     color: {FG};
     font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 0.3px;
+    font-size: 15px;
+    letter-spacing: 0.5px;
 }}
 headerbar .subtitle {{
     color: {FG_MUTED};
@@ -126,76 +127,75 @@ headerbar .subtitle {{
 headerbar button {{
     background: {SURFACE_2};
     border: 1px solid {BORDER};
-    border-radius: 6px;
+    border-radius: 8px;
     color: {FG};
-    padding: 5px 12px;
+    padding: 6px 14px;
     font-weight: 500;
-    transition: background 150ms ease, border-color 150ms ease;
+    transition: all 150ms ease;
 }}
 headerbar button:hover {{ background: {SURFACE_3}; border-color: {FG_DIM}; }}
-headerbar button:active {{ background: {SURFACE_3}; }}
 
 /* ─── Sidebar ────────────────────────────────────── */
 .win-controls button {{
-    background: {SURFACE_2};
+    background: transparent;
     border: none;
-    border-radius: 6px;
-    min-width: 30px;
-    min-height: 26px;
+    border-radius: 8px;
+    min-width: 32px;
+    min-height: 28px;
     padding: 0;
     color: {FG_MUTED};
-    transition: background 120ms ease, color 120ms ease;
+    transition: all 120ms ease;
 }}
 .win-controls button:hover {{ background: {SURFACE_3}; color: {FG}; }}
 .win-controls .win-close:hover {{ background: {DANGER}; color: white; }}
-
 .sidebar {{
-    background-color: {SURFACE_2};
-    border-right: 1px solid {BORDER};
-    padding: 8px 6px;
+    background: linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%);
+    border-right: 2px solid {BORDER};
+    padding: 10px 6px;
 }}
 .sidebar-btn {{
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 10px;
     color: {FG_MUTED};
-    padding: 10px 12px;
+    padding: 12px 14px;
+    margin: 1px 2px;
     font-weight: 500;
     font-size: 15px;
-    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+    transition: all 150ms ease;
     outline: none;
 }}
-.sidebar-btn:hover {{ background: {SURFACE_3}; color: {FG}; }}
+.sidebar-btn:hover {{ background: {SURFACE_3}; color: {FG}; border-color: rgba(255,255,255,0.05); }}
 .sidebar-btn.active {{
-    background: {SURFACE};
+    background: linear-gradient(135deg, {SURFACE} 0%, {SURFACE_2} 100%);
     color: {FG};
-    border-color: {BORDER};
-    box-shadow: inset 2px 0 0 {BRAND};
+    border: 1px solid {BORDER};
+    box-shadow: inset 3px 0 0 {BRAND}, 0 1px 3px rgba(0,0,0,0.2);
 }}
 .sidebar-btn .badge {{
     background: {BRAND};
     color: {ON_BRAND};
-    border-radius: 10px;
-    padding: 1px 7px;
+    border-radius: 12px;
+    padding: 2px 8px;
     font-size: 10px;
     font-weight: 700;
-    min-width: 16px;
+    min-width: 18px;
 }}
 .sidebar-section {{
     color: {FG_DIM};
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 1.2px;
-    padding: 14px 12px 6px 12px;
+    letter-spacing: 1.5px;
+    padding: 18px 14px 8px 14px;
 }}
 .sidebar-divider {{
     background: {BORDER};
     min-height: 1px;
-    margin: 6px 8px;
+    margin: 8px 10px;
 }}
 
 /* ─── Content area ───────────────────────────────── */
-.content {{ background-color: {BG}; padding: 20px 22px; }}
+.content {{ background-color: {BG}; padding: 24px 28px; }}
 .content-scrolled {{ background-color: {BG}; }}
 
 /* ─── Section headers ────────────────────────────── */
@@ -203,29 +203,119 @@ headerbar button:active {{ background: {SURFACE_3}; }}
     color: {FG_MUTED};
     font-weight: 700;
     font-size: 11px;
-    letter-spacing: 1.2px;
+    letter-spacing: 1.5px;
+    margin-bottom: 4px;
 }}
 .section-h {{
     color: {FG};
     font-weight: 700;
-    font-size: 16px;
-    letter-spacing: 0.2px;
+    font-size: 18px;
+    letter-spacing: 0.3px;
 }}
 
 /* ─── Stat cards ─────────────────────────────────── */
 .stat-card {{
-    background-color: {SURFACE};
-    border-radius: 10px;
+    background: linear-gradient(160deg, {SURFACE} 0%, {SURFACE_2} 100%);
+    border-radius: 12px;
     border: 1px solid {BORDER};
-    padding: 14px 16px;
-    box-shadow: 0 1px 2px rgba(20,25,32,0.06);
-    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+    padding: 16px 18px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    transition: all 200ms ease;
 }}
 .stat-card:hover {{
     border-color: {FG_DIM};
-    background-color: {SURFACE_2};
-    box-shadow: 0 2px 8px rgba(20,25,32,0.09);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
 }}
+.stat-card-accent {{
+    border-left: 4px solid {ACCENT};
+    background: linear-gradient(160deg, {SURFACE} 0%, rgba(26,27,30,0.6) 100%);
+}}
+
+/* ─── Animaciones ──────────────────────────────────── */
+.toast-bar {{
+    background: linear-gradient(135deg, {SURFACE_2} 0%, {SURFACE_3} 100%);
+    border: 1px solid {BORDER};
+    border-radius: 10px;
+    padding: 10px 18px;
+    min-height: 36px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}}
+.toast-label {{
+    color: {FG};
+    font-size: 13px;
+    font-weight: 500;
+}}
+
+.sidebar-btn {{
+    transition: all 150ms ease;
+}}
+
+/* ─── Buttons ────────────────────────────────────── */
+button.action-btn {{
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    transition: all 150ms ease;
+    outline: none;
+}}
+button.action-btn:disabled {{ opacity: 0.35; }}
+.btn-primary {{
+    background: linear-gradient(180deg, {ACCENT} 0%, #2a5fbf 100%);
+    color: #ffffff;
+    border: 1px solid {ACCENT};
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}}
+.btn-primary:hover {{ background: linear-gradient(180deg, #4a7fdf 0%, {ACCENT} 100%); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }}
+.btn-brand {{
+    background: linear-gradient(180deg, {BRAND} 0%, #b8700a 100%);
+    color: {ON_BRAND};
+    border: 1px solid {BRAND};
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}}
+.btn-brand:hover {{ background: linear-gradient(180deg, #e8982f 0%, {BRAND} 100%); }}
+.btn-warn {{
+    background: transparent;
+    color: {WARNING};
+    border: 1px solid {WARNING};
+}}
+.btn-warn:hover {{ background: rgba(184,134,11,0.12); }}
+.btn-danger {{
+    background: transparent;
+    color: {DANGER};
+    border: 1px solid {DANGER};
+}}
+.btn-danger:hover {{ background: rgba(198,40,40,0.12); }}
+.btn-flat {{
+    background: {SURFACE_2};
+    color: {FG};
+    border: 1px solid {BORDER};
+}}
+.btn-flat:hover {{ background: {SURFACE_3}; border-color: {FG_DIM}; }}
+.btn-small {{ padding: 5px 12px; font-size: 11px; }}
+.btn-icon  {{ padding: 7px 10px; min-width: 32px; }}
+
+/* ─── Inputs ─────────────────────────────────────── */
+entry {{
+    background: {SURFACE};
+    color: {FG};
+    border-radius: 8px;
+    border: 1px solid {BORDER};
+    padding: 8px 12px;
+    transition: all 150ms ease;
+}}
+entry:focus {{
+    border-color: {ACCENT};
+    box-shadow: 0 0 0 3px rgba(61,139,253,0.15);
+}}
+entry:disabled {{ color: {FG_DIM}; background: {SURFACE_2}; }}
+
+label {{ color: {FG}; }}
+.label-muted {{ color: {FG_MUTED}; font-size: 12px; }}
+.label-dim    {{ color: {FG_DIM}; font-size: 11px; }}
+.label-bold   {{ font-weight: 700; }}
+
 .stat-label {{
     color: {FG_DIM};
     font-size: 11px;
@@ -234,7 +324,7 @@ headerbar button:active {{ background: {SURFACE_3}; }}
 }}
 .stat-value {{
     color: {FG};
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 700;
     margin-top: 4px;
 }}
@@ -245,13 +335,13 @@ headerbar button:active {{ background: {SURFACE_3}; }}
 }}
 .stat-trend-up   {{ color: {SUCCESS}; font-size: 11px; font-weight: 600; }}
 .stat-trend-down {{ color: {DANGER};  font-size: 11px; font-weight: 600; }}
-.day-bar-bg {{ background-color: {BORDER}; border-radius: 3px; }}
-.day-bar-fg {{ background-color: {BRAND};  border-radius: 3px; }}
+.day-bar-bg {{ background-color: {BORDER}; border-radius: 4px; }}
+.day-bar-fg {{ background-color: {BRAND};  border-radius: 4px; }}
 
 /* ─── Status pills / dots ────────────────────────── */
 .status-pill {{
     border-radius: 999px;
-    padding: 3px 10px;
+    padding: 4px 12px;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -259,106 +349,39 @@ headerbar button:active {{ background: {SURFACE_3}; }}
 .pill-success {{ background: rgba(30,142,90,0.14); color: {SUCCESS}; border: 1px solid rgba(30,142,90,0.35); }}
 .pill-warning {{ background: rgba(184,134,11,0.14); color: {WARNING}; border: 1px solid rgba(184,134,11,0.35); }}
 .pill-danger  {{ background: rgba(198,40,40,0.14); color: {DANGER};  border: 1px solid rgba(198,40,40,0.35); }}
-.pill-muted   {{ background: {SURFACE_3};            color: {FG_MUTED}; border: 1px solid {BORDER}; }}
-.pill-info    {{ background: rgba(27,58,107,0.12); color: {INFO};    border: 1px solid rgba(27,58,107,0.3); }}
-.pill-brand   {{ background: rgba(212,128,10,0.14); color: {BRAND};   border: 1px solid rgba(212,128,10,0.35); }}
-
-.status-dot {{ border-radius: 999px; min-width: 9px; min-height: 9px; }}
-.dot-active   {{ background-color: {SUCCESS}; }}
+.pill-muted   {{ background: {SURFACE_3}; color: {FG_MUTED}; border: 1px solid {BORDER}; }}
+.pill-info    {{ background: rgba(27,58,107,0.12); color: {INFO}; border: 1px solid rgba(27,58,107,0.3); }}
+.pill-brand   {{ background: rgba(212,128,10,0.14); color: {BRAND}; border: 1px solid rgba(212,128,10,0.35); }}
+.status-dot {{ border-radius: 999px; min-width: 10px; min-height: 10px; }}
+.dot-active   {{ background-color: {SUCCESS}; box-shadow: 0 0 6px rgba(47,191,113,0.4); }}
 .dot-inactive {{ background-color: {FG_DIM}; }}
-.dot-failed   {{ background-color: {DANGER}; }}
+.dot-failed   {{ background-color: {DANGER}; box-shadow: 0 0 6px rgba(229,72,77,0.4); }}
 .dot-warning  {{ background-color: {WARNING}; }}
-
-/* ─── Buttons ────────────────────────────────────── */
-button.action-btn {{
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.3px;
-    transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
-    outline: none;
-}}
-button.action-btn:disabled {{
-    opacity: 0.35;
-}}
-.btn-primary {{
-    background-color: {ACCENT};
-    color: #ffffff;
-    border: 1px solid {ACCENT};
-}}
-.btn-primary:hover {{ background-color: #24487f; }}
-.btn-primary:active {{ background-color: #142c50; }}
-.btn-brand {{
-    background-color: {BRAND};
-    color: {ON_BRAND};
-    border: 1px solid {BRAND};
-}}
-.btn-brand:hover {{ background-color: #e8901f; }}
-.btn-warn {{
-    background-color: transparent;
-    color: {WARNING};
-    border: 1px solid {WARNING};
-}}
-.btn-warn:hover {{ background-color: rgba(184,134,11,0.10); }}
-.btn-danger {{
-    background-color: transparent;
-    color: {DANGER};
-    border: 1px solid {DANGER};
-}}
-.btn-danger:hover {{ background-color: rgba(198,40,40,0.10); }}
-.btn-flat {{
-    background-color: {SURFACE_2};
-    color: {FG};
-    border: 1px solid {BORDER};
-}}
-.btn-flat:hover {{ background-color: {SURFACE_3}; border-color: {FG_DIM}; }}
-.btn-small {{ padding: 4px 10px; font-size: 11px; }}
-.btn-icon  {{ padding: 6px 8px; min-width: 30px; }}
-
-/* ─── Inputs ─────────────────────────────────────── */
-entry {{
-    background-color: {SURFACE};
-    color: {FG};
-    border-radius: 6px;
-    border: 1px solid {BORDER};
-    padding: 7px 10px;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
-}}
-entry:focus {{
-    border-color: {ACCENT};
-    box-shadow: 0 0 0 2px rgba(27,58,107,0.18);
-}}
-entry:disabled {{ color: {FG_DIM}; background: {SURFACE_2}; }}
-
-label {{ color: {FG}; }}
-.label-muted {{ color: {FG_MUTED}; font-size: 12px; }}
-.label-dim    {{ color: {FG_DIM}; font-size: 11px; }}
-.label-bold   {{ font-weight: 700; }}
 
 /* ─── Treeview / lists ───────────────────────────── */
 scrolledwindow, treeview {{
     background-color: {SURFACE};
     color: {FG};
+    border-radius: 8px;
 }}
 treeview header button {{
-    background-color: {SURFACE_2};
+    background: linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE_3} 100%);
     color: {FG_DIM};
     border: none;
-    border-bottom: 1px solid {BORDER};
+    border-bottom: 2px solid {BORDER};
     font-size: 11px;
     font-weight: 700;
-    padding: 9px 10px;
+    padding: 10px 12px;
     letter-spacing: 0.4px;
 }}
 treeview row:nth-child(even) {{ background-color: {SURFACE}; }}
 treeview row:nth-child(odd)  {{ background-color: {SURFACE_2}; }}
-treeview row:selected {{ background-color: rgba(27,58,107,0.14); color: {FG}; }}
+treeview row:selected {{ background: rgba(61,139,253,0.12); color: {FG}; }}
 
 /* ─── Textview (logs, security) ──────────────────── */
-textview {{ background-color: {SURFACE}; }}
+textview {{ background-color: {SURFACE}; border-radius: 8px; }}
 textview text {{ background-color: {SURFACE}; color: {FG_MUTED}; }}
-textview selection {{ background-color: rgba(27,58,107,0.22); }}
+textview selection {{ background-color: rgba(61,139,253,0.22); }}
 
 /* ─── Separator / divider ────────────────────────── */
 separator {{ background-color: {BORDER}; min-height: 1px; }}
@@ -366,46 +389,46 @@ separator {{ background-color: {BORDER}; min-height: 1px; }}
 
 /* ─── Brand swatches ─────────────────────────────── */
 .preset-swatch {{
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid {BORDER};
-    background-color: {SURFACE};
-    padding: 8px;
-    transition: border-color 150ms ease, transform 100ms ease;
+    background: {SURFACE};
+    padding: 10px;
+    transition: all 150ms ease;
 }}
-.preset-swatch:hover {{ border-color: {FG_DIM}; }}
+.preset-swatch:hover {{ border-color: {FG_DIM}; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }}
 .preset-selected {{ border: 2px solid {BRAND}; }}
 
 /* ─── QR / preview frames ────────────────────────── */
 .frame {{
-    background-color: {SURFACE};
+    background: linear-gradient(160deg, {SURFACE} 0%, {SURFACE_2} 100%);
     border: 1px solid {BORDER};
-    border-radius: 10px;
-    padding: 14px;
-    box-shadow: 0 1px 2px rgba(20,25,32,0.05);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }}
 
 /* ─── Order card (Pedidos Activos) ───────────────── */
 .order-card {{
-    background-color: {SURFACE};
+    background: linear-gradient(160deg, {SURFACE} 0%, {SURFACE_2} 100%);
     border: 1px solid {BORDER};
-    border-left: 3px solid {FG_DIM};
-    border-radius: 8px;
-    padding: 12px 14px;
-    box-shadow: 0 1px 2px rgba(20,25,32,0.05);
-    transition: border-color 150ms ease, box-shadow 150ms ease;
+    border-left: 4px solid {FG_DIM};
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: all 150ms ease;
 }}
-.order-card:hover {{ border-color: {FG_DIM}; box-shadow: 0 2px 6px rgba(20,25,32,0.08); }}
+.order-card:hover {{ border-color: {FG_DIM}; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
 .order-pending  {{ border-left-color: {WARNING}; }}
 .order-claimed  {{ border-left-color: {INFO}; }}
 .order-en_camino{{ border-left-color: {BRAND}; }}
 
 /* ─── Bot status card ────────────────────────────── */
 .bot-frame {{
-    background: linear-gradient(180deg, {SURFACE} 0%, {SURFACE_2} 100%);
+    background: linear-gradient(160deg, {SURFACE} 0%, {SURFACE_2} 100%);
     border: 1px solid {BORDER};
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: 0 1px 3px rgba(20,25,32,0.06);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }}
 
 /* ─── Scrollbar slim ─────────────────────────────── */
@@ -422,8 +445,124 @@ scrollbar {{ background-color: transparent; }}
     color: {FG_DIM};
     font-size: 13px;
     font-style: italic;
-    padding: 32px;
+    padding: 40px;
 }}
+
+/* ─── Payment method cards ───────────────────────── */
+.payment-card {{
+    background: linear-gradient(160deg, {SURFACE} 0%, {SURFACE_2} 100%);
+    border: 1px solid {BORDER};
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 4px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}}
+.payment-card:hover {{ border-color: {FG_DIM}; }}
+
+/* ─── Info cards (help, hints) ───────────────────── */
+.info-card {{
+    background: rgba(61,139,253,0.06);
+    border: 1px solid rgba(61,139,253,0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+}}
+
+/* ─── Premium polish: shadows, gradients, effects ────── */
+
+sidebar {{
+    background: linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 50%, {SURFACE_2} 100%);
+}}
+
+.sidebar-btn {{
+    border-left: 3px solid transparent;
+}}
+.sidebar-btn.active {{
+    border-left: 3px solid {BRAND};
+    border-radius: 0 12px 12px 0;
+    padding-left: 14px;
+}}
+
+/* Glow effect on primary buttons */
+.btn-primary {{
+    background: linear-gradient(135deg, {ACCENT} 0%, #2a5fbf 50%, {ACCENT} 100%);
+    background-size: 200% 200%;
+    transition: all 200ms ease;
+}}
+.btn-primary:hover {{
+    background: linear-gradient(135deg, #4a7fdf 0%, {ACCENT} 50%, #2a5fbf 100%);
+    background-size: 200% 200%;
+    box-shadow: 0 4px 14px rgba(61,139,253,0.4);
+}}
+
+/* Brand button shimmer */
+.btn-brand {{
+    background: linear-gradient(135deg, {BRAND} 0%, #b8700a 100%);
+    transition: all 200ms ease;
+}}
+.btn-brand:hover {{
+    box-shadow: 0 4px 14px rgba(212,128,10,0.4);
+}}
+
+/* Card lift on hover */
+.stat-card, .payment-card, .frame, .order-card, .bot-frame {{
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}}
+.stat-card:hover, .payment-card:hover, .order-card:hover {{
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}}
+
+/* Subtle pulse for connection dot -- animación via GLib.timeout_add (PulsingDot)
+   GTK3 no soporta CSS @keyframes, por eso está implementada en Python. */
+.dot-active {{
+    box-shadow: 0 0 8px rgba(47,191,113,0.4);
+}}
+
+/* Treeview polish */
+treeview row {{
+    transition: background 120ms ease;
+}}
+treeview row:hover {{
+    background: rgba(61,139,253,0.08);
+}}
+
+/* Section title with accent line */
+.section-title {{
+    border-bottom: 1px solid rgba(61,139,253,0.15);
+    padding-bottom: 6px;
+}}
+
+/* Pill animations */
+.status-pill {{
+    transition: all 150ms ease;
+}}
+.pill-success {{ box-shadow: 0 0 8px rgba(47,191,113,0.2); }}
+.pill-warning {{ box-shadow: 0 0 8px rgba(240,180,41,0.2); }}
+.pill-danger  {{ box-shadow: 0 0 8px rgba(229,72,77,0.2); }}
+
+/* Sidebar section labels with accent */
+.sidebar-section {{
+    color: {BRAND};
+    text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+}}
+
+/* Subtle gradient on headerbar title */
+headerbar .title {{
+    color: {FG};
+    text-shadow: 0 1px 0 rgba(0,0,0,0.2);
+}}
+
+/* Smooth scrollbar */
+scrollbar slider:hover {{
+    background-color: {FG_DIM};
+}}
+
+/* Entry focus ring enhanced */
+entry:focus {{
+    box-shadow: 0 0 0 3px rgba(61,139,253,0.25), inset 0 1px 2px rgba(0,0,0,0.1);
+}}
+
+/* Icon-friendly button padding */
+.btn-icon {{ padding: 8px 10px; }}
 """
 
 # ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -545,6 +684,25 @@ def pg_connect():
         password=env_get('PG_PASSWORD') or '',
         connect_timeout=3,
     )
+
+
+def server_status():
+    """Verifica si el servidor Node está activo usando PID file + direct check."""
+    if os.path.exists(PIDFILE):
+        try:
+            with open(PIDFILE) as f:
+                pid = int(f.read().strip())
+            if os.path.isdir(f'/proc/{pid}'):
+                return 'active', pid
+        except (ValueError, OSError):
+            pass
+    try:
+        out = sh(f'systemctl is-active {SERVICE} 2>/dev/null') or ''
+        if out.strip() in ('active', 'inactive', 'failed'):
+            return out.strip(), None
+    except Exception:
+        pass
+    return 'inactivo', None
 
 
 def appdata_dir():
@@ -1251,13 +1409,24 @@ class Chart(Gtk.DrawingArea):
 
 class StatCard(Gtk.Box):
     """Card de estadística: label pequeño + valor grande + subtexto opcional."""
-    def __init__(self, label, value='—', sub='', trend=None):
+    def __init__(self, label, value='—', sub='', trend=None, accent=False, icon=None, color=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        self.get_style_context().add_class('stat-card')
+        ctx = self.get_style_context()
+        ctx.add_class('stat-card')
+        if accent:
+            ctx.add_class('stat-card-accent')
 
+        # Header row: label + optional icon
+        header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         lbl = Gtk.Label(label=label.upper(), xalign=0)
         lbl.get_style_context().add_class('stat-label')
-        self.pack_start(lbl, False, False, 0)
+        lbl.set_hexpand(True)
+        header_row.pack_start(lbl, True, True, 0)
+        if icon:
+            icon_lbl = Gtk.Label(label=icon)
+            icon_lbl.set_markup(f'<span size="x-large">{icon}</span>')
+            header_row.pack_start(icon_lbl, False, False, 0)
+        self.pack_start(header_row, False, False, 0)
 
         self.value_lbl = Gtk.Label(label=value, xalign=0)
         self.value_lbl.get_style_context().add_class('stat-value')
@@ -1312,8 +1481,6 @@ def make_btn(label, css_class='btn-flat', small=False, on_click=None, icon=None)
         btn.connect('clicked', on_click)
     return btn
 
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # MÓDULO: MONITOREO
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1338,7 +1505,7 @@ class MonitorModule:
         self.box.pack_start(cards_box, False, False, 0)
 
         # Servicio Node
-        self.card_node = StatCard('Servicio Node', sub='systemd ' + SERVICE)
+        self.card_node = StatCard('Servicio Node', sub='systemd ' + SERVICE, accent=True)
         self.dot_node = Gtk.Box()
         self.dot_node.set_size_request(9, 9)
         self.dot_node.get_style_context().add_class('status-dot')
@@ -1435,15 +1602,28 @@ class MonitorModule:
         if not self._current_tunnel_url:
             self.parent.show_toast('Acceso público inactivo — no hay URL para copiar')
             return
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(self._current_tunnel_url, -1)
+        try:
+            clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            clipboard.set_text(self._current_tunnel_url, -1)
+        except AttributeError:
+            pass
         self.parent.show_toast(f'URL copiada: {self._current_tunnel_url}')
 
     def _run_with_tunnel(self, action):
         """Inicia/detiene/reinicia el servidor Node. Tailscale/Funnel es un
         servicio del sistema independiente (siempre corriendo) -- no se
         detiene ni reinicia junto con la app."""
-        sh(f'systemctl {action} {SERVICE}')
+        if action in ('start', 'stop', 'restart'):
+            svc_check = f"systemctl list-units --full --all 2>/dev/null | grep -q '^{SERVICE}\\.service'"
+            if sh(svc_check):
+                sh(f'systemctl {action} {SERVICE}')
+            else:
+                if action == 'stop':
+                    sh(f'kill $(cat {PIDFILE} 2>/dev/null) 2>/dev/null; rm -f {PIDFILE}')
+                elif action == 'start':
+                    subprocess.Popen(['bash', os.path.join(PROJ, 'deploy-linux.sh'), '--start'])
+                else:
+                    subprocess.Popen(['bash', os.path.join(PROJ, 'deploy-linux.sh'), '--restart'])
         GLib.timeout_add(1500, lambda: (self.parent.refresh_all(), False)[1])
 
     def _update_action_buttons(self, is_active):
@@ -1454,10 +1634,16 @@ class MonitorModule:
 
     def refresh(self):
         # Servicio Node
-        active = sh(f'systemctl is-active {SERVICE} 2>/dev/null') or 'inactivo'
-        self.card_node.set_value(active.upper() if active != 'inactivo' else 'INACTIVO')
-        self._set_dot(self.dot_node, active == 'active', failed=(active == 'failed'))
-        self._update_action_buttons(active == 'active')
+        status, pid = server_status()
+        if status == 'active':
+            if pid:
+                self.card_node.set_value(f'PID {pid}')
+            else:
+                self.card_node.set_value('ACTIVO')
+        else:
+            self.card_node.set_value(status.upper())
+        self._set_dot(self.dot_node, status == 'active', failed=(status == 'failed'))
+        self._update_action_buttons(status == 'active')
 
         # Acceso público (Tailscale Funnel)
         ts_active = sh('systemctl is-active tailscaled 2>/dev/null') or 'no instalado'
@@ -1562,10 +1748,10 @@ class SalesModule:
         cards = Gtk.Box(spacing=12)
         self.box.pack_start(cards, False, False, 0)
 
-        self.card_today     = StatCard('Ventas hoy',       sub='Entregados hoy')
-        self.card_avg       = StatCard('Ticket promedio',  sub='Histórico entregados')
-        self.card_cancelled = StatCard('% Cancelados',     sub='Sobre el total de pedidos')
-        self.card_delivered = StatCard('Entregados',       sub='Total histórico')
+        self.card_today     = StatCard('Ventas hoy',       sub='Entregados hoy', accent=True, trend='')
+        self.card_avg       = StatCard('Ticket promedio',  sub='Histórico entregados', accent=True, trend='')
+        self.card_cancelled = StatCard('% Cancelados',     sub='Sobre el total de pedidos', accent=True, trend='')
+        self.card_delivered = StatCard('Entregados',       sub='Total histórico', accent=True, trend='')
         for c in (self.card_today, self.card_avg, self.card_cancelled, self.card_delivered):
             cards.pack_start(c, True, True, 0)
 
@@ -1629,6 +1815,18 @@ class SalesModule:
         scroll.set_min_content_height(200)
         self.box.pack_start(scroll, True, True, 0)
 
+        # ─── Stock bajo ───────────────────────────────────────────────
+        stock_title = Gtk.Label(label='STOCK BAJO EL MÍNIMO CONFIGURADO', xalign=0)
+        stock_title.get_style_context().add_class('section-title')
+        self.box.pack_start(stock_title, False, False, 0)
+
+        self.stock_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.box.pack_start(self.stock_box, False, False, 0)
+
+        self.stock_empty_label = Gtk.Label(label='Sin alertas de stock — todo por encima del mínimo ✓')
+        self.stock_empty_label.get_style_context().add_class('empty-state')
+        self.stock_box.pack_start(self.stock_empty_label, False, False, 0)
+
     def refresh(self):
         # Ventas hoy
         sales_today = query("""
@@ -1637,7 +1835,22 @@ class SalesModule:
             WHERE o.status IN ('entregado','delivered')
               AND (o.delivered_at::timestamptz AT TIME ZONE 'America/Bogota')::date = (now() AT TIME ZONE 'America/Bogota')::date
         """)
-        self.card_today.set_value(fmt_money(sales_today[0][0] if sales_today else 0))
+        sales_yesterday = query("""
+            SELECT COALESCE(SUM(oi.product_price*oi.quantity),0) FROM orders o
+            JOIN order_items oi ON oi.order_id=o.id
+            WHERE o.status IN ('entregado','delivered')
+              AND (o.delivered_at::timestamptz AT TIME ZONE 'America/Bogota')::date = ((now() AT TIME ZONE 'America/Bogota')::date - INTERVAL '1 day')
+        """)
+        today_val = sales_today[0][0] if sales_today else 0
+        yesterday_val = sales_yesterday[0][0] if sales_yesterday else 0
+        if yesterday_val:
+            pct = ((today_val - yesterday_val) / yesterday_val) * 100
+            sign = '+' if pct >= 0 else ''
+            trend_text = f'{sign}{pct:.0f}% vs ayer'
+        else:
+            trend_text = '—'
+        self.card_today.set_value(fmt_money(today_val))
+        self.card_today.set_sub(trend_text)
 
         # Ticket promedio
         avg = query("""
@@ -1660,8 +1873,35 @@ class SalesModule:
             self.card_cancelled.set_value(f'{pct}%')
             self.card_delivered.set_value(str(delivered))
         else:
+            cancelled, delivered, total = 0, 0, 0
             self.card_cancelled.set_value('0%')
             self.card_delivered.set_value('0')
+        # Tendencia del ticket promedio
+        counts_30 = query("""
+            SELECT ROUND(AVG(t),0) FROM (
+              SELECT SUM(oi.product_price*oi.quantity) t FROM orders o
+              JOIN order_items oi ON oi.order_id=o.id
+              WHERE o.status IN ('entregado','delivered')
+                AND o.delivered_at >= now() - INTERVAL '30 days'
+              GROUP BY o.id)
+        """)
+        avg_last30 = counts_30[0][0] if counts_30 and counts_30[0][0] else 0
+        counts_prev = query("""
+            SELECT ROUND(AVG(t),0) FROM (
+              SELECT SUM(oi.product_price*oi.quantity) t FROM orders o
+              JOIN order_items oi ON oi.order_id=o.id
+              WHERE o.status IN ('entregado','delivered')
+                AND o.delivered_at >= now() - INTERVAL '60 days'
+                AND o.delivered_at < now() - INTERVAL '30 days'
+              GROUP BY o.id)
+        """)
+        avg_prev = counts_prev[0][0] if counts_prev and counts_prev[0][0] else 0
+        if avg_prev:
+            avg_pct = ((avg_last30 - avg_prev) / avg_prev) * 100
+            avg_sign = '+' if avg_pct >= 0 else ''
+            self.card_avg.set_sub(f'{avg_sign}{avg_pct:.0f}% vs mes ant.')
+        else:
+            self.card_avg.set_sub('Histórico entregados')
 
         # Gráfico de ingresos 7 días
         rows = query("""
@@ -1737,6 +1977,26 @@ class SalesModule:
             n, t = by_day.get(iso, (0, 0))
             self.days_flow.add(self._build_day_card(d, n, t or 0, iso, max_total))
         self.days_flow.show_all()
+
+        # Stock bajo
+        for w in self.stock_box.get_children():
+            self.stock_box.remove(w)
+        low_stock = query("""
+            SELECT name, stock, low_stock_threshold FROM products
+            WHERE stock IS NOT NULL AND low_stock_threshold IS NOT NULL AND stock <= low_stock_threshold
+            ORDER BY stock ASC
+        """)
+        if low_stock:
+            for name, stock, threshold in low_stock:
+                row = Gtk.Box(spacing=8)
+                lbl = Gtk.Label(label=f'⚠️ {name} — quedan {stock} (mínimo {threshold})', xalign=0)
+                row.pack_start(lbl, True, True, 0)
+                self.stock_box.pack_start(row, False, False, 0)
+            self.stock_box.show_all()
+        else:
+            self.stock_box.pack_start(self.stock_empty_label, False, False, 0)
+            self.stock_empty_label.show()
+        self.parent.set_badge('sales', len(low_stock))
 
     def _build_day_card(self, d, count, total, iso, max_total):
         """Tarjeta clickeable con barra de intensidad relativa al dia de
@@ -1892,6 +2152,7 @@ class OrdersModule:
             self.card_claimed.set_value(str(c))
             self.card_camino.set_value(str(e))
             self.card_today.set_value(str(t))
+            self.parent.set_badge('orders', p)
 
         # Lista de pedidos activos
         for w in self.orders_box.get_children():
@@ -2042,8 +2303,6 @@ class OrdersModule:
     def _toast(self, msg):
         # Usamos la barra de estado del parent
         self.parent.show_toast(msg)
-
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MÓDULO: BOT WHATSAPP (NUEVO)
@@ -2381,7 +2640,7 @@ class BotModule:
         dialog = Gtk.MessageDialog(
             transient_for=self.parent, flags=0,
             message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text='Esto desvincula el WhatsApp de la empresa por completo (borra sesión y número guardado). '
                  'Los clientes no podrán escribir al bot hasta que vincules uno nuevo. ¿Continuar?')
         resp = dialog.run()
@@ -2400,12 +2659,7 @@ class BotModule:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PaymentsModule:
-    """Conexion de la cuenta Nequi receptora del negocio -- conectar/cambiar,
-    pausar/reanudar, desconectar. Sin credenciales reales de la API de Nequi
-    Conecta todavia (pago push): esto guarda la cuenta receptora (cifrada,
-    igual que el numero del bot) para que la app la muestre en el checkout
-    del cliente. El cobro automatico por push queda listo para activarse
-    apenas haya convenio con Nequi/Bancolombia."""
+    """Múltiples métodos de pago: Nequi, Bancolombia, Stripe, PSE, Efectivo, PayPal."""
 
     def __init__(self, parent):
         self.parent = parent
@@ -2413,7 +2667,7 @@ class PaymentsModule:
         self._connected = False
 
         header = SectionHeader('Métodos de pago',
-                               'Cuenta Nequi receptora que ven los clientes al pagar',
+                               'Conectá los métodos que los clientes ven al pagar',
                                make_btn('↻ Actualizar', 'btn-flat', small=True, on_click=lambda *_: self.refresh()))
         self.box.pack_start(header, False, False, 0)
 
@@ -2426,34 +2680,59 @@ class PaymentsModule:
         for c in (self.card_status, self.card_phone, self.card_name, self.card_since):
             cards.pack_start(c, True, True, 0)
 
-        frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        frame.get_style_context().add_class('bot-frame')
-        self.box.pack_start(frame, True, True, 0)
+        # ─── Métodos de pago ────────────────────────────────────────
+        methods_title = Gtk.Label(label='PROVEEDORES DE PAGO', xalign=0)
+        methods_title.get_style_context().add_class('section-title')
+        self.box.pack_start(methods_title, False, False, 0)
 
-        notice = Gtk.Label(
-            label='Aún sin credenciales de la API de pago-push de Nequi Conecta -- esto guarda '
-                  'la cuenta receptora para mostrarla en el checkout de la app. El cobro '
-                  'automático se activa cuando haya convenio con Nequi/Bancolombia.',
-            xalign=0)
-        notice.set_line_wrap(True)
-        notice.get_style_context().add_class('label-dim')
-        frame.pack_start(notice, False, False, 0)
-
-        actions_title = Gtk.Label(label='ACCIONES', xalign=0)
-        actions_title.get_style_context().add_class('section-title')
-        frame.pack_start(actions_title, False, False, 8)
-
-        actions = Gtk.Box(spacing=8)
-        frame.pack_start(actions, False, False, 0)
-        self.btn_connect = make_btn('Conectar Nequi', 'btn-primary', on_click=lambda *_: self._open_connect_dialog())
-        self.btn_pause   = make_btn('Pausar', 'btn-warn', on_click=lambda *_: self._toggle_pause())
-        self.btn_disconnect = make_btn('Desconectar', 'btn-danger', on_click=lambda *_: self._disconnect())
-        for b in (self.btn_connect, self.btn_pause, self.btn_disconnect):
-            actions.pack_start(b, False, False, 0)
+        self._method_widgets = {}
+        pay_methods = [
+            ('Nequi', 'Conectá tu cuenta Nequi receptora', '📱',
+             'https://developer.nequi.com.co/',
+             lambda: self._open_connect_dialog()),
+            ('Bancolombia', 'API Bancolombia para pagos push', '🏦',
+             'https://www.bancolombia.com/desarrolladores',
+             lambda: self.parent.show_toast('Integración Bancolombia próximamente')),
+            ('Visa/Mastercard (via Stripe)', 'Tarjetas de crédito/débito internacionales', '💳',
+             'https://stripe.com/docs',
+             lambda: self.parent.show_toast('Integración Stripe próximamente')),
+            ('PSE', 'Pagos online desde cualquier banco colombiano', '🏧',
+             'https://api-pse.docs.tpaga.co/',
+             lambda: self.parent.show_toast('Integración PSE próximamente')),
+            ('Efectivo / Contraentrega', 'Pago en efectivo al recibir el pedido', '💵',
+             None, None),
+            ('PayPal', 'Pagos vía PayPal internacional', '🌐',
+             'https://developer.paypal.com/docs/',
+             lambda: self.parent.show_toast('Integración PayPal próximamente')),
+        ]
+        for name, desc, icon, help_url, connect_cb in pay_methods:
+            method_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            method_box.get_style_context().add_class('payment-card')
+            icon_lbl = Gtk.Label(label=icon)
+            icon_lbl.set_markup(f'<span size="xx-large">{icon}</span>')
+            method_box.pack_start(icon_lbl, False, False, 0)
+            info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            name_lbl = Gtk.Label(label=name, xalign=0)
+            name_lbl.get_style_context().add_class('label-bold')
+            info_box.pack_start(name_lbl, False, False, 0)
+            desc_lbl = Gtk.Label(label=desc, xalign=0)
+            desc_lbl.get_style_context().add_class('label-dim')
+            info_box.pack_start(desc_lbl, False, False, 0)
+            method_box.pack_start(info_box, True, True, 0)
+            btn_box = Gtk.Box(spacing=4)
+            if connect_cb:
+                btn_box.pack_start(make_btn('Conectar', 'btn-primary', small=True, on_click=lambda *_, cb=connect_cb: cb()), False, False, 0)
+            if help_url:
+                btn_box.pack_start(make_btn('🔗 Ayuda', 'btn-flat', small=True,
+                    on_click=lambda *_, url=help_url: sh(f'xdg-open "{url}" 2>/dev/null &')), False, False, 0)
+            method_box.pack_start(btn_box, False, False, 0)
+            self.box.pack_start(method_box, False, False, 0)
+            self._method_widgets[name] = method_box
 
         self.status_label = Gtk.Label(label='')
-        self.status_label.get_style_context().add_class('label-dim')
-        frame.pack_start(self.status_label, False, False, 8)
+        self.status_label.get_style_context().add_class('label-muted')
+        self.status_label.set_xalign(0)
+        self.box.pack_start(self.status_label, False, False, 0)
 
     def refresh(self):
         run_in_background(lambda: http_get('/api/payments/nequi'), self._apply_refresh)
@@ -2537,7 +2816,7 @@ class PaymentsModule:
         dialog = Gtk.MessageDialog(
             transient_for=self.parent, flags=0,
             message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text='Esto desconecta la cuenta Nequi -- los clientes dejarán de ver la opción de '
                  'pago Nequi en el checkout hasta que conectes una cuenta de nuevo. ¿Continuar?')
         resp = dialog.run()
@@ -2554,6 +2833,16 @@ class PaymentsModule:
 # ══════════════════════════════════════════════════════════════════════════════
 # MÓDULO: CORREO (NUEVO) — cuenta emisora para recuperación de contraseña
 # ══════════════════════════════════════════════════════════════════════════════
+
+PAYMENT_DOCS = {
+    'Gmail':       {'host': 'smtp.gmail.com',       'port': '587', 'notes': 'Usá contraseña de aplicación (Cuenta de Google → Seguridad → Contraseñas de aplicaciones)'},
+    'Outlook':     {'host': 'smtp.office365.com',    'port': '587', 'notes': 'Usá la contraseña normal o App Password si tenés 2FA'},
+    'Yahoo Mail':  {'host': 'smtp.mail.yahoo.com',   'port': '465', 'notes': 'Habilitá "Acceso de aplicaciones menos seguras" o genera App Password'},
+    'Zoho Mail':   {'host': 'smtp.zoho.com',         'port': '587', 'notes': 'Usá dirección de correo completa como usuario'},
+    'Mailgun':     {'host': 'smtp.mailgun.org',      'port': '587', 'notes': 'Usá smtp_login como usuario, default_smtp_login como contraseña'},
+    'SendGrid':    {'host': 'smtp.sendgrid.net',      'port': '587', 'notes': 'Usá "apikey" como usuario y tu API Key como contraseña'},
+}
+
 
 class EmailModule:
     """Conecta la cuenta de correo que la app usa para enviar los códigos de
@@ -2573,40 +2862,109 @@ class EmailModule:
 
         cards = Gtk.Box(spacing=12)
         self.box.pack_start(cards, False, False, 0)
-        self.card_status = StatCard('Estado', sub='Conexión de correo')
-        self.card_email  = StatCard('Cuenta', sub='Cifrada en la base de datos')
-        self.card_since  = StatCard('Conectado desde', sub='Última conexión')
+        self.card_status = StatCard('Estado', sub='Conexión de correo', accent=True)
+        self.card_email  = StatCard('Cuenta', sub='Cifrada en la base de datos', accent=True)
+        self.card_since  = StatCard('Conectado desde', sub='Última conexión', accent=True)
         for c in (self.card_status, self.card_email, self.card_since):
             cards.pack_start(c, True, True, 0)
 
-        frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        frame.get_style_context().add_class('bot-frame')
-        self.box.pack_start(frame, True, True, 0)
+        # ─── Info card: qué se necesita ──────────────────────────────
+        info_box = Gtk.Box(spacing=8)
+        info_box.get_style_context().add_class('info-card')
+        info_lbl = Gtk.Label(label='', xalign=0)
+        info_lbl.set_markup(
+            '<b>📧 Datos necesarios:</b>\n'
+            '• Correo electrónico de la empresa\n'
+            '• Contraseña de aplicación (no la normal)\n'
+            '• Servidor SMTP — ej: <tt>smtp.gmail.com</tt>\n'
+            '• Puerto — generalmente <tt>587</tt> (STARTTLS) o <tt>465</tt> (SSL)'
+        )
+        info_lbl.set_line_wrap(True)
+        info_box.pack_start(info_lbl, True, True, 0)
+        self.box.pack_start(info_box, False, False, 0)
 
-        notice = Gtk.Label(
-            label='Usa una "contraseña de aplicación" (no la contraseña normal de la cuenta) -- '
-                  'en Gmail se genera desde Cuenta de Google → Seguridad → Contraseñas de aplicaciones. '
-                  'La conexión se prueba en el momento: si las credenciales no funcionan, no se guarda nada.',
-            xalign=0)
-        notice.set_line_wrap(True)
-        notice.get_style_context().add_class('label-dim')
-        frame.pack_start(notice, False, False, 0)
+        # ─── Formulario ──────────────────────────────────────────────
+        form_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        form_box.get_style_context().add_class('bot-frame')
+        self.box.pack_start(form_box, True, True, 0)
 
-        actions_title = Gtk.Label(label='ACCIONES', xalign=0)
-        actions_title.get_style_context().add_class('section-title')
-        frame.pack_start(actions_title, False, False, 8)
+        grid = Gtk.Grid(column_spacing=14, row_spacing=10)
+        form_box.pack_start(grid, False, False, 0)
 
+        lbl = Gtk.Label(label='Correo electrónico:', xalign=0)
+        lbl.get_style_context().add_class('label-muted')
+        self.email_entry = Gtk.Entry()
+        self.email_entry.set_placeholder_text('contacto@supermercadogo.com.co')
+        self.email_entry.set_width_chars(40)
+        grid.attach(lbl, 0, 0, 1, 1)
+        grid.attach(self.email_entry, 1, 0, 1, 1)
+
+        lbl2 = Gtk.Label(label='Contraseña de app:', xalign=0)
+        lbl2.get_style_context().add_class('label-muted')
+        self.pass_entry = Gtk.Entry()
+        self.pass_entry.set_placeholder_text('Contraseña de aplicación (16 letras)')
+        self.pass_entry.set_visibility(False)
+        self.pass_entry.set_width_chars(40)
+        grid.attach(lbl2, 0, 1, 1, 1)
+        grid.attach(self.pass_entry, 1, 1, 1, 1)
+
+        lbl3 = Gtk.Label(label='Servidor SMTP:', xalign=0)
+        lbl3.get_style_context().add_class('label-muted')
+        self.smtp_entry = Gtk.Entry()
+        self.smtp_entry.set_placeholder_text('smtp.gmail.com')
+        self.smtp_entry.set_width_chars(40)
+        grid.attach(lbl3, 0, 2, 1, 1)
+        grid.attach(self.smtp_entry, 1, 2, 1, 1)
+
+        lbl4 = Gtk.Label(label='Puerto:', xalign=0)
+        lbl4.get_style_context().add_class('label-muted')
+        self.port_entry = Gtk.Entry()
+        self.port_entry.set_placeholder_text('587')
+        self.port_entry.set_width_chars(10)
+        grid.attach(lbl4, 0, 3, 1, 1)
+        grid.attach(self.port_entry, 1, 3, 1, 1)
+
+        # ─── Acciones ────────────────────────────────────────────────
         actions = Gtk.Box(spacing=8)
-        frame.pack_start(actions, False, False, 0)
-        self.btn_connect    = make_btn('Conectar correo', 'btn-primary', on_click=lambda *_: self._open_connect_dialog())
+        form_box.pack_start(actions, False, False, 0)
+        self.btn_connect    = make_btn('📧 Conectar correo', 'btn-primary', on_click=lambda *_: self._open_connect_dialog())
         self.btn_test       = make_btn('Enviar prueba', 'btn-flat', on_click=lambda *_: self._send_test())
         self.btn_disconnect = make_btn('Desconectar', 'btn-danger', on_click=lambda *_: self._disconnect())
-        for b in (self.btn_connect, self.btn_test, self.btn_disconnect):
+        self.btn_help       = make_btn('📖 Ayuda: Ejemplos SMTP', 'btn-flat', on_click=lambda *_: self._show_email_help())
+        for b in (self.btn_connect, self.btn_test, self.btn_disconnect, self.btn_help):
             actions.pack_start(b, False, False, 0)
 
         self.status_label = Gtk.Label(label='')
         self.status_label.get_style_context().add_class('label-dim')
-        frame.pack_start(self.status_label, False, False, 8)
+        form_box.pack_start(self.status_label, False, False, 0)
+
+    def _show_email_help(self):
+        dialog = Gtk.Dialog(title='Ayuda: Configuración SMTP',
+                            transient_for=self.parent, modal=True, destroy_with_parent=True)
+        dialog.add_buttons('Cerrar', Gtk.ResponseType.CLOSE)
+        dialog.set_default_size(520, 400)
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_border_width(16)
+        intro = Gtk.Label(label='', xalign=0)
+        intro.set_markup('<b>Ejemplos de configuración para proveedores comunes:</b>')
+        intro.set_line_wrap(True)
+        box.pack_start(intro, False, False, 0)
+        for provider, cfg in PAYMENT_DOCS.items():
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            card.get_style_context().add_class('info-card')
+            t = Gtk.Label(label='', xalign=0)
+            t.set_markup(f'<b>{provider}</b>  —  <tt>{cfg["host"]}:{cfg["port"]}</tt>')
+            t.set_line_wrap(True)
+            card.pack_start(t, False, False, 0)
+            n = Gtk.Label(label=cfg['notes'], xalign=0)
+            n.get_style_context().add_class('label-dim')
+            n.set_line_wrap(True)
+            card.pack_start(n, False, False, 0)
+            box.pack_start(card, False, False, 0)
+        box.show_all()
+        dialog.run()
+        dialog.destroy()
 
     def refresh(self):
         run_in_background(lambda: http_get('/api/email/status'), self._apply_refresh)
@@ -2685,7 +3043,7 @@ class EmailModule:
         dialog = Gtk.MessageDialog(
             transient_for=self.parent, flags=0,
             message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text='Esto desconecta la cuenta de correo -- la recuperación de contraseña de los '
                  'clientes dejará de funcionar hasta que conectes una cuenta de nuevo. ¿Continuar?')
         resp = dialog.run()
@@ -3505,224 +3863,6 @@ class DataModule:
             self.parent.show_toast(f'Error generando los archivos {label}')
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MÓDULO: MARCA
-# ══════════════════════════════════════════════════════════════════════════════
-
-class BrandModule:
-    """Personalización de marca: nombre, paleta (presets + HEX custom),
-    vista previa en vivo y carga de logo. Se aplica al instante en la app."""
-
-    def __init__(self, parent):
-        self.parent = parent
-        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-
-        header = SectionHeader('Personalización de marca',
-                               'Paleta, nombre y logo que ven tus clientes en la app')
-        self.box.pack_start(header, False, False, 0)
-
-        info = Gtk.Label(label='Los cambios se aplican al instante — la app los toma en el próximo login del cliente. '
-                               'No es necesario reiniciar el servidor.')
-        info.get_style_context().add_class('label-muted')
-        info.set_line_wrap(True)
-        info.set_xalign(0)
-        self.box.pack_start(info, False, False, 0)
-
-        # ─── Nombre de marca ────────────────────────────────────────
-        name_box = Gtk.Box(spacing=10)
-        self.box.pack_start(name_box, False, False, 4)
-        name_box.pack_start(Gtk.Label(label='Nombre de marca:'), False, False, 0)
-        self.entry_name = Gtk.Entry()
-        self.entry_name.set_width_chars(30)
-        self.entry_name.set_placeholder_text('Ej: Supermercado GO')
-        name_box.pack_start(self.entry_name, False, False, 0)
-
-        # ─── Presets ────────────────────────────────────────────────
-        presets_title = Gtk.Label(label='PALETAS PREDEFINIDAS', xalign=0)
-        presets_title.get_style_context().add_class('section-title')
-        self.box.pack_start(presets_title, False, False, 0)
-
-        self.preset_buttons = []
-        presets_box = Gtk.FlowBox()
-        presets_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        presets_box.set_max_children_per_line(6)
-        presets_box.set_row_spacing(8)
-        presets_box.set_column_spacing(8)
-        self.box.pack_start(presets_box, False, False, 0)
-        for name, primary, accent in PRESETS:
-            btn = self._make_preset_swatch(name, primary, accent)
-            presets_box.add(btn)
-
-        # ─── Custom HEX ─────────────────────────────────────────────
-        custom_title = Gtk.Label(label='COLOR PERSONALIZADO (HEX)', xalign=0)
-        custom_title.get_style_context().add_class('section-title')
-        self.box.pack_start(custom_title, False, False, 0)
-
-        custom_box = Gtk.Box(spacing=10)
-        self.box.pack_start(custom_box, False, False, 0)
-        custom_box.pack_start(Gtk.Label(label='Primario'), False, False, 0)
-        self.entry_primary = Gtk.Entry()
-        self.entry_primary.set_width_chars(10)
-        self.entry_primary.set_placeholder_text('#2D5016')
-        custom_box.pack_start(self.entry_primary, False, False, 0)
-        custom_box.pack_start(Gtk.Label(label='Acento'), False, False, 0)
-        self.entry_accent = Gtk.Entry()
-        self.entry_accent.set_width_chars(10)
-        self.entry_accent.set_placeholder_text('#D4800A')
-        custom_box.pack_start(self.entry_accent, False, False, 0)
-
-        # ─── Vista previa ───────────────────────────────────────────
-        preview_title = Gtk.Label(label='VISTA PREVIA', xalign=0)
-        preview_title.get_style_context().add_class('section-title')
-        self.box.pack_start(preview_title, False, False, 0)
-        self.preview = Gtk.DrawingArea()
-        self.preview.set_size_request(-1, 80)
-        self.preview.connect('draw', self._draw_preview)
-        self.box.pack_start(self.preview, False, False, 0)
-
-        # ─── Logo ───────────────────────────────────────────────────
-        logo_box = Gtk.Box(spacing=10)
-        self.box.pack_start(logo_box, False, False, 4)
-        logo_box.pack_start(make_btn('🖼 Cambiar logo', 'btn-flat', on_click=lambda *_: self._pick_logo()), False, False, 0)
-        self.logo_status = Gtk.Label(label='')
-        self.logo_status.get_style_context().add_class('label-muted')
-        logo_box.pack_start(self.logo_status, False, False, 0)
-
-        # ─── Botón guardar ──────────────────────────────────────────
-        self.box.pack_start(make_btn('💾 Guardar marca', 'btn-brand', on_click=lambda *_: self._save()), False, False, 8)
-
-        # Refrescar preview al editar
-        for entry in (self.entry_primary, self.entry_accent, self.entry_name):
-            entry.connect('changed', lambda *_: self.preview.queue_draw())
-
-    def _make_preset_swatch(self, name, primary, accent):
-        btn = Gtk.Button()
-        btn.get_style_context().add_class('preset-swatch')
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        box.set_size_request(78, 64)
-        swatch = Gtk.DrawingArea()
-        swatch.set_size_request(64, 32)
-
-        def draw(widget, cr, p=primary, a=accent):
-            w = widget.get_allocated_width()
-            h = widget.get_allocated_height()
-            r, g, b = hex_to_rgb(p)
-            cr.set_source_rgb(r, g, b)
-            cr.rectangle(0, 0, w / 2, h)
-            cr.fill()
-            r, g, b = hex_to_rgb(a)
-            cr.set_source_rgb(r, g, b)
-            cr.rectangle(w / 2, 0, w / 2, h)
-            cr.fill()
-        swatch.connect('draw', draw)
-        box.pack_start(swatch, False, False, 0)
-        lbl = Gtk.Label(label=name)
-        lbl.set_line_wrap(True)
-        lbl.set_justify(Gtk.Justification.CENTER)
-        lbl.get_style_context().add_class('label-dim')
-        box.pack_start(lbl, False, False, 0)
-        btn.add(box)
-        btn.connect('clicked', lambda *_: self._apply_preset(primary, accent))
-        return btn
-
-    def _apply_preset(self, primary, accent):
-        self.entry_primary.set_text(primary)
-        self.entry_accent.set_text(accent)
-
-    def _draw_preview(self, widget, cr):
-        w = widget.get_allocated_width()
-        h = widget.get_allocated_height()
-        primary = self.entry_primary.get_text() or PRIMARY_DEFAULT
-        accent = self.entry_accent.get_text() or ACCENT_DEFAULT
-
-        # Fondo redondeado con el color primario
-        r, g, b = hex_to_rgb(primary)
-        cr.set_source_rgb(r, g, b)
-        self._round_rect(cr, 0, 0, w, h, 10)
-        cr.fill()
-
-        # Borde sutil
-        cr.set_source_rgba(0, 0, 0, 0.15)
-        cr.set_line_width(1)
-        self._round_rect(cr, 0.5, 0.5, w - 1, h - 1, 10)
-        cr.stroke()
-
-        # Nombre de marca a la izquierda
-        cr.set_source_rgb(1, 1, 1)
-        cr.select_font_face('Sans', 0, 1)
-        cr.set_font_size(16)
-        name = self.entry_name.get_text() or 'Nombre de tu negocio'
-        cr.move_to(18, h / 2 + 5)
-        cr.show_text(name)
-
-        # Botón "Pedir ahora" a la derecha
-        ra, ga, ba = hex_to_rgb(accent)
-        cr.set_source_rgb(ra, ga, ba)
-        btn_w, btn_h = 110, 32
-        self._round_rect(cr, w - btn_w - 16, h / 2 - btn_h / 2, btn_w, btn_h, 6)
-        cr.fill()
-
-        cr.set_source_rgb(1, 1, 1)
-        cr.select_font_face('Sans', 0, 1)
-        cr.set_font_size(12)
-        cr.move_to(w - btn_w - 16 + 22, h / 2 + 4)
-        cr.show_text('Pedir ahora')
-
-    @staticmethod
-    def _round_rect(cr, x, y, w, h, r):
-        cr.move_to(x + r, y)
-        cr.arc(x + w - r, y + r, r, -1.5708, 0)
-        cr.arc(x + w - r, y + h - r, r, 0, 1.5708)
-        cr.arc(x + r, y + h - r, r, 1.5708, 3.14159)
-        cr.arc(x + r, y + r, r, 3.14159, 4.71239)
-        cr.close_path()
-
-    def _pick_logo(self, _btn=None):
-        dialog = Gtk.FileChooserDialog(
-            title='Elegí un logo', parent=self.parent,
-            action=Gtk.FileChooserAction.OPEN)
-        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-                           Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
-        filt = Gtk.FileFilter()
-        filt.set_name('Imágenes')
-        filt.add_mime_type('image/png')
-        filt.add_mime_type('image/jpeg')
-        dialog.add_filter(filt)
-        if dialog.run() == Gtk.ResponseType.OK:
-            src = dialog.get_filename()
-            ext = 'png' if src.lower().endswith('png') else 'jpg'
-            appdata = self.parent._appdata_dir()
-            if appdata:
-                dest_dir = os.path.join(appdata, 'pedidos-bot', 'branding')
-                os.makedirs(dest_dir, exist_ok=True)
-                fname = f'logo_{int(datetime.datetime.now().timestamp())}.{ext}'
-                dest = os.path.join(dest_dir, fname)
-                sh(f'cp "{src}" "{dest}"')
-                setting_set('theme_logo_url', fname)
-                self.logo_status.set_text(f'✓ Logo actualizado: {fname}')
-            else:
-                self.logo_status.set_text('No se encontró APPDATA del servicio')
-        dialog.destroy()
-
-    def _save(self, _btn=None):
-        primary = self.entry_primary.get_text().strip() or PRIMARY_DEFAULT
-        accent = self.entry_accent.get_text().strip() or ACCENT_DEFAULT
-        name = self.entry_name.get_text().strip()
-        setting_set('theme_primary', primary)
-        setting_set('theme_accent', accent)
-        if name:
-            setting_set('theme_name', name)
-        self.logo_status.set_text('✓ Marca guardada — la app la toma en el próximo login.')
-
-    def refresh(self):
-        if not self.entry_primary.get_text():
-            self.entry_primary.set_text(setting_get('theme_primary', PRIMARY_DEFAULT))
-        if not self.entry_accent.get_text():
-            self.entry_accent.set_text(setting_get('theme_accent', ACCENT_DEFAULT))
-        if not self.entry_name.get_text():
-            self.entry_name.set_text(setting_get('theme_name', 'Supermercado GO'))
-        self.preview.queue_draw()
-
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3763,6 +3903,17 @@ class DomainModule:
                                'Conecta el servidor a internet -- se usa una sola vez al '
                                'principio; si ya lo configuraste, esto solo muestra el estado')
         self.box.pack_start(header, False, False, 0)
+
+        # ─── Dominio real actual ────────────────────────────────────
+        real_box = Gtk.Box(spacing=8)
+        real_box.get_style_context().add_class('info-card')
+        real_box.pack_start(Gtk.Label(label='🔗'), False, False, 0)
+        self.real_lbl = Gtk.Label(label='')
+        self.real_lbl.set_markup('<b>Dominio público actual:</b>  — (sin configurar)')
+        self.real_lbl.set_line_wrap(True)
+        self.real_lbl.set_xalign(0)
+        real_box.pack_start(self.real_lbl, True, True, 0)
+        self.box.pack_start(real_box, False, False, 0)
 
         # ─── Estado actual ──────────────────────────────────────────
         cards = Gtk.Box(spacing=12)
@@ -3857,6 +4008,10 @@ class DomainModule:
         for k, fb in self.field_boxes.items():
             self.box.pack_start(fb, False, False, 0)
 
+        help_btn = make_btn('📖 Ayuda: Pasos para configurar dominio', 'btn-flat',
+                           on_click=lambda *_: self._show_domain_help())
+        self.box.pack_start(help_btn, False, False, 0)
+
         # ─── Estado / progreso ──────────────────────────────────────
         self.status_label = Gtk.Label(label='')
         self.status_label.get_style_context().add_class('label-muted')
@@ -3881,6 +4036,52 @@ class DomainModule:
         active = self.combo.get_active_id() or 'ninguno'
         for k, fb in self.field_boxes.items():
             fb.set_visible(k == active)
+
+    def _show_domain_help(self):
+        dialog = Gtk.Dialog(title='Ayuda: Configuración de dominio',
+                            transient_for=self.parent, modal=True, destroy_with_parent=True)
+        dialog.add_buttons('Cerrar', Gtk.ResponseType.CLOSE)
+        dialog.set_default_size(580, 480)
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_border_width(16)
+
+        steps = [
+            ('1. Sin dominio — solo red local',
+             'Estado por defecto. El servidor solo responde en 127.0.0.1. '
+             'Nadie desde afuera puede conectarse. Útil para desarrollo o redes internas.'),
+            ('2. Dominio propio',
+             'Necesitas un dominio real (ej: midominio.com) y DNS apuntando a la IP '
+             'pública de tu servidor. Configura un reverse proxy (Nginx/Caddy) con '
+             'certificado SSL.'),
+            ('3. DuckDNS — subdominio gratis',
+             'Crea una cuenta en duckdns.org, obtén un subdominio (ej: tucosa.duckdns.org) '
+             'y un token. El dashboard configura el update automático cada 10 minutos.'),
+            ('4. Cloudflare Tunnel — sin abrir puertos',
+             'Crea una cuenta en Cloudflare. Instala cloudflared en el servidor. '
+             'Genera un túnel HTTPS de salida — no necesitas abrir puertos en el router. '
+             'El dashboard instala y configura todo automáticamente.'),
+            ('5. Tailscale Funnel — requiere cuenta Tailscale',
+             'Instala Tailscale en el servidor. Inicia sesión con tu cuenta (login único '
+             'por dispositivo). Activa Funnel para exponer el puerto 443. '
+             'El dashboard te guía paso a paso.'),
+        ]
+        for title, desc in steps:
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            card.get_style_context().add_class('info-card')
+            t_lbl = Gtk.Label(label='', xalign=0)
+            t_lbl.set_markup(f'<b>{title}</b>')
+            t_lbl.set_line_wrap(True)
+            card.pack_start(t_lbl, False, False, 0)
+            d_lbl = Gtk.Label(label=desc, xalign=0)
+            d_lbl.get_style_context().add_class('label-muted')
+            d_lbl.set_line_wrap(True)
+            card.pack_start(d_lbl, False, False, 0)
+            box.pack_start(card, False, False, 0)
+
+        box.show_all()
+        dialog.run()
+        dialog.destroy()
 
     def _set_busy(self, busy, msg=''):
         self._busy = busy
@@ -4122,7 +4323,20 @@ WantedBy=multi-user.target
         run_in_background(work, done)
 
     def refresh(self):
-        method = load_conf('ACCESS_METHOD') or 'local'
+        method = load_conf('ACCESS_METHOD') or ''
+        # Auto-detectar método activo si no está configurado
+        if not method:
+            ts = sh('tailscale funnel status 2>/dev/null')
+            if 'Funnel on' in ts:
+                method = 'tailscale-funnel'
+                save_conf('ACCESS_METHOD', method)
+            else:
+                cf = sh('systemctl is-active supermercado-go-tunnel 2>/dev/null')
+                if cf == 'active':
+                    method = 'cloudflare'
+                    save_conf('ACCESS_METHOD', method)
+                else:
+                    method = 'local'
         method_labels = {
             'local': 'Ninguno (red local)', 'propio': 'Dominio propio',
             'duckdns': 'DuckDNS', 'cloudflare': 'Cloudflare Tunnel',
@@ -4132,20 +4346,27 @@ WantedBy=multi-user.target
         self.card_method.set_value(method_labels.get(method, method))
         settings = (http_get('/api/settings') or {}).get('settings', {})
         domain = settings.get('server_domain', '')
+        # Auto-detectar dominio si está vacío
+        if not domain and method == 'tailscale-funnel':
+            ts = sh('tailscale funnel status 2>/dev/null')
+            for line in ts.splitlines():
+                line = line.strip()
+                if line.startswith('https://') and not line.startswith('https://127.'):
+                    domain = line.replace('https://', '').rstrip('/')
+                    break
+            if domain:
+                http_put('/api/settings', {'server_domain': domain})
         self.card_domain.set_value(domain or '—')
-        # Preseleccionar el combo segun el metodo activo, para que el
-        # usuario vea de entrada en que estado quedo, no siempre "ninguno".
+        if domain:
+            self.real_lbl.set_markup(f'<b>Dominio público actual:</b>  <a href="https://{domain}">https://{domain}</a>')
+        else:
+            self.real_lbl.set_markup('<b>Dominio público actual:</b>  — (sin configurar)')
+        # Preseleccionar el combo segun el metodo activo
         combo_id = {
             'local': 'ninguno', 'propio': 'propio', 'duckdns': 'duckdns',
             'cloudflare': 'cloudflare', 'tunnel': 'cloudflare',
             'tailscale-funnel': 'tailscale',
         }.get(method, 'ninguno')
-        # Solo se auto-selecciona UNA vez (la primera vez que se muestra el
-        # módulo, para reflejar el estado ya configurado). El auto-refresh
-        # de 10s llama a este mismo refresh() de fondo -- si volviera a
-        # forzar el combo en cada tick, le pisaría al usuario la opción que
-        # está eligiendo (o los datos que está tipeando) antes de que
-        # alcance a tocar "Guardar".
         if not self._initial_synced and not self._busy:
             self.combo.set_active_id(combo_id)
             self._initial_synced = True
@@ -4163,20 +4384,23 @@ class ConfigModule:
 
     def __init__(self, parent):
         self.parent = parent
-        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
 
-        header = SectionHeader('Configuración y acceso',
-                               'Parámetros de red del servidor y acciones sensibles')
+        header = SectionHeader('Configuración del servidor',
+                               'Red, negocio, acciones sensibles e información del sistema')
         self.box.pack_start(header, False, False, 0)
 
-        # ─── Conexión ───────────────────────────────────────────────
+        # ─── Conexión y red ──────────────────────────────────────────
+        conn_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        conn_card.get_style_context().add_class('stat-card')
+        self.box.pack_start(conn_card, False, False, 0)
+
         conn_title = Gtk.Label(label='CONEXIÓN Y RED', xalign=0)
         conn_title.get_style_context().add_class('section-title')
-        self.box.pack_start(conn_title, False, False, 0)
+        conn_card.pack_start(conn_title, False, False, 0)
 
         grid = Gtk.Grid(column_spacing=14, row_spacing=10)
-        self.box.pack_start(grid, False, False, 0)
-
+        conn_card.pack_start(grid, False, False, 0)
         self.entry_port   = self._field(grid, 0, 'Puerto del servidor', env_get('PORT') or '3000')
         self.entry_phone  = self._field(grid, 1, 'Número WhatsApp (BOT_PHONE)', env_get('BOT_PHONE'))
         self.entry_domain = self._field(grid, 2, 'Dominio propio (HTTPS)', env_get('SERVER_DOMAIN'))
@@ -4184,69 +4408,105 @@ class ConfigModule:
                                         env_get('HOST') or '127.0.0.1')
         self.entry_bot_enabled = self._field(grid, 4, 'Bot habilitado (true/false)',
                                              env_get('BOT_ENABLED') or 'false')
+        conn_card.pack_start(
+            make_btn('💾 Guardar y reiniciar servicio', 'btn-primary', on_click=lambda *_: self._save_config()),
+            False, False, 0)
 
-        self.box.pack_start(make_btn('💾 Guardar y reiniciar servicio', 'btn-primary', on_click=lambda *_: self._save_config()), False, False, 8)
+        # ─── Dominios adicionales ─────────────────────────────────────
+        dom_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        dom_card.get_style_context().add_class('stat-card')
+        self.box.pack_start(dom_card, False, False, 0)
 
-        # ─── Dominios adicionales (CORS, sin reinicio) ───────────────
-        dom_title = Gtk.Label(label='DOMINIOS ADICIONALES (ACCESO REMOTO)', xalign=0)
+        dom_title = Gtk.Label(label='DOMINIOS ADICIONALES (CORS)', xalign=0)
         dom_title.get_style_context().add_class('section-title')
-        self.box.pack_start(dom_title, False, False, 8)
+        dom_card.pack_start(dom_title, False, False, 0)
 
         dom_hint = Gtk.Label(
             label='Cualquier dominio, subdominio HTTPS, DuckDNS o Tailscale que deba poder '
                   'conectarse al servidor (app web, otro panel, etc). Varios separados por '
                   'coma. Se aplica en segundos, sin reiniciar el servicio.',
             xalign=0)
-        dom_hint.get_style_context().add_class('label-muted')
+        dom_hint.get_style_context().add_class('label-dim')
         dom_hint.set_line_wrap(True)
-        self.box.pack_start(dom_hint, False, False, 0)
+        dom_card.pack_start(dom_hint, False, False, 0)
 
         dom_grid = Gtk.Grid(column_spacing=14, row_spacing=10)
-        self.box.pack_start(dom_grid, False, False, 0)
-
+        dom_card.pack_start(dom_grid, False, False, 0)
         settings_pre = (http_get('/api/settings') or {}).get('settings', {})
         self.entry_extra_domains = self._field(
             dom_grid, 0, 'Dominios adicionales (ej: midominio.com, otro.duckdns.org)',
             settings_pre.get('extra_domains', ''))
         self.entry_extra_domains.set_width_chars(50)
-
-        self.box.pack_start(
+        dom_card.pack_start(
             make_btn('💾 Guardar dominios adicionales', 'btn-primary', on_click=lambda *_: self._save_domains()),
-            False, False, 8)
+            False, False, 0)
 
         # ─── Información del negocio ─────────────────────────────────
+        biz_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        biz_card.get_style_context().add_class('stat-card')
+        self.box.pack_start(biz_card, False, False, 0)
+
         biz_title = Gtk.Label(label='INFORMACIÓN DEL NEGOCIO', xalign=0)
         biz_title.get_style_context().add_class('section-title')
-        self.box.pack_start(biz_title, False, False, 8)
+        biz_card.pack_start(biz_title, False, False, 0)
 
         biz_hint = Gtk.Label(
-            label='Esto lo ve el cliente en la app (nombre del negocio, horario). '
-                  'Se aplica al instante, sin reiniciar el servidor.',
+            label='Esto lo ve el cliente en la app. Se aplica al instante, sin reiniciar.',
             xalign=0)
-        biz_hint.get_style_context().add_class('label-muted')
+        biz_hint.get_style_context().add_class('label-dim')
         biz_hint.set_line_wrap(True)
-        self.box.pack_start(biz_hint, False, False, 0)
+        biz_card.pack_start(biz_hint, False, False, 0)
 
         biz_grid = Gtk.Grid(column_spacing=14, row_spacing=10)
-        self.box.pack_start(biz_grid, False, False, 0)
-
+        biz_card.pack_start(biz_grid, False, False, 0)
         settings = http_get('/api/settings') or {}
         current = (settings or {}).get('settings', {})
         self.entry_empresa_nombre = self._field(biz_grid, 0, 'Nombre del negocio', current.get('empresa_nombre', ''))
         self.entry_empresa_desc   = self._field(biz_grid, 1, 'Descripción', current.get('empresa_descripcion', ''))
         self.entry_horario        = self._field(biz_grid, 2, 'Horario de atención', current.get('horario_atencion', ''))
-
-        self.box.pack_start(
+        biz_card.pack_start(
             make_btn('💾 Guardar información del negocio', 'btn-primary', on_click=lambda *_: self._save_business_info()),
-            False, False, 8)
+            False, False, 0)
+
+        # ─── Métodos de contacto ─────────────────────────────────────
+        contact_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        contact_card.get_style_context().add_class('stat-card')
+        self.box.pack_start(contact_card, False, False, 0)
+
+        contact_title = Gtk.Label(label='MÉTODOS DE CONTACTO', xalign=0)
+        contact_title.get_style_context().add_class('section-title')
+        contact_card.pack_start(contact_title, False, False, 0)
+
+        contact_hint = Gtk.Label(
+            label='Estos datos aparecen en la web y la app para que los clientes puedan contactarte.',
+            xalign=0)
+        contact_hint.get_style_context().add_class('label-dim')
+        contact_hint.set_line_wrap(True)
+        contact_card.pack_start(contact_hint, False, False, 0)
+
+        contact_grid = Gtk.Grid(column_spacing=14, row_spacing=10)
+        contact_card.pack_start(contact_grid, False, False, 0)
+        current_contact = (http_get('/api/settings') or {}).get('settings', {})
+        self.entry_contact_phone   = self._field(contact_grid, 0, 'Teléfono / WhatsApp', current_contact.get('contact_phone', ''))
+        self.entry_contact_email   = self._field(contact_grid, 1, 'Correo electrónico', current_contact.get('contact_email', ''))
+        self.entry_contact_address = self._field(contact_grid, 2, 'Dirección física', current_contact.get('contact_address', ''))
+        self.entry_contact_instagram = self._field(contact_grid, 3, 'Instagram', current_contact.get('contact_instagram', ''))
+        self.entry_contact_facebook  = self._field(contact_grid, 4, 'Facebook', current_contact.get('contact_facebook', ''))
+        contact_card.pack_start(
+            make_btn('💾 Guardar contactos', 'btn-primary', on_click=lambda *_: self._save_contacts()),
+            False, False, 0)
 
         # ─── Acciones sensibles ─────────────────────────────────────
+        sec_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        sec_card.get_style_context().add_class('stat-card')
+        self.box.pack_start(sec_card, False, False, 0)
+
         sec_title = Gtk.Label(label='ACCIONES SENSIBLES', xalign=0)
         sec_title.get_style_context().add_class('section-title')
-        self.box.pack_start(sec_title, False, False, 8)
+        sec_card.pack_start(sec_title, False, False, 0)
 
         sensitive = Gtk.Box(spacing=8)
-        self.box.pack_start(sensitive, False, False, 0)
+        sec_card.pack_start(sensitive, False, False, 0)
         sensitive.pack_start(make_btn('🔑 Regenerar secretos', 'btn-warn', on_click=lambda *_: self._regen_secrets()), False, False, 0)
         sensitive.pack_start(make_btn('📱 Re-vincular WhatsApp', 'btn-warn', on_click=lambda *_: self._relink()), False, False, 0)
         sensitive.pack_start(make_btn('🧹 Limpiar media antiguos', 'btn-flat', on_click=lambda *_: self._clean_media()), False, False, 0)
@@ -4254,15 +4514,19 @@ class ConfigModule:
         # ─── Estado ─────────────────────────────────────────────────
         self.status_label = Gtk.Label(label='')
         self.status_label.get_style_context().add_class('label-muted')
-        self.box.pack_start(self.status_label, False, False, 8)
+        self.box.pack_start(self.status_label, False, False, 0)
 
         # ─── Información del sistema ────────────────────────────────
+        info_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        info_card.get_style_context().add_class('stat-card')
+        self.box.pack_start(info_card, False, False, 0)
+
         info_title = Gtk.Label(label='INFORMACIÓN DEL SISTEMA', xalign=0)
         info_title.get_style_context().add_class('section-title')
-        self.box.pack_start(info_title, False, False, 8)
+        info_card.pack_start(info_title, False, False, 0)
 
         self.info_grid = Gtk.Grid(column_spacing=14, row_spacing=8)
-        self.box.pack_start(self.info_grid, False, False, 0)
+        info_card.pack_start(self.info_grid, False, False, 0)
         self.info_labels = {}
         for i, (key, label) in enumerate([
             ('service_user', 'Usuario del servicio'),
@@ -4296,7 +4560,8 @@ class ConfigModule:
         env_set('BOT_PHONE', re.sub(r'\D', '', self.entry_phone.get_text()))
         env_set('SERVER_DOMAIN', domain)
         env_set('HOST', self.entry_host.get_text().strip() or '127.0.0.1')
-        env_set('BOT_ENABLED', self.entry_bot_enabled.get_text().strip().lower() in ('true', '1', 'yes'))
+        val = self.entry_bot_enabled.get_text().strip().lower() in ('true', '1', 'yes')
+        env_set('BOT_ENABLED', 'true' if val else 'false')
         # Tambien a la DB (settings.server_domain): asi el CORS lo toma en
         # segundos por cache, sin depender de que el reinicio ya haya pasado.
         http_put('/api/settings', {'key': 'server_domain', 'value': domain})
@@ -4323,11 +4588,23 @@ class ConfigModule:
             http_put('/api/settings', {'key': key, 'value': value})
         self.status_label.set_text('✓ Información del negocio guardada.')
 
+    def _save_contacts(self, _btn=None):
+        pairs = [
+            ('contact_phone', self.entry_contact_phone.get_text().strip()),
+            ('contact_email', self.entry_contact_email.get_text().strip()),
+            ('contact_address', self.entry_contact_address.get_text().strip()),
+            ('contact_instagram', self.entry_contact_instagram.get_text().strip()),
+            ('contact_facebook', self.entry_contact_facebook.get_text().strip()),
+        ]
+        for key, value in pairs:
+            http_put('/api/settings', {'key': key, 'value': value})
+        self.status_label.set_text('✓ Contactos guardados — visibles en web y app.')
+
     def _regen_secrets(self, _btn=None):
         dialog = Gtk.MessageDialog(
             transient_for=self.parent, flags=0,
             message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text='Esto regenerará API_KEY y JWT_SECRET. La app móvil y el bot deberán '
                  'reautenticarse. ¿Continuar?')
         resp = dialog.run()
@@ -4342,7 +4619,7 @@ class ConfigModule:
         dialog = Gtk.MessageDialog(
             transient_for=self.parent, flags=0,
             message_type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text='Esto borra la sesión de WhatsApp actual. El bot pedirá un nuevo código '
                  'de vinculación. ¿Continuar?')
         resp = dialog.run()
@@ -4588,15 +4865,18 @@ class LogsModule:
         buf = self.view.get_buffer()
         start, end = buf.get_bounds()
         text = buf.get_text(start, end, True)
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(text, -1)
+        try:
+            clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            clipboard.set_text(text, -1)
+        except AttributeError:
+            pass
         self.parent.show_toast('Logs copiados al portapapeles')
 
     def _clear(self):
         dialog = Gtk.MessageDialog(
             transient_for=self.parent, flags=0,
             message_type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text='¿Vaciar el archivo server.log? Esto borra el historial de logs.')
         if dialog.run() == Gtk.ResponseType.YES:
             sh(f'> "{os.path.join(LOG_DIR, "server.log")}" 2>/dev/null')
@@ -4729,7 +5009,12 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self.sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.sidebar_scroll.set_size_request(220, -1)
         self.sidebar_scroll.add(self.sidebar)
-        self.main_box.pack_start(self.sidebar_scroll, False, False, 0)
+        self.sidebar_revealer = Gtk.Revealer()
+        self.sidebar_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_RIGHT)
+        self.sidebar_revealer.set_transition_duration(200)
+        self.sidebar_revealer.add(self.sidebar_scroll)
+        self.sidebar_revealer.set_reveal_child(True)
+        self.main_box.pack_start(self.sidebar_revealer, False, False, 0)
 
         # Branding en sidebar
         brand_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -4754,6 +5039,7 @@ class DashboardWindow(Gtk.ApplicationWindow):
 
         # Botones de módulos
         self.module_buttons = {}
+        self.module_badges = {}
         self.modules = {}
 
         # Stack con crossfade nativo -- reemplaza el pack/remove manual del
@@ -4791,7 +5077,7 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self._add_module('monitor', 'Monitoreo', MonitorModule)
         self._add_module('orders',  'Pedidos activos', OrdersModule, badge_key='orders')
         self._add_module('bot',     'Bot WhatsApp', BotModule)
-        self._add_module('sales',   'Ventas', SalesModule)
+        self._add_module('sales',   'Ventas', SalesModule, badge_key='sales')
         self._add_module('employees','Empleados', EmployeesModule)
         self._add_module('locations','Ubicaciones', LocationsModule)
         self._add_module('connections', 'Conexiones', ConnectionsModule)
@@ -4804,7 +5090,7 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self.sidebar.pack_start(cfg_label, False, False, 0)
 
         self._add_module('domain', 'Dominio', DomainModule)
-        self._add_module('brand',  'Marca', BrandModule)
+
         self._add_module('payments', 'Métodos de pago', PaymentsModule)
         self._add_module('email',   'Correo', EmailModule)
         self._add_module('config', 'Configuración', ConfigModule)
@@ -4842,6 +5128,20 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self.status_bar = Gtk.Box()
         self.status_bar.get_style_context().add_class('sidebar')
         self.status_bar.set_size_request(-1, 28)
+        # Toast animado (slide-down)
+        self.toast_label = Gtk.Label(label='')
+        self.toast_label.get_style_context().add_class('label-dim')
+        self.toast_label.set_xalign(0)
+        self.toast_label.set_margin_start(12)
+        self.toast_revealer = Gtk.Revealer()
+        self.toast_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self.toast_revealer.set_transition_duration(250)
+        toast_box = Gtk.Box(spacing=6)
+        toast_box.get_style_context().add_class('toast-bar')
+        toast_box.pack_start(self.toast_label, False, False, 0)
+        self.toast_revealer.add(toast_box)
+        self.status_bar.pack_start(self.toast_revealer, False, False, 0)
+        # Status label normal
         self.status_label = Gtk.Label(label='')
         self.status_label.get_style_context().add_class('label-dim')
         self.status_label.set_xalign(0)
@@ -4896,9 +5196,18 @@ class DashboardWindow(Gtk.ApplicationWindow):
         # el Label a mano, alineado a la izquierda, como cualquier menu
         # de navegacion nativo.
         btn = Gtk.Button()
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         lbl = Gtk.Label(label=label)
         lbl.set_xalign(0)
-        btn.add(lbl)
+        row.pack_start(lbl, True, True, 0)
+        badge = None
+        if badge_key:
+            badge = Gtk.Label(label='')
+            badge.get_style_context().add_class('badge')
+            badge.set_no_show_all(True)  # arranca oculto hasta el primer refresh con count>0
+            row.pack_start(badge, False, False, 0)
+            self.module_badges[badge_key] = badge
+        btn.add(row)
         btn.get_style_context().add_class('sidebar-btn')
         btn.set_relief(Gtk.ReliefStyle.NONE)
         btn.connect('clicked', lambda *_: self.switch_module(key))
@@ -4916,8 +5225,19 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self.modules[key] = ModuleClass(self)
         self.content_stack.add_named(self.modules[key].box, key)
 
+    def set_badge(self, key, count):
+        """Actualiza el badge numerico de un boton del sidebar (oculto si count<=0)."""
+        badge = self.module_badges.get(key)
+        if not badge:
+            return
+        if count and count > 0:
+            badge.set_text(str(count))
+            badge.set_visible(True)
+        else:
+            badge.set_visible(False)
+
     def switch_module(self, name):
-        """Cambia el módulo visible en el área de contenido (crossfade nativo)."""
+        """Cambia el módulo visible con animación fade-in."""
         if name not in self.modules:
             return
         # Marcar botón activo
@@ -4928,6 +5248,11 @@ class DashboardWindow(Gtk.ApplicationWindow):
                 btn.get_style_context().remove_class('active')
         self.content_stack.set_visible_child_name(name)
         self.current_module = name
+        # Animación fade-in via opacidad progresiva
+        child = self.content_stack.get_visible_child()
+        if child:
+            child.set_opacity(0.0)
+            GLib.timeout_add(30, lambda c=child, s=[0.0]: _fade_in_step(c, s) or False)
         # Refrescar el módulo recién mostrado
         try:
             self.modules[name].refresh()
@@ -4959,14 +5284,9 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self.maximize_btn.set_tooltip_text('Restaurar' if maximized else 'Maximizar')
 
     def _toggle_sidebar(self):
-        """Colapsa/expande el sidebar lateral."""
+        """Colapsa/expande el sidebar lateral con animación slide."""
         self._sidebar_visible = not self._sidebar_visible
-        self.sidebar_scroll.set_visible(self._sidebar_visible)
-        # Reajustar tamaño mínimo cuando está oculto
-        if self._sidebar_visible:
-            self.sidebar_scroll.set_size_request(220, -1)
-        else:
-            self.sidebar_scroll.set_size_request(0, -1)
+        self.sidebar_revealer.set_reveal_child(self._sidebar_visible)
 
     def _tick(self):
         """Refresh automático cada 10s."""
@@ -5001,9 +5321,11 @@ class DashboardWindow(Gtk.ApplicationWindow):
                 print(f'[dashboard] refresh_all {self.current_module}: {e}', file=sys.stderr)
 
     def show_toast(self, msg):
-        """Muestra un mensaje temporal en la barra de estado."""
-        self.status_label.set_text(msg)
-        GLib.timeout_add_seconds(4, lambda: (self.status_label.set_text(''), False)[1])
+        """Muestra un mensaje temporal con animación slide-down."""
+        self.toast_label.set_text(msg)
+        self.toast_revealer.set_reveal_child(True)
+        GLib.timeout_add_seconds(4, lambda: self.toast_revealer.set_reveal_child(False) or True)
+        GLib.timeout_add_seconds(5, lambda: self.toast_label.set_text('') or True)
 
     def _appdata_dir(self):
         """Devuelve el APPDATA configurado en el servicio systemd."""

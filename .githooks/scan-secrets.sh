@@ -15,7 +15,7 @@ set -euo pipefail
 # de la API de DuckDNS (igual para cualquier usuario del servicio, no es un
 # subdominio privado de nadie) -- distinto de un "<subdominio>.duckdns.org"
 # real, que si queda bloqueado.
-ALLOWLIST_RE='tu-dominio\.com|tu-dominio\.duckdns\.org|midominio\.ts\.net|midominio\.com|otrodominio\.com|mi-negocio\.duckdns\.org|ejemplo\.com|example\.com|www\.duckdns\.org|uno\.duckdns\.org|dos\.ts\.net|cors-test-domain\.com|no-deberia-pasar\.com|prueba-panel\.example\.com'
+ALLOWLIST_RE='tu-dominio\.com|tu-dominio\.duckdns\.org|midominio\.ts\.net|midominio\.com|otrodominio\.com|mi-negocio\.duckdns\.org|tucosa\.duckdns\.org|ejemplo\.com|example\.com|www\.duckdns\.org|uno\.duckdns\.org|dos\.ts\.net|cors-test-domain\.com|no-deberia-pasar\.com|prueba-panel\.example\.com'
 
 PATTERNS=(
     '[a-z0-9-]+\.ts\.net'                         # hostname real de Tailscale
