@@ -4,6 +4,8 @@ import '../styles/components.css';
 import '../styles/producto.css';
 import { mountLayout, authFetch, getToken } from './layout';
 import { gsap, fadeInUp, staggerReveal } from './animations';
+import { renderBreadcrumb as renderBreadcrumbShared, type BreadcrumbItem } from './breadcrumb';
+import { icon } from './icons';
 
 /**
  * Claves de localStorage:
@@ -107,9 +109,8 @@ function buildProductCard(p: Product): HTMLElement {
     img.loading = 'lazy';
     media.appendChild(img);
   } else {
-    media.textContent = '🛒';
-    media.style.fontSize = '3rem';
-    media.style.opacity = '0.25';
+    media.innerHTML = icon('cart', 40);
+    media.classList.add('product-card__media--placeholder');
   }
   card.appendChild(media);
 
@@ -139,22 +140,18 @@ async function fetchProducts(): Promise<Product[]> {
 function renderBreadcrumb(product: Product): void {
   const nav = document.getElementById('product-breadcrumb');
   if (!nav) return;
-  const parts: string[] = [
-    '<a href="/index.html">Inicio</a>',
-    '<span class="product-breadcrumb__sep">/</span>',
-    '<a href="/catalogo.html">Catálogo</a>',
+  const items: BreadcrumbItem[] = [
+    { label: 'Inicio', href: '/index.html' },
+    { label: 'Catálogo', href: '/catalogo.html' },
   ];
   if (product.category) {
-    parts.push(
-      '<span class="product-breadcrumb__sep">/</span>',
-      `<a href="/catalogo.html?categoria=${encodeURIComponent(product.category)}">${product.category}</a>`
-    );
+    items.push({
+      label: product.category,
+      href: `/catalogo.html?categoria=${encodeURIComponent(product.category)}`,
+    });
   }
-  parts.push(
-    '<span class="product-breadcrumb__sep">/</span>',
-    `<span class="product-breadcrumb__current">${product.name}</span>`
-  );
-  nav.innerHTML = parts.join(' ');
+  items.push({ label: product.name });
+  renderBreadcrumbShared(nav, items);
 }
 
 function renderGallery(product: Product): void {
@@ -265,6 +262,71 @@ function renderInfo(product: Product): { qtyInput: HTMLInputElement } {
   }
 
   return { qtyInput };
+}
+
+/** Tab "Detalles" -- solo campos que ya vienen de la API, nada inventado. */
+function renderDetails(product: Product): void {
+  const dl = document.getElementById('product-details-list');
+  if (!dl) return;
+  const rows: [string, string][] = [
+    ['Categoría', product.category || 'Sin categoría'],
+    ['Disponibilidad', product.available ? 'Disponible' : 'Agotado'],
+    ['Fiado', product.no_fiado ? 'No se fía' : 'Se fía'],
+  ];
+  dl.innerHTML = rows.map(([term, desc]) => `<dt>${term}</dt><dd>${desc}</dd>`).join('');
+}
+
+/**
+ * Tabs Descripción/Detalles/Reseñas -- role="tablist"/"tab"/aria-selected
+ * real (no solo visual) + navegación con flechas, y fade con gsap en vez
+ * de solo togglear `hidden` en seco.
+ */
+function initTabs(): void {
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.product-tabs__tab'));
+  if (!tabs.length) return;
+
+  const panelFor = (tab: HTMLButtonElement): HTMLElement | null =>
+    document.getElementById(tab.getAttribute('aria-controls') || '');
+
+  const activate = (tab: HTMLButtonElement): void => {
+    const nextPanel = panelFor(tab);
+    if (!nextPanel || tab.getAttribute('aria-selected') === 'true') return;
+
+    const currentTab = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
+    const currentPanel = currentTab ? panelFor(currentTab) : null;
+
+    tabs.forEach((t) => {
+      const selected = t === tab;
+      t.setAttribute('aria-selected', String(selected));
+      t.tabIndex = selected ? 0 : -1;
+    });
+
+    if (currentPanel && currentPanel !== nextPanel) {
+      gsap.to(currentPanel, {
+        opacity: 0,
+        duration: 0.15,
+        onComplete: () => {
+          currentPanel.hidden = true;
+          nextPanel.hidden = false;
+          gsap.fromTo(nextPanel, { opacity: 0 }, { opacity: 1, duration: 0.25 });
+        },
+      });
+    } else {
+      nextPanel.hidden = false;
+      gsap.fromTo(nextPanel, { opacity: 0 }, { opacity: 1, duration: 0.25 });
+    }
+  };
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => activate(tab));
+    tab.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      next.focus();
+      activate(next);
+    });
+  });
 }
 
 async function handleAddToCart(product: Product, btn: HTMLButtonElement, qtyInput: HTMLInputElement): Promise<void> {
@@ -411,6 +473,8 @@ async function init(): Promise<void> {
     renderBreadcrumb(product);
     renderGallery(product);
     renderInfo(product);
+    renderDetails(product);
+    initTabs();
 
     if (loading) loading.hidden = true;
     if (detail) {

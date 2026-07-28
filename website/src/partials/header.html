@@ -1,18 +1,57 @@
 <header class="site-header" data-reveal="fade">
   <div class="container site-header__inner">
     <a href="/index.html" class="site-header__logo" aria-label="Supermercado GO — inicio">
-      <span class="site-header__logo-emoji" aria-hidden="true">🛒</span>
+      <span class="site-header__logo-icon" data-icon="cart" data-icon-size="24" aria-hidden="true"></span>
       <span class="site-header__logo-text">Supermercado GO</span>
     </a>
 
     <nav class="site-header__nav" aria-label="Navegación principal">
       <a href="/index.html" class="site-header__link">Inicio</a>
-      <a href="/catalogo.html" class="site-header__link">Catálogo</a>
+
+      <div class="site-header__nav-item site-header__nav-item--mega" data-mega-toggle>
+        <a href="/catalogo.html" class="site-header__link">
+          Catálogo
+          <span class="site-header__chevron" data-icon="chevron-down" data-icon-size="14" data-mega-chevron aria-hidden="true"></span>
+        </a>
+        <div class="mega-menu">
+          <a href="/catalogo.html?categoria=Frutas%20y%20Verduras" class="mega-menu__item">
+            <span class="mega-menu__icon" data-icon="leaf" data-icon-size="18" aria-hidden="true"></span>
+            Frutas y Verduras
+          </a>
+          <a href="/catalogo.html?categoria=L%C3%A1cteos" class="mega-menu__item">
+            <span class="mega-menu__icon" data-icon="milk" data-icon-size="18" aria-hidden="true"></span>
+            Lácteos
+          </a>
+          <a href="/catalogo.html?categoria=Carnes" class="mega-menu__item">
+            <span class="mega-menu__icon" data-icon="beef" data-icon-size="18" aria-hidden="true"></span>
+            Carnes
+          </a>
+          <a href="/catalogo.html?categoria=Panader%C3%ADa" class="mega-menu__item">
+            <span class="mega-menu__icon" data-icon="bread" data-icon-size="18" aria-hidden="true"></span>
+            Panadería
+          </a>
+          <a href="/catalogo.html?categoria=Bebidas" class="mega-menu__item">
+            <span class="mega-menu__icon" data-icon="cup-soda" data-icon-size="18" aria-hidden="true"></span>
+            Bebidas
+          </a>
+          <a href="/catalogo.html?categoria=Aseo" class="mega-menu__item">
+            <span class="mega-menu__icon" data-icon="spray" data-icon-size="18" aria-hidden="true"></span>
+            Aseo
+          </a>
+        </div>
+      </div>
+
+      <a href="/ofertas.html" class="site-header__link">Ofertas</a>
+
       <a href="/carrito.html" class="site-header__link site-header__link--cart">
+        <span class="site-header__link-icon" data-icon="cart" data-icon-size="16" aria-hidden="true"></span>
         Carrito
         <span class="site-header__cart-count" data-cart-count>0</span>
       </a>
-      <a href="/cuenta.html" class="site-header__link">Mi cuenta</a>
+      <a href="/cuenta.html" class="site-header__link site-header__link--account">
+        <span class="site-header__link-icon" data-icon="user" data-icon-size="16" aria-hidden="true"></span>
+        Mi cuenta
+      </a>
       <a href="/contacto.html" class="site-header__link">Contacto</a>
     </nav>
 

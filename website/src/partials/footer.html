@@ -1,7 +1,7 @@
 <footer class="site-footer" data-reveal="fade">
   <div class="container site-footer__inner">
     <div class="site-footer__brand">
-      <span class="site-footer__logo-emoji" aria-hidden="true">🛒</span>
+      <span class="site-footer__logo-icon" data-icon="cart" data-icon-size="24" aria-hidden="true"></span>
       <span>Supermercado GO</span>
     </div>
 
@@ -16,6 +16,19 @@
       <a href="/terminos.html">Términos y condiciones</a>
       <a href="/privacidad.html">Privacidad</a>
     </nav>
+
+    <div class="site-footer__row">
+      <div class="site-footer__payments" aria-label="Métodos de pago aceptados">
+        <span class="site-footer__payments-label">Pagos aceptados</span>
+        <span class="site-footer__payment-icon" data-icon="wallet" data-icon-size="18" aria-hidden="true" title="Nequi"></span>
+        <span class="site-footer__payment-icon" data-icon="credit-card" data-icon-size="18" aria-hidden="true" title="Tarjeta"></span>
+        <span class="site-footer__payment-icon" data-icon="banknote" data-icon-size="18" aria-hidden="true" title="Contraentrega"></span>
+      </div>
+
+      <div class="site-footer__social" data-footer-social aria-label="Redes sociales">
+        <!-- Se completa en runtime desde GET /api/settings/public (contact_instagram/contact_facebook/contact_phone) -->
+      </div>
+    </div>
 
     <p class="site-footer__copy">
       &copy; <span data-footer-year></span> Supermercado GO. Todos los derechos reservados.

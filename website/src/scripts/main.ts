@@ -5,6 +5,7 @@ import '../styles/home.css';
 import { mountLayout } from './layout';
 import { gsap, staggerReveal } from './animations';
 import { SplitText } from 'gsap/SplitText';
+import { icon, type IconName } from './icons';
 
 gsap.registerPlugin(SplitText);
 
@@ -19,30 +20,30 @@ interface PublicProduct {
   images: string[];
 }
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  'frutas y verduras': '🥦',
-  lácteos: '🥛',
-  lacteos: '🥛',
-  carnes: '🥩',
-  panadería: '🥖',
-  panaderia: '🥖',
-  bebidas: '🥤',
-  aseo: '🧼',
+const CATEGORY_ICON: Record<string, IconName> = {
+  'frutas y verduras': 'leaf',
+  lácteos: 'milk',
+  lacteos: 'milk',
+  carnes: 'beef',
+  panadería: 'bread',
+  panaderia: 'bread',
+  bebidas: 'cup-soda',
+  aseo: 'spray',
 };
 
 function fmtPrice(value: number): string {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value);
 }
 
-function placeholderEmoji(category: string | null): string {
-  if (!category) return '🛒';
-  return CATEGORY_EMOJI[category.toLowerCase()] || '🛒';
+function placeholderIcon(category: string | null): string {
+  const name = (category && CATEGORY_ICON[category.toLowerCase()]) || 'cart';
+  return icon(name, 48);
 }
 
 function productCardHtml(p: PublicProduct): string {
   const media = p.images?.length
     ? `<img src="/api/products/images/${encodeURIComponent(p.images[0])}" alt="${p.name}" loading="lazy" />`
-    : `<span class="product-card__media--placeholder" aria-hidden="true">${placeholderEmoji(p.category)}</span>`;
+    : `<span class="product-card__media--placeholder" aria-hidden="true">${placeholderIcon(p.category)}</span>`;
 
   return `
     <article class="product-card" data-reveal-item>
@@ -87,7 +88,7 @@ async function loadFeaturedProducts(): Promise<void> {
 
 /** Nombre del negocio real desde settings, con fallback silencioso. */
 async function loadBrandName(): Promise<void> {
-  const el = document.querySelector<HTMLElement>('[data-brand-eyebrow]');
+  const el = document.querySelector<HTMLElement>('[data-brand-eyebrow-text]');
   if (!el) return;
   try {
     const res = await fetch('/api/settings/public');
@@ -95,7 +96,7 @@ async function loadBrandName(): Promise<void> {
     const { settings } = await res.json();
     const name = settings?.theme_name;
     if (name && name !== DEFAULT_BRAND) {
-      el.textContent = `🛒 ${name}`;
+      el.textContent = name;
     }
   } catch {
     // queda el fallback "Supermercado GO" ya en el HTML

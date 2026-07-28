@@ -1,0 +1,1 @@
+import{i as e}from"./layout-CRh1XZgP.js";function b(s,n){const a=[];n.forEach((r,c)=>{c>0&&a.push(`<span class="breadcrumb__sep">${e("chevron-right",14)}</span>`),a.push(r.href?`<a href="${r.href}" class="breadcrumb__link">${r.label}</a>`:`<span class="breadcrumb__current">${r.label}</span>`)}),s.innerHTML=a.join("")}export{b as r};

@@ -97,8 +97,8 @@
 }
 
 .info-card__icon {
-  font-size: 1.75rem;
-  display: block;
+  display: flex;
+  color: var(--brand);
   margin-bottom: var(--sp-2);
 }
 

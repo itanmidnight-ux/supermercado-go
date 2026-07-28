@@ -29,6 +29,7 @@
 import headerHtml from '../partials/header.html?raw';
 import footerHtml from '../partials/footer.html?raw';
 import { initSmoothScroll, initScrollReveal, fadeInUp } from './animations';
+import { icon, mountIcons } from './icons';
 
 const CART_KEY = 'sg_cart';
 const TOKEN_KEY = 'sg_token';
@@ -89,6 +90,25 @@ function initMobileMenu(): void {
   });
 }
 
+/**
+ * Mega-menu de "Catálogo": en desktop se abre con hover/focus (puro CSS,
+ * ver layout.css). En mobile no hay hover, así que el chevron actúa como
+ * toggle propio -- separado del link para que tocar el texto siga
+ * navegando a catalogo.html normalmente.
+ */
+function initMegaMenu(): void {
+  const wrapper = document.querySelector<HTMLElement>('[data-mega-toggle]');
+  const chevron = wrapper?.querySelector<HTMLElement>('[data-mega-chevron]');
+  if (!wrapper || !chevron) return;
+
+  chevron.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isOpen = wrapper.classList.toggle('is-open');
+    chevron.closest('a')?.setAttribute('aria-expanded', String(isOpen));
+  });
+}
+
 function updateCartCount(): void {
   const el = document.querySelector<HTMLElement>('[data-cart-count]');
   if (!el) return;
@@ -106,26 +126,62 @@ function setFooterYear(): void {
   if (el) el.textContent = String(new Date().getFullYear());
 }
 
+/** Arma el link de WhatsApp desde el teléfono público. Duplica la lógica
+ * mínima que ya usa contacto.ts (misma función `waLink`) -- no se importa
+ * desde ahí para no acoplar el layout compartido al entry point de una
+ * sola página, y es demasiado poco código para justificar un módulo aparte. */
+function waLink(rawPhone: string): string {
+  let digits = rawPhone.replace(/\D/g, '');
+  if (digits.length === 10 && digits.startsWith('3')) digits = `57${digits}`;
+  return `https://wa.me/${digits}`;
+}
+
+interface PublicSettings {
+  theme_name?: string;
+  contact_instagram?: string;
+  contact_facebook?: string;
+  contact_phone?: string;
+}
+
+function fillFooterSocial(settings: PublicSettings): void {
+  const el = document.querySelector<HTMLElement>('[data-footer-social]');
+  if (!el) return;
+
+  const links: Array<[string, string]> = [];
+  if (settings.contact_instagram) links.push(['instagram', settings.contact_instagram]);
+  if (settings.contact_facebook) links.push(['facebook', settings.contact_facebook]);
+  if (settings.contact_phone) links.push(['whatsapp', waLink(settings.contact_phone)]);
+
+  el.innerHTML = links
+    .map(
+      ([name, url]) =>
+        `<a href="${url}" target="_blank" rel="noopener noreferrer" class="site-footer__social-link" aria-label="${name}">${icon(name, 18)}</a>`
+    )
+    .join('');
+}
+
 async function fillFooterContact(): Promise<void> {
   const el = document.querySelector<HTMLElement>('[data-footer-contact]');
-  if (!el) return;
   try {
     const res = await fetch('/api/settings/public');
     if (!res.ok) return;
-    const { settings } = await res.json();
-    if (settings?.theme_name) {
+    const { settings }: { settings: PublicSettings } = await res.json();
+    if (el && settings?.theme_name) {
       el.textContent = settings.theme_name;
     }
+    fillFooterSocial(settings || {});
   } catch {
-    // sin conexión al backend: el footer queda sin línea de contacto, no rompe la página
+    // sin conexión al backend: el footer queda sin línea de contacto ni redes, no rompe la página
   }
 }
 
 /** Punto de entrada único: llamar una vez por página, apenas cargue el script. */
 export function mountLayout(): void {
   mountPartials();
+  mountIcons();
   markActiveLink();
   initMobileMenu();
+  initMegaMenu();
   updateCartCount();
   setFooterYear();
   void fillFooterContact();
