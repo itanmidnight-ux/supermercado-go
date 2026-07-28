@@ -26,6 +26,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscure2 = true;
   String? _error;
 
+  // Computa fortaleza de la contraseña en tiempo real
+  int get _pwStrength {
+    final pw = _pwCtrl.text;
+    if (pw.isEmpty) return 0;
+    int score = 0;
+    if (pw.length >= 8) score++;
+    if (RegExp(r'[A-Z]').hasMatch(pw)) score++;
+    if (RegExp(r'[0-9]').hasMatch(pw)) score++;
+    if (RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-+=]').hasMatch(pw)) score++;
+    return score;
+  }
+
+  String get _pwStrengthLabel {
+    switch (_pwStrength) {
+      case 0: return '';
+      case 1: return 'Débil';
+      case 2: return 'Aceptable';
+      case 3: return 'Buena';
+      case 4: return 'Segura';
+      default: return '';
+    }
+  }
+
+  Color get _pwStrengthColor {
+    switch (_pwStrength) {
+      case 0: return Colors.grey;
+      case 1: return const Color(0xFFD32F2F); // rojo
+      case 2: return const Color(0xFFEF6C00); // naranja
+      case 3: return const Color(0xFFFBC02D); // amarillo
+      case 4: return const Color(0xFF2E7D32); // verde
+      default: return Colors.grey;
+    }
+  }
+
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -192,6 +226,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // Security strip
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  const Color(0xFF2E7D32).withValues(alpha: 0.08),
+                                  const Color(0xFF1565C0).withValues(alpha: 0.08),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: const Color(0xFF2E7D32)
+                                      .withValues(alpha: 0.2)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.shield_outlined,
+                                    size: 14, color: Color(0xFF2E7D32)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Tus datos están protegidos con cifrado AES-256',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+
                           const Text('Información personal',
                               style: TextStyle(
                                   fontSize: 13,
@@ -260,6 +328,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ? 'Mínimo 8 caracteres'
                                 : null,
                           ),
+
+                          // Indicador de fortaleza de contraseña en tiempo real
+                          AnimatedBuilder(
+                            animation: _pwCtrl,
+                            builder: (context, _) =>
+                                _PasswordStrengthIndicator(
+                              strength: _pwStrength,
+                              label: _pwStrengthLabel,
+                              color: _pwStrengthColor,
+                            ),
+                          ),
+
                           const SizedBox(height: 12),
                           _field(
                             controller: _pw2Ctrl,
@@ -335,6 +415,74 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Password strength indicator ──────────────────────────────────────
+class _PasswordStrengthIndicator extends StatelessWidget {
+  final int strength; // 0-4
+  final String label;
+  final Color color;
+
+  const _PasswordStrengthIndicator({
+    required this.strength,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (strength == 0) return const SizedBox(height: 8);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Barra de 4 segmentos
+          Row(
+            children: List.generate(4, (i) {
+              final filled = i < strength;
+              return Expanded(
+                child: Container(
+                  height: 4,
+                  margin: EdgeInsets.only(right: i < 3 ? 3 : 0),
+                  decoration: BoxDecoration(
+                    color: filled
+                        ? color
+                        : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                strength >= 3 ? Icons.check_circle : Icons.info_outline,
+                size: 12,
+                color: color,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Seguridad: $label',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Una contraseña segura tiene mayúsculas, números y símbolos',
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+          ),
+        ],
       ),
     );
   }

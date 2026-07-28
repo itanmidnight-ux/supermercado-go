@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/app_card.dart';
 import '../widgets/empty_state.dart';
@@ -14,13 +15,16 @@ const Map<String, String> _statusLabels = {
   'delivered': 'Entregado',
   'cancelled': 'Cancelado',
 };
+// Antes duplicaba los mismos hex de AppTheme.warning/info/success/errorColor
+// como literales sueltos -- si esas constantes cambian algún día, este mapa
+// quedaba desincronizado en silencio.
 const Map<String, Color> _statusColors = {
-  'pending': Color(0xFFB5651D),
-  'claimed': Color(0xFF3B5A73),
+  'pending': AppTheme.warningColor,
+  'claimed': AppTheme.infoColor,
   'en_camino': Color(0xFF2D5016),
-  'entregado': Color(0xFF2E7D32),
-  'delivered': Color(0xFF2E7D32),
-  'cancelled': Color(0xFFB3261E),
+  'entregado': AppTheme.successColor,
+  'delivered': AppTheme.successColor,
+  'cancelled': AppTheme.errorColor,
 };
 
 class AdminAnalyticsScreen extends StatefulWidget {
