@@ -1,18 +1,18 @@
 <%- include('partials/header', { csrf }) %>
 
-<p><a href="/productos">&larr; Volver a productos</a></p>
+<p class="breadcrumb"><a href="/productos">&larr; Volver a productos</a></p>
 <h1><%= product ? 'Editar producto' : 'Nuevo producto' %></h1>
 <% if (error) { %><p class="error"><%= error %></p><% } %>
 
 <div class="form-layout">
-  <form class="card" method="post" action="<%= product ? ('/productos/' + product.id) : '/productos/nuevo' %>">
+  <form class="card animate-in" method="post" action="<%= product ? ('/productos/' + product.id) : '/productos/nuevo' %>">
     <input type="hidden" name="_csrf" value="<%= csrf %>">
 
-    <label>Nombre</label>
-    <input type="text" name="name" value="<%= product ? product.name : '' %>" required maxlength="200">
+    <label>Nombre del producto</label>
+    <input type="text" name="name" value="<%= product ? product.name : '' %>" required maxlength="200" placeholder="Ej: Arroz Diana 1kg">
 
     <label>Precio (COP)</label>
-    <input type="number" name="price" value="<%= product ? product.price : '' %>" required min="0" step="1">
+    <input type="number" name="price" value="<%= product ? product.price : '' %>" required min="0" step="1" placeholder="0">
 
     <label>Categoría</label>
     <select name="category">
@@ -23,23 +23,26 @@
     </select>
 
     <label>Descripción</label>
-    <textarea name="description" rows="4" maxlength="2000"><%= product ? (product.description || '') : '' %></textarea>
+    <textarea name="description" rows="4" maxlength="2000" placeholder="Descripción opcional del producto..."><%= product ? (product.description || '') : '' %></textarea>
 
     <label>SKU (opcional)</label>
-    <input type="text" name="sku" value="<%= product ? (product.sku || '') : '' %>" maxlength="60">
+    <input type="text" name="sku" value="<%= product ? (product.sku || '') : '' %>" maxlength="60" placeholder="Código interno">
 
     <label>Stock (vacío = sin límite)</label>
-    <input type="number" name="stock" value="<%= product && product.stock !== null && product.stock !== undefined ? product.stock : '' %>" min="0">
+    <input type="number" name="stock" value="<%= product && product.stock !== null && product.stock !== undefined ? product.stock : '' %>" min="0" placeholder="Sin límite">
 
-    <label class="check"><input type="checkbox" name="available" <%= !product || product.available ? 'checked' : '' %>> Disponible</label>
-    <label class="check"><input type="checkbox" name="favorite" <%= product && product.favorite ? 'checked' : '' %>> Destacado</label>
-    <label class="check"><input type="checkbox" name="no_fiado" <%= product && product.no_fiado ? 'checked' : '' %>> No fiado</label>
+    <label>Alertar cuando el stock baje de</label>
+    <input type="number" name="low_stock_threshold" value="<%= product && product.low_stock_threshold !== null && product.low_stock_threshold !== undefined ? product.low_stock_threshold : '' %>" min="0" placeholder="Sin alerta">
 
-    <button type="submit">Guardar</button>
+    <label class="check"><input type="checkbox" name="available" <%= !product || product.available ? 'checked' : '' %>> Disponible para la venta</label>
+    <label class="check"><input type="checkbox" name="favorite" <%= product && product.favorite ? 'checked' : '' %>> Destacado en la tienda</label>
+    <label class="check"><input type="checkbox" name="no_fiado" <%= product && product.no_fiado ? 'checked' : '' %>> No disponible para fiar</label>
+
+    <button type="submit"><%= product ? 'Guardar cambios' : 'Crear producto' %></button>
   </form>
 
   <% if (product) { %>
-    <div class="card">
+    <div class="card animate-in animate-delay-1">
       <h2>Imágenes</h2>
       <div class="thumbs">
         <% (product.images || []).forEach(filename => { %>
@@ -51,7 +54,7 @@
             </form>
           </div>
         <% }) %>
-        <% if (!(product.images || []).length) { %><p class="muted">Sin imágenes aún.</p><% } %>
+        <% if (!(product.images || []).length) { %><p class="muted">Sin imágenes aún. Sube una imagen del producto.</p><% } %>
       </div>
       <form method="post" action="/productos/<%= product.id %>/imagenes" enctype="multipart/form-data" class="upload-form">
         <input type="hidden" name="_csrf" value="<%= csrf %>">
@@ -60,9 +63,9 @@
       </form>
     </div>
 
-    <div class="card danger-zone">
+    <div class="card danger-zone animate-in animate-delay-2">
       <h2>Eliminar producto</h2>
-      <p class="muted">Esta acción no se puede deshacer.</p>
+      <p class="muted">Esta acción no se puede deshacer. El producto se eliminará permanentemente.</p>
       <form method="post" action="/productos/<%= product.id %>/eliminar" onsubmit="return confirm('¿Eliminar este producto permanentemente?');">
         <input type="hidden" name="_csrf" value="<%= csrf %>">
         <button type="submit" class="danger">Eliminar producto</button>
