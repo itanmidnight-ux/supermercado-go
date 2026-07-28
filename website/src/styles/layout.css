@@ -4,7 +4,11 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(10, 10, 15, 0.75);
+  /* Quedó con el fondo oscuro (rgba(10,10,15,...)) de antes de pasar a la
+     paleta clara -- texto de nav oscuro (--fg-muted) sobre fondo casi negro
+     quedaba ilegible ("muy claro", bajo contraste). Ahora usa --surface
+     (blanco real) traslúcido, consistente con el resto del sitio. */
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--surface-3);
 }

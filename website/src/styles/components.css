@@ -1,6 +1,22 @@
 /* Componentes base reusables. Sin contenido específico de página --
    estructura + estados (hover/active/loading) solamente. */
 
+/* Bug real encontrado en producción: el atributo nativo [hidden] tiene la
+   MISMA especificidad (0,1,0) que cualquier ".clase { display: ... }" del
+   sitio -- y como la hoja de estilos del sitio carga después que la hoja
+   por defecto del navegador, la clase gana y [hidden] queda sin efecto en
+   cualquier elemento que también tenga una clase con "display" propio.
+   Pasaba en producto.html (#product-loading Y #product-detail visibles a
+   la vez, "galería duplicada") y en cuenta.html (login + #register-form +
+   #forgot-panel todos visibles juntos, "todo duplicado"). Con !important
+   acá se restaura la garantía real de [hidden]: oculto es oculto, sin
+   importar qué clase tenga el elemento. Es el único lugar del sitio donde
+   corresponde usar !important.
+*/
+[hidden] {
+  display: none !important;
+}
+
 /* ── Botones ─────────────────────────────────────────────── */
 .btn {
   position: relative;
