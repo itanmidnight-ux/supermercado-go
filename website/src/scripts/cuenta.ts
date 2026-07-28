@@ -2,34 +2,17 @@ import '../styles/tokens.css';
 import '../styles/layout.css';
 import '../styles/components.css';
 import '../styles/cuenta.css';
-import { mountLayout } from './layout';
+import { mountLayout, getToken, setToken, clearToken, authFetch } from './layout';
 import { gsap } from './animations';
 
 mountLayout();
 
-// ── Convención de sesión del sitio: JWT crudo en localStorage['sg_token'],
+// Convención de sesión del sitio: JWT crudo en localStorage['sg_token'],
 // enviado como header Authorization: Bearer <token> en requests autenticadas.
-// Otras páginas del sitio ya asumen esta clave -- no cambiarla.
-const TOKEN_KEY = 'sg_token';
-
-function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
-  const token = getToken();
-  const headers = new Headers(opts.headers || {});
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(url, { ...opts, headers });
-}
+// getToken/setToken/clearToken/authFetch viven en layout.ts (única fuente,
+// las 3 páginas del sitio que necesitan sesión los importan de ahí -- antes
+// cada página tenía su propia copia con comportamiento levemente distinto
+// en el manejo de 401).
 
 function redirectAfterAuth(): void {
   const params = new URLSearchParams(location.search);
