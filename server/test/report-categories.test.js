@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('report-categories');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 process.env.REPORTS_DIR = path.join(os.tmpdir(), `reports-cat-test-${Date.now()}`);
 
 const request = require('supertest');
@@ -26,7 +26,7 @@ afterAll(async () => {
 });
 
 async function loginAdmin() {
-  const res = await request(app).post('/api/auth/token').send({ username: 'jesus', password: 'admin-test-pw' });
+  const res = await request(app).post('/api/auth/token').send({ username: 'admin', password: 'admin-test-pw' });
   return res.body.token;
 }
 

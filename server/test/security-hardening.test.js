@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('security-hardening');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 // dotenv (cargado por app.js) no sobreescribe vars ya seteadas -- fijamos
 // esta ANTES del primer require de app.js para no escribir reportes en el
 // REPORTS_DIR real de produccion (sin permisos para este usuario/test).
@@ -14,17 +14,16 @@ process.env.REPORTS_DIR = path.join(os.tmpdir(), `reports-test-${Date.now()}`);
 const request = require('supertest');
 const ExcelJS = require('exceljs');
 const { initDB, getDB } = require('../src/db/database');
+const { scanSuspiciousIPs, _resetLastAlertedAt } = require('../src/services/securityMonitor');
 const app = require('../src/app');
 const { getIP } = require('../src/utils/ip');
 const { flushIpActivity } = require('../src/middleware/ipActivity');
 const { raiseAlert } = require('../src/utils/securityAlert');
-const { scanSuspiciousIPs } = require('../src/services/securityMonitor');
-
 beforeAll(async () => { await initDB(); });
 afterAll(async () => { await teardownTestSchema(); });
 
 async function loginAdmin() {
-  const res = await request(app).post('/api/auth/token').send({ username: 'jesus', password: 'admin-test-pw' });
+  const res = await request(app).post('/api/auth/token').send({ username: 'admin', password: 'admin-test-pw' });
   return res.body.token;
 }
 function normPhone(phone) { return '57' + phone; }
@@ -193,6 +192,7 @@ describe('raiseAlert', () => {
 });
 
 describe('scanSuspiciousIPs', () => {
+  beforeEach(() => { _resetLastAlertedAt(); });
   test('marca alerta cuando una IP supera el umbral de LOGINS fallidos reales', async () => {
     const db = getDB();
     const minute = new Date().toISOString().slice(0, 16);

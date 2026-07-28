@@ -1,7 +1,7 @@
 'use strict';
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('settings-theming');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 
 const request = require('supertest');
 const { initDB } = require('../src/db/database');
@@ -12,7 +12,7 @@ afterAll(async () => { await teardownTestSchema(); });
 
 async function loginAdmin() {
   const res = await request(app).post('/api/auth/token')
-    .send({ username: 'jesus', password: 'admin-test-pw' });
+    .send({ username: 'admin', password: 'admin-test-pw' });
   return res.body.token;
 }
 
