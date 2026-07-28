@@ -35,10 +35,10 @@ app.get('/login', (req, res) => {
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
-  if (!username || !password) return render(req, res, 'login', { error: 'Usuario y contraseña requeridos' });
+  if (!username || !password) return render(req, res, 'login', { error: '⚠️ Usuario y contraseña requeridos' });
   const { ok, data } = await apiRequest(null, 'POST', '/api/auth/token', { json: { username, password } });
-  if (!ok || !data?.token) return render(req, res, 'login', { error: data?.error || 'Credenciales incorrectas' });
-  if (data.role !== 'admin') return render(req, res, 'login', { error: 'Esta cuenta no tiene permisos de administrador' });
+  if (!ok || !data?.token) return render(req, res, 'login', { error: '⚠️ ' + (data?.error || 'Credenciales incorrectas. Verifica tu usuario y contraseña.') });
+  if (data.role !== 'admin') return render(req, res, 'login', { error: '⚠️ Esta cuenta no tiene permisos de administrador. Ingresa con una cuenta admin.' });
   setCookie(res, 'token', data.token, { maxAgeMs: 30 * 24 * 60 * 60 * 1000 });
   setCookie(res, 'csrf', newCsrfToken(), { maxAgeMs: 30 * 24 * 60 * 60 * 1000, httpOnly: false });
   res.redirect('/productos');
@@ -59,6 +59,14 @@ app.get('/', (req, res) => res.redirect('/productos'));
 app.get('/productos', async (req, res) => {
   const { ok, data } = await apiRequest(req.adminToken, 'GET', '/api/products');
   render(req, res, 'productos-lista', { products: ok && Array.isArray(data) ? data : [], error: ok ? null : 'No se pudo cargar el catálogo.' });
+});
+
+app.get('/alertas', async (req, res) => {
+  const { ok, data } = await apiRequest(req.adminToken, 'GET', '/api/analytics/products');
+  render(req, res, 'alertas', {
+    needsAttention: ok && Array.isArray(data?.needs_attention) ? data.needs_attention : [],
+    error: ok ? null : 'No se pudo cargar las alertas.',
+  });
 });
 
 app.get('/productos/nuevo', (req, res) => {
@@ -131,6 +139,7 @@ function formToProductBody(body) {
     description: body.description || null,
     sku: body.sku || null,
     stock: body.stock !== undefined && body.stock !== '' ? Number(body.stock) : null,
+    low_stock_threshold: body.low_stock_threshold !== undefined && body.low_stock_threshold !== '' ? Number(body.low_stock_threshold) : null,
     available: body.available === 'on' ? 1 : 0,
     favorite: body.favorite === 'on' ? 1 : 0,
     no_fiado: body.no_fiado === 'on' ? 1 : 0,
