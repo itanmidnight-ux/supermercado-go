@@ -23,7 +23,8 @@ Ambos consumen la misma API REST.
 - Node.js 20+
 - PostgreSQL 16+
 - Flutter 3.44+ (solo para compilar la app Android)
-- Python 3.10+ (solo para dashboard.py)
+- Python 3.10+ (solo para dashboard.py) — `pip install -r requirements.txt`
+  (además necesita GTK3 del sistema, ver comentario en `requirements.txt`)
 
 ## Inicio rápido
 
