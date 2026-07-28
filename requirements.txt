@@ -1,0 +1,14 @@
+# Dependencias Python para dashboard.py (panel de control GTK del servidor).
+# No hace falta para el backend Node/Express ni para el sitio web (website/)
+# ni para la app Android (android-app/) -- solo para correr dashboard.py.
+#
+# GTK3 en si (Gtk, Gdk, GLib, GdkPixbuf, Cairo) es una librería del sistema,
+# no un paquete pip -- instalala con el gestor de paquetes del SO antes de
+# instalar este requirements.txt:
+#   Debian/Ubuntu/Kali: sudo apt install python3-gi gir1.2-gtk-3.0 libcairo2-dev libgirepository1.0-dev
+#
+# Instalar: pip install -r requirements.txt
+
+psycopg2-binary>=2.9
+PyGObject>=3.50
+pycairo>=1.26
