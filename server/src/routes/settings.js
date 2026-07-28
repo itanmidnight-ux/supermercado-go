@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { adminAuth, clientAuth } = require('../middleware/auth');
 const { getDB } = require('../db/database');
+const { settingsCache } = require('../utils/memoryCache');
 
 // GET /api/settings/public — nombre/logo/colores de marca, sin auth. Lo
 // necesita la pantalla de login (todavía no hay sesión ahí) para mostrar
@@ -11,10 +12,13 @@ const { getDB } = require('../db/database');
 // dominios, etc. que solo se devuelven autenticado).
 router.get('/public', async (req, res, next) => {
   try {
-    const keys = ['theme_name', 'theme_primary', 'theme_accent', 'theme_logo_url'];
-    const { rows } = await getDB().query('SELECT key, value FROM settings WHERE key = ANY($1)', [keys]);
-    const settings = {};
-    rows.forEach(r => { settings[r.key] = r.value; });
+    const settings = await settingsCache.wrap('public', 60_000, async () => {
+      const keys = ['theme_name', 'theme_primary', 'theme_accent', 'theme_logo_url'];
+      const { rows } = await getDB().query('SELECT key, value FROM settings WHERE key = ANY($1)', [keys]);
+      const out = {};
+      rows.forEach(r => { out[r.key] = r.value; });
+      return out;
+    });
     res.json({ settings });
   } catch (e) { next(e); }
 });
@@ -24,16 +28,23 @@ router.get('/', clientAuth, async (req, res, next) => {
   try {
     const db = getDB();
     if (req.user.role === 'admin') {
-      const { rows } = await db.query('SELECT key, value FROM settings');
-      const settings = {};
-      rows.forEach(r => { settings[r.key] = r.value; });
+      const settings = await settingsCache.wrap('admin', 30_000, async () => {
+        const { rows } = await db.query('SELECT key, value FROM settings');
+        const out = {};
+        rows.forEach(r => { out[r.key] = r.value; });
+        return out;
+      });
       return res.json({ settings });
     }
-    // Clients only get nequi_phone + nequi_name + empresa_nombre + horario_atencion
-    const allowed = ['nequi_phone', 'nequi_name', 'empresa_nombre', 'horario_atencion'];
-    const { rows } = await db.query('SELECT key, value FROM settings WHERE key = ANY($1)', [allowed]);
-    const settings = {};
-    rows.forEach(r => { settings[r.key] = r.value; });
+    // Clients only get nequi_phone + nequi_name + empresa_nombre + horario_atencion + contact_*
+    const settings = await settingsCache.wrap('client', 60_000, async () => {
+      const allowed = ['nequi_phone', 'nequi_name', 'empresa_nombre', 'horario_atencion', 'empresa_descripcion',
+                       'contact_phone', 'contact_email', 'contact_address', 'contact_instagram', 'contact_facebook'];
+      const { rows } = await db.query('SELECT key, value FROM settings WHERE key = ANY($1)', [allowed]);
+      const out = {};
+      rows.forEach(r => { out[r.key] = r.value; });
+      return out;
+    });
     res.json({ settings });
   } catch (e) { next(e); }
 });
@@ -43,6 +54,8 @@ const ALLOWED_SETTINGS_KEYS = [
   'empresa_nombre', 'empresa_descripcion', 'horario_atencion',
   'theme_primary', 'theme_accent', 'theme_name',
   'server_domain', 'extra_domains',
+  'contact_phone', 'contact_email', 'contact_address',
+  'contact_instagram', 'contact_facebook',
 ];
 
 // Dominio suelto (sin protocolo), opcionalmente con :puerto. Usado tanto para
@@ -75,6 +88,7 @@ router.put('/', adminAuth, async (req, res, next) => {
       INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
     `, [key, strVal]);
+    settingsCache.flush();
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -101,6 +115,7 @@ router.post('/logo', adminAuth, logoUpload.single('logo'), async (req, res, next
     fs.renameSync(req.file.path, path.join(LOGO_DIR, filename));
     await getDB().query(`INSERT INTO settings (key, value) VALUES ('theme_logo_url', $1)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [filename]);
+    settingsCache.flush();
     res.json({ filename });
   } catch (e) { next(e); }
 });
