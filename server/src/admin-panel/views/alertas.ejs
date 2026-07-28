@@ -1,0 +1,22 @@
+<%- include('partials/header', { csrf }) %>
+
+<h1>⚠️ Alertas</h1>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+
+<% if (needsAttention.length) { %>
+  <ul class="alertas-lista">
+    <% needsAttention.forEach(function(item) { %>
+      <li class="alerta-<%= item.reason %>">
+        <strong><%= item.name %></strong> — <%= item.detail %>
+        <span class="alerta-tag"><%= item.reason === 'low_stock' ? 'Stock bajo' : 'Baja demanda' %></span>
+      </li>
+    <% }); %>
+  </ul>
+<% } else { %>
+  <div class="empty-state">
+    <div style="font-size: 3rem; margin-bottom: .5rem;">✅</div>
+    <p style="font-size: 1.05rem;">Sin alertas — todo el inventario está por encima del mínimo configurado.</p>
+  </div>
+<% } %>
+
+<%- include('partials/footer') %>
