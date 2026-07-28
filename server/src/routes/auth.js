@@ -9,12 +9,18 @@ const { raiseAlert } = require('../utils/securityAlert');
 const logger = require('../utils/logger');
 
 // ── Brute-force protection ────────────────────────────────────
-// key = username (independiente de la IP -- un atacante que rota de IP no
-// debe poder seguir probando contraseñas contra la misma cuenta) → { count, lockedUntil }
+// Doble capa: por username (evita que un atacante rote IPs contra la misma
+// cuenta) Y por IP (evita que un atacante pruebe muchos usuarios desde una
+// misma IP). Lockout progresivo: después de 3 fallos hay una pausa breve,
+// después de 5 fallos hay un bloqueo más largo. El bloqueo se AUTOLIMPIA
+// si el usuario verifica su identidad vía email (forgot-password → reset).
+// Un usuario real que olvidó su contraseña nunca queda atrapado.
 const attempts = new Map();
-const MAX_ATTEMPTS  = 5;
-const LOCKOUT_MS    = 15 * 60 * 1000; // 15 min
-const CLEANUP_EVERY = 10 * 60 * 1000; // purge stale entries
+const MAX_ATTEMPTS_BRIEF  = 3;
+const BRIEF_PAUSE_MS      = 30 * 1000; // 30s
+const MAX_ATTEMPTS_LOCK   = 5;
+const LOCKOUT_MS          = 10 * 60 * 1000; // 10 min
+const CLEANUP_EVERY = 10 * 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
@@ -27,24 +33,48 @@ function checkLock(key) {
   const a = attempts.get(key);
   if (!a) return null;
   if (a.lockedUntil && Date.now() < a.lockedUntil) {
-    const secsLeft = Math.ceil((a.lockedUntil - Date.now()) / 1000);
-    return secsLeft;
+    return Math.ceil((a.lockedUntil - Date.now()) / 1000);
   }
   return null;
 }
 
 function recordFail(key) {
-  const a   = attempts.get(key) || { count: 0 };
-  a.count  += 1;
-  if (a.count >= MAX_ATTEMPTS && !a.lockedUntil) {
-    a.lockedUntil = Date.now() + LOCKOUT_MS;
-    raiseAlert('brute_force', `Cuenta "${key}" bloqueada 15 minutos por fuerza bruta`);
+  const a = attempts.get(key) || { count: 0 };
+  a.count += 1;
+  const now = Date.now();
+  if (a.count >= MAX_ATTEMPTS_LOCK && !a.lockedUntil) {
+    a.lockedUntil = now + LOCKOUT_MS;
+    raiseAlert('brute_force', `Cuenta "${key}" bloqueada 10 minutos por fuerza bruta`);
+  } else if (a.count >= MAX_ATTEMPTS_BRIEF && !a.lockedUntil) {
+    a.lockedUntil = now + BRIEF_PAUSE_MS;
   }
   attempts.set(key, a);
 }
 
 function clearAttempts(key) {
   attempts.delete(key);
+}
+
+function isLocked(req, identifier) {
+  const ipLock  = `ip:${getIP(req)}`;
+  const userLock = identifier;
+  const ipSecs   = checkLock(ipLock);
+  const userSecs = checkLock(userLock);
+  const secs = Math.max(ipSecs || 0, userSecs || 0);
+  if (secs > 0) {
+    return { locked: true, retryIn: secs };
+  }
+  return { locked: false };
+}
+
+function recordFailBoth(req, identifier) {
+  recordFail(`ip:${getIP(req)}`);
+  recordFail(identifier);
+}
+
+function clearAttemptsBoth(req, identifier) {
+  clearAttempts(`ip:${getIP(req)}`);
+  clearAttempts(identifier);
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -80,14 +110,12 @@ router.post('/token', async (req, res, next) => {
       return res.status(400).json({ error: 'Contraseña requerida' });
 
     const identifier = username.trim().toLowerCase();
-    // Bloqueo por CUENTA, no por IP -- ver comentario en la declaracion de `attempts`.
-    const lockKey = identifier;
 
-    const secs = checkLock(lockKey);
-    if (secs !== null) {
+    const { locked, retryIn } = isLocked(req, identifier);
+    if (locked) {
       return res.status(429).json({
-        error:     `Cuenta temporalmente bloqueada. Intenta en ${secs} segundos.`,
-        retry_in:  secs,
+        error:     `Demasiados intentos. Intenta de nuevo en ${Math.ceil(retryIn / 60)} min.`,
+        retry_in:  retryIn,
       });
     }
 
@@ -104,21 +132,21 @@ router.post('/token', async (req, res, next) => {
     const user = rows[0];
 
     if (!user) {
-      recordFail(lockKey);
+      recordFailBoth(req, identifier);
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
     const match = await bcrypt.compare(credential, user.pin || user.password_hash);
     if (!match) {
-      recordFail(lockKey);
-      const a = attempts.get(lockKey);
-      const remaining = Math.max(0, MAX_ATTEMPTS - (a?.count || 0));
+      recordFailBoth(req, identifier);
+      const a = attempts.get(identifier);
+      const remaining = Math.max(0, MAX_ATTEMPTS_LOCK - (a?.count || 0));
       return res.status(401).json({
         error:     'Credenciales incorrectas',
         attempts_left: remaining,
       });
     }
-    clearAttempts(lockKey);
+    clearAttemptsBoth(req, identifier);
     // Hora de entrada -- solo staff (admin/worker); clientes no marcan turno
     if (['admin', 'worker'].includes(user.role)) {
       await db.query(`INSERT INTO login_events (user_id, logged_in_at, device_info) VALUES ($1, now_iso(), $2)`,
@@ -177,10 +205,29 @@ router.post('/refresh', async (req, res, next) => {
       return res.status(401).json({ error: 'Sesión expirada. Inicia sesión nuevamente.' });
     }
 
-    const db   = getDB();
+    const db = getDB();
+    // El mismo chequeo de revocacion que jwtAuth (middleware/auth.js) --
+    // faltaba acá, así que un token robado seguía pudiendo renovarse aunque
+    // la víctima ya hubiera hecho logout (que revoca el jti viejo). Sin
+    // esto, /logout no servía de nada contra un token ya filtrado.
+    if (payload.jti) {
+      const { isRevokedFast } = require('../middleware/auth');
+      if (await isRevokedFast(payload.jti)) return res.status(401).json({ error: 'Sesión cerrada' });
+      const { rows: revokedRows } = await db.query('SELECT 1 FROM revoked_tokens WHERE jti = $1', [payload.jti]);
+      if (revokedRows[0]) return res.status(401).json({ error: 'Sesión cerrada' });
+    }
+
     const { rows } = await db.query('SELECT * FROM users WHERE id = $1 AND active = 1', [payload.id]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: 'Usuario no encontrado' });
+
+    // Rotación: el jti viejo queda revocado apenas se emite el nuevo, para
+    // que no sirva ni siquiera dentro de su ventana de gracia de 7 días.
+    if (payload.jti) {
+      await db.query('INSERT INTO revoked_tokens (jti, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [payload.jti, user.id]);
+      require('../middleware/auth').mirrorRevocation(payload.jti);
+    }
 
     res.json(signToken(user));
   } catch (e) { next(e); }
@@ -370,6 +417,7 @@ router.post('/reset-password', async (req, res) => {
     await db.query('UPDATE users SET password_hash = $1, pin = $1 WHERE id = $2', [hash, user.id]);
     await db.query('UPDATE password_resets SET used = 1 WHERE id = $1', [reset.id]);
     clearAttempts(lockKey);
+    clearAttempts(email); // también limpia bloqueo de login para este usuario
     res.json({ ok: true, message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
   } catch (e) {
     res.status(500).json({ error: 'Error al restablecer la contraseña' });

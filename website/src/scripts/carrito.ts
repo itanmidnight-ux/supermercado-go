@@ -2,17 +2,17 @@ import '../styles/tokens.css';
 import '../styles/layout.css';
 import '../styles/components.css';
 import '../styles/carrito.css';
-import { mountLayout } from './layout';
+import { mountLayout, authFetch, getToken } from './layout';
 import { gsap, fadeInUp } from './animations';
 
 /**
  * Convención de sesión (misma que producto.ts):
- * - 'sg_token' en localStorage = JWT crudo, header Authorization: Bearer <token>.
+ * - 'sg_token' en localStorage = JWT crudo, vía authFetch() de layout.ts
+ *   (agrega el header Authorization y limpia el token solo en 401).
  * - 'sg_cart' en localStorage = espejo del carrito ([{id, qty}]) que lee
  *   layout.ts para el contador del header. Esta página es la fuente de
  *   verdad (GET /api/cart) -- 'sg_cart' se resincroniza acá en cada cambio.
  */
-const TOKEN_KEY = 'sg_token';
 const CART_KEY = 'sg_cart';
 
 interface CartItem {
@@ -36,10 +36,6 @@ type PaymentMethod = 'nequi' | 'visa' | 'contra_entrega';
 type DeliveryMode = 'gps' | 'address';
 
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
-
-function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
 
 function imgUrl(filename: string): string {
   return `/api/products/images/${encodeURIComponent(filename)}`;
@@ -189,9 +185,9 @@ function buildCartItemRow(item: CartItem, imageFilename: string | null): HTMLEle
     if (newQty < 1) return;
     setBusy(true);
     try {
-      const res = await fetch('/api/cart', {
+      const res = await authFetch('/api/cart', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: item.product_id, quantity: newQty }),
       });
       if (!res.ok) throw new Error('No se pudo actualizar');
@@ -219,10 +215,7 @@ function buildCartItemRow(item: CartItem, imageFilename: string | null): HTMLEle
     setBusy(true);
     void (async () => {
       try {
-        const res = await fetch(`/api/cart/${item.product_id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${getToken()}` },
-        });
+        const res = await authFetch(`/api/cart/${item.product_id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('No se pudo quitar');
 
         gsap.to(row, {
@@ -283,7 +276,7 @@ async function loadCart(): Promise<void> {
   loadingEl.hidden = false;
 
   try {
-    const res = await fetch('/api/cart', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await authFetch('/api/cart');
     if (res.status === 401) {
       showGuest();
       return;
@@ -455,9 +448,9 @@ form.addEventListener('submit', (e) => {
 
   void (async () => {
     try {
-      const res = await fetch('/api/cart/checkout', {
+      const res = await authFetch('/api/cart/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 

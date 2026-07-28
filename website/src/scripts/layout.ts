@@ -31,6 +31,36 @@ import footerHtml from '../partials/footer.html?raw';
 import { initSmoothScroll, initScrollReveal, fadeInUp } from './animations';
 
 const CART_KEY = 'sg_cart';
+const TOKEN_KEY = 'sg_token';
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+/**
+ * fetch() autenticado compartido -- agrega el Bearer token si hay sesión, y
+ * limpia sg_token automáticamente en cualquier 401 (token vencido/revocado).
+ * Antes cada página manejaba el 401 a su manera: cuenta.ts limpiaba el
+ * token, carrito.ts/producto.ts no -- quedaban con un token inválido
+ * persistido hasta que el usuario visitara cuenta.html. Centralizado acá
+ * para que las 3 páginas se comporten igual.
+ */
+export async function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(input, { ...init, headers });
+  if (res.status === 401) clearToken();
+  return res;
+}
 
 function mountPartials(): void {
   const headerMount = document.getElementById('site-header');

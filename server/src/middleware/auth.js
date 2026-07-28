@@ -105,4 +105,4 @@ function verifyWebhookSignature(req, res, next) {
   next();
 }
 
-module.exports = { apiKeyAuth, jwtAuth, adminAuth, staffAuth, clientAuth, verifyWebhookSignature, mirrorRevocation };
+module.exports = { apiKeyAuth, jwtAuth, adminAuth, staffAuth, clientAuth, verifyWebhookSignature, mirrorRevocation, isRevokedFast };

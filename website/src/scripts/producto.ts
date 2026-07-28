@@ -2,18 +2,17 @@ import '../styles/tokens.css';
 import '../styles/layout.css';
 import '../styles/components.css';
 import '../styles/producto.css';
-import { mountLayout } from './layout';
+import { mountLayout, authFetch, getToken } from './layout';
 import { gsap, fadeInUp, staggerReveal } from './animations';
 
 /**
  * Claves de localStorage:
  * - 'sg_cart'  ya la usa layout.ts (contador del carrito en el header).
- * - 'sg_token' es el token JWT de sesión (Authorization: Bearer <token>).
- *   No hay página de login todavía en este agente -- se asume esta clave
- *   como convención para que la página de cuenta/login la use igual.
+ * - 'sg_token' es el token JWT de sesión -- authFetch() de layout.ts agrega
+ *   el header y limpia el token solo en 401 (mismo comportamiento en las
+ *   3 páginas: cuenta/carrito/producto).
  */
 const CART_KEY = 'sg_cart';
-const TOKEN_KEY = 'sg_token';
 
 interface Product {
   id: number;
@@ -54,10 +53,6 @@ function imgUrl(filename: string): string {
 
 function fmtPrice(v: number): string {
   return '$' + Math.round(v).toLocaleString('es-CO');
-}
-
-function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
 }
 
 function starString(rating: number): string {
@@ -287,11 +282,16 @@ async function handleAddToCart(product: Product, btn: HTMLButtonElement, qtyInpu
   btn.disabled = true;
 
   try {
-    const res = await fetch('/api/cart', {
+    const res = await authFetch('/api/cart', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product_id: product.id, quantity: qty }),
     });
+    if (res.status === 401) {
+      const back = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/cuenta.html?redirect=${back}`;
+      return;
+    }
     if (!res.ok) throw new Error('No se pudo agregar');
 
     addToLocalCart(product.id, qty);
@@ -327,9 +327,7 @@ async function renderReviews(productId: number): Promise<void> {
   // -- sin token ni se intenta, se cae directo al estado neutro de abajo.
   if (token) {
     try {
-      const res = await fetch(`/api/products/${productId}/reviews`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch(`/api/products/${productId}/reviews`);
       if (res.ok) data = await res.json();
     } catch {
       data = null;
