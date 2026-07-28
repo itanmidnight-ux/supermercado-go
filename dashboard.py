@@ -949,6 +949,17 @@ def render_static_map(points, width=640, height=220):
     return Gdk.pixbuf_get_from_surface(surface, 0, 0, width, height)
 
 
+def _http_error_body(e):
+    """La API siempre manda {"error": "..."} en 4xx/5xx (ver middleware de error
+    en server/src/app.js) -- sin esto, cualquier rechazo con motivo real
+    (409 "ya reclamado", 400 "dominio inválido", etc.) se perdía y quedaba
+    como un None genérico indistinguible de un servidor caído."""
+    try:
+        return json.loads(e.read().decode('utf-8'))
+    except Exception:
+        return {'error': f'HTTP {e.code}'}
+
+
 def http_get(path, timeout=4):
     """GET a la API HTTP del servidor (con API-Key). Devuelve dict o None."""
     url = API_BASE + path
@@ -960,6 +971,8 @@ def http_get(path, timeout=4):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        return _http_error_body(e)
     except Exception:
         return None
 
@@ -976,6 +989,8 @@ def http_post(path, data, timeout=5):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        return _http_error_body(e)
     except Exception:
         return None
 
@@ -992,6 +1007,8 @@ def http_put(path, data, timeout=5):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        return _http_error_body(e)
     except Exception:
         return None
 
@@ -1008,6 +1025,8 @@ def http_delete(path, data=None, timeout=5):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        return _http_error_body(e)
     except Exception:
         return None
 
@@ -2643,6 +2662,7 @@ class BotModule:
             buttons=Gtk.ButtonsType.NONE,
             text='Esto desvincula el WhatsApp de la empresa por completo (borra sesión y número guardado). '
                  'Los clientes no podrán escribir al bot hasta que vincules uno nuevo. ¿Continuar?')
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Desvincular', Gtk.ResponseType.YES)
         resp = dialog.run()
         dialog.destroy()
         if resp == Gtk.ResponseType.YES:
@@ -2720,7 +2740,22 @@ class PaymentsModule:
             info_box.pack_start(desc_lbl, False, False, 0)
             method_box.pack_start(info_box, True, True, 0)
             btn_box = Gtk.Box(spacing=4)
-            if connect_cb:
+            if name == 'Nequi':
+                # Único método realmente conectable hoy (backend en
+                # payments.js) -- necesita 3 botones propios (conectar/
+                # pausar/desconectar), no el "Conectar" genérico del resto.
+                self.btn_connect = make_btn('Conectar Nequi', 'btn-primary', small=True,
+                    on_click=lambda *_: self._open_connect_dialog())
+                self.btn_pause = make_btn('Pausar', 'btn-flat', small=True,
+                    on_click=lambda *_: self._toggle_pause())
+                self.btn_disconnect = make_btn('Desconectar', 'btn-flat', small=True,
+                    on_click=lambda *_: self._disconnect())
+                self.btn_pause.set_sensitive(False)
+                self.btn_disconnect.set_sensitive(False)
+                btn_box.pack_start(self.btn_connect, False, False, 0)
+                btn_box.pack_start(self.btn_pause, False, False, 0)
+                btn_box.pack_start(self.btn_disconnect, False, False, 0)
+            elif connect_cb:
                 btn_box.pack_start(make_btn('Conectar', 'btn-primary', small=True, on_click=lambda *_, cb=connect_cb: cb()), False, False, 0)
             if help_url:
                 btn_box.pack_start(make_btn('🔗 Ayuda', 'btn-flat', small=True,
@@ -2819,6 +2854,7 @@ class PaymentsModule:
             buttons=Gtk.ButtonsType.NONE,
             text='Esto desconecta la cuenta Nequi -- los clientes dejarán de ver la opción de '
                  'pago Nequi en el checkout hasta que conectes una cuenta de nuevo. ¿Continuar?')
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Desconectar', Gtk.ResponseType.YES)
         resp = dialog.run()
         dialog.destroy()
         if resp == Gtk.ResponseType.YES:
@@ -2834,7 +2870,7 @@ class PaymentsModule:
 # MÓDULO: CORREO (NUEVO) — cuenta emisora para recuperación de contraseña
 # ══════════════════════════════════════════════════════════════════════════════
 
-PAYMENT_DOCS = {
+EMAIL_SMTP_DOCS = {
     'Gmail':       {'host': 'smtp.gmail.com',       'port': '587', 'notes': 'Usá contraseña de aplicación (Cuenta de Google → Seguridad → Contraseñas de aplicaciones)'},
     'Outlook':     {'host': 'smtp.office365.com',    'port': '587', 'notes': 'Usá la contraseña normal o App Password si tenés 2FA'},
     'Yahoo Mail':  {'host': 'smtp.mail.yahoo.com',   'port': '465', 'notes': 'Habilitá "Acceso de aplicaciones menos seguras" o genera App Password'},
@@ -2884,45 +2920,15 @@ class EmailModule:
         self.box.pack_start(info_box, False, False, 0)
 
         # ─── Formulario ──────────────────────────────────────────────
+        # El form de conexión real vive en el diálogo de _open_connect_dialog
+        # (incluye email/password/SMTP host/puerto) -- acá solo quedan los
+        # botones de acción. Antes había un segundo formulario grande acá
+        # mismo (email/password/SMTP/puerto) cuyos valores nunca se leían en
+        # ningún lado: el admin podía escribir un SMTP custom y quedaba
+        # descartado en silencio.
         form_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         form_box.get_style_context().add_class('bot-frame')
         self.box.pack_start(form_box, True, True, 0)
-
-        grid = Gtk.Grid(column_spacing=14, row_spacing=10)
-        form_box.pack_start(grid, False, False, 0)
-
-        lbl = Gtk.Label(label='Correo electrónico:', xalign=0)
-        lbl.get_style_context().add_class('label-muted')
-        self.email_entry = Gtk.Entry()
-        self.email_entry.set_placeholder_text('contacto@supermercadogo.com.co')
-        self.email_entry.set_width_chars(40)
-        grid.attach(lbl, 0, 0, 1, 1)
-        grid.attach(self.email_entry, 1, 0, 1, 1)
-
-        lbl2 = Gtk.Label(label='Contraseña de app:', xalign=0)
-        lbl2.get_style_context().add_class('label-muted')
-        self.pass_entry = Gtk.Entry()
-        self.pass_entry.set_placeholder_text('Contraseña de aplicación (16 letras)')
-        self.pass_entry.set_visibility(False)
-        self.pass_entry.set_width_chars(40)
-        grid.attach(lbl2, 0, 1, 1, 1)
-        grid.attach(self.pass_entry, 1, 1, 1, 1)
-
-        lbl3 = Gtk.Label(label='Servidor SMTP:', xalign=0)
-        lbl3.get_style_context().add_class('label-muted')
-        self.smtp_entry = Gtk.Entry()
-        self.smtp_entry.set_placeholder_text('smtp.gmail.com')
-        self.smtp_entry.set_width_chars(40)
-        grid.attach(lbl3, 0, 2, 1, 1)
-        grid.attach(self.smtp_entry, 1, 2, 1, 1)
-
-        lbl4 = Gtk.Label(label='Puerto:', xalign=0)
-        lbl4.get_style_context().add_class('label-muted')
-        self.port_entry = Gtk.Entry()
-        self.port_entry.set_placeholder_text('587')
-        self.port_entry.set_width_chars(10)
-        grid.attach(lbl4, 0, 3, 1, 1)
-        grid.attach(self.port_entry, 1, 3, 1, 1)
 
         # ─── Acciones ────────────────────────────────────────────────
         actions = Gtk.Box(spacing=8)
@@ -2950,7 +2956,7 @@ class EmailModule:
         intro.set_markup('<b>Ejemplos de configuración para proveedores comunes:</b>')
         intro.set_line_wrap(True)
         box.pack_start(intro, False, False, 0)
-        for provider, cfg in PAYMENT_DOCS.items():
+        for provider, cfg in EMAIL_SMTP_DOCS.items():
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             card.get_style_context().add_class('info-card')
             t = Gtk.Label(label='', xalign=0)
@@ -3004,6 +3010,14 @@ class EmailModule:
         pass_entry.set_visibility(False)
         pass_entry.set_placeholder_text('Contraseña de aplicación (no la contraseña normal)')
         box.pack_start(pass_entry, False, False, 0)
+        box.pack_start(Gtk.Label(label='Servidor SMTP (opcional, autodetecta por dominio si se deja vacío):'), False, False, 0)
+        smtp_entry = Gtk.Entry()
+        smtp_entry.set_placeholder_text('smtp.gmail.com')
+        box.pack_start(smtp_entry, False, False, 0)
+        box.pack_start(Gtk.Label(label='Puerto SMTP (opcional):'), False, False, 0)
+        port_entry = Gtk.Entry()
+        port_entry.set_placeholder_text('587')
+        box.pack_start(port_entry, False, False, 0)
         if is_change:
             warn = Gtk.Label(label='Esto reemplaza la cuenta de correo conectada actualmente.')
             warn.get_style_context().add_class('label-dim')
@@ -3013,10 +3027,17 @@ class EmailModule:
         if dialog.run() == Gtk.ResponseType.OK:
             email = email_entry.get_text().strip()
             app_password = pass_entry.get_text().strip()
+            smtp_host = smtp_entry.get_text().strip()
+            smtp_port = port_entry.get_text().strip()
             if email and app_password:
+                payload = {'email': email, 'app_password': app_password}
+                if smtp_host:
+                    payload['smtp_host'] = smtp_host
+                if smtp_port:
+                    payload['smtp_port'] = smtp_port
                 self.status_label.set_text('Verificando credenciales…')
                 run_in_background(
-                    lambda: http_post('/api/email/configure', {'email': email, 'app_password': app_password}),
+                    lambda: http_post('/api/email/configure', payload),
                     self._on_connect_done)
         dialog.destroy()
 
@@ -3046,6 +3067,7 @@ class EmailModule:
             buttons=Gtk.ButtonsType.NONE,
             text='Esto desconecta la cuenta de correo -- la recuperación de contraseña de los '
                  'clientes dejará de funcionar hasta que conectes una cuenta de nuevo. ¿Continuar?')
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Desconectar', Gtk.ResponseType.YES)
         resp = dialog.run()
         dialog.destroy()
         if resp == Gtk.ResponseType.YES:
@@ -3164,7 +3186,7 @@ class EmployeesModule:
             # Promedio de tiempos: ponderado por pedidos entregados, no
             # promedio-de-promedios -- un empleado con 1 pedido no puede
             # pesar igual que uno con 200 en el tiempo global del equipo.
-            weighted = [(r[4], r[3]) for r in employees if r[4]]
+            weighted = [(r[4], r[3]) for r in employees if r[4] is not None]
             if weighted:
                 total_weight = sum(c for _, c in weighted)
                 avg_t = int(sum(t * c for t, c in weighted) / total_weight)
@@ -3666,7 +3688,17 @@ class ConnectionsModule:
 
     def _toggle_block(self, ip, block):
         action = 'block' if block else 'unblock'
-        sh(f"sudo /usr/local/bin/pedidos-block-ip.sh {ip} {action}")
+        # El script real es scripts/block-ip.sh (el path viejo
+        # /usr/local/bin/pedidos-block-ip.sh nunca existió/se instaló --
+        # siempre fallaba en silencio). Requiere el sudoers NOPASSWD acotado
+        # documentado en el propio script; si ese sudoers no está instalado,
+        # sh() devuelve '' (sin stdout) y NO se escribe nada en la DB, en vez
+        # de mentir que la IP quedó bloqueada quand no pasó nada a nivel firewall.
+        script = os.path.join(PROJ, 'scripts', 'block-ip.sh')
+        out = sh(f"sudo {script} {ip} {action}")
+        if not out:
+            self.parent.show_toast(f'No se pudo {"bloquear" if block else "desbloquear"} {ip} — revisá el sudoers de block-ip.sh')
+            return
         if block:
             db_write("""INSERT INTO blocked_ips (ip, reason, blocked_at) VALUES (%s, %s, now_iso())
                         ON CONFLICT (ip) DO UPDATE SET reason=excluded.reason, blocked_at=excluded.blocked_at""",
@@ -4355,7 +4387,7 @@ WantedBy=multi-user.target
                     domain = line.replace('https://', '').rstrip('/')
                     break
             if domain:
-                http_put('/api/settings', {'server_domain': domain})
+                http_put('/api/settings', {'key': 'server_domain', 'value': domain})
         self.card_domain.set_value(domain or '—')
         if domain:
             self.real_lbl.set_markup(f'<b>Dominio público actual:</b>  <a href="https://{domain}">https://{domain}</a>')
@@ -4401,12 +4433,17 @@ class ConfigModule:
 
         grid = Gtk.Grid(column_spacing=14, row_spacing=10)
         conn_card.pack_start(grid, False, False, 0)
+        # Nota: el número de WhatsApp del bot NO se configura acá -- vive
+        # encriptado en la tabla bot_config (server/src/db/schema.sql) y se
+        # vincula desde el módulo "Bot WhatsApp" (POST /api/bot/configure).
+        # Un campo BOT_PHONE acá era puro env var sin consumidor real: el
+        # admin podía "guardarlo" y reiniciar el servicio sin que nada
+        # cambiara.
         self.entry_port   = self._field(grid, 0, 'Puerto del servidor', env_get('PORT') or '3000')
-        self.entry_phone  = self._field(grid, 1, 'Número WhatsApp (BOT_PHONE)', env_get('BOT_PHONE'))
-        self.entry_domain = self._field(grid, 2, 'Dominio propio (HTTPS)', env_get('SERVER_DOMAIN'))
-        self.entry_host   = self._field(grid, 3, 'Bind de host (recomendado 127.0.0.1)',
+        self.entry_domain = self._field(grid, 1, 'Dominio propio (HTTPS)', env_get('SERVER_DOMAIN'))
+        self.entry_host   = self._field(grid, 2, 'Bind de host (recomendado 127.0.0.1)',
                                         env_get('HOST') or '127.0.0.1')
-        self.entry_bot_enabled = self._field(grid, 4, 'Bot habilitado (true/false)',
+        self.entry_bot_enabled = self._field(grid, 3, 'Bot habilitado (true/false)',
                                              env_get('BOT_ENABLED') or 'false')
         conn_card.pack_start(
             make_btn('💾 Guardar y reiniciar servicio', 'btn-primary', on_click=lambda *_: self._save_config()),
@@ -4557,7 +4594,6 @@ class ConfigModule:
     def _save_config(self, _btn=None):
         domain = self.entry_domain.get_text().strip()
         env_set('PORT', self.entry_port.get_text().strip() or '3000')
-        env_set('BOT_PHONE', re.sub(r'\D', '', self.entry_phone.get_text()))
         env_set('SERVER_DOMAIN', domain)
         env_set('HOST', self.entry_host.get_text().strip() or '127.0.0.1')
         val = self.entry_bot_enabled.get_text().strip().lower() in ('true', '1', 'yes')
@@ -4584,9 +4620,15 @@ class ConfigModule:
             ('empresa_descripcion', self.entry_empresa_desc.get_text().strip()),
             ('horario_atencion', self.entry_horario.get_text().strip()),
         ]
+        errors = []
         for key, value in pairs:
-            http_put('/api/settings', {'key': key, 'value': value})
-        self.status_label.set_text('✓ Información del negocio guardada.')
+            result = http_put('/api/settings', {'key': key, 'value': value})
+            if not (result and result.get('ok')):
+                errors.append((result or {}).get('error', key))
+        if errors:
+            self.status_label.set_text(f"✗ No se guardó todo: {'; '.join(errors)}")
+        else:
+            self.status_label.set_text('✓ Información del negocio guardada.')
 
     def _save_contacts(self, _btn=None):
         pairs = [
@@ -4596,9 +4638,15 @@ class ConfigModule:
             ('contact_instagram', self.entry_contact_instagram.get_text().strip()),
             ('contact_facebook', self.entry_contact_facebook.get_text().strip()),
         ]
+        errors = []
         for key, value in pairs:
-            http_put('/api/settings', {'key': key, 'value': value})
-        self.status_label.set_text('✓ Contactos guardados — visibles en web y app.')
+            result = http_put('/api/settings', {'key': key, 'value': value})
+            if not (result and result.get('ok')):
+                errors.append((result or {}).get('error', key))
+        if errors:
+            self.status_label.set_text(f"✗ No se guardó todo: {'; '.join(errors)}")
+        else:
+            self.status_label.set_text('✓ Contactos guardados — visibles en web y app.')
 
     def _regen_secrets(self, _btn=None):
         dialog = Gtk.MessageDialog(
@@ -4607,6 +4655,7 @@ class ConfigModule:
             buttons=Gtk.ButtonsType.NONE,
             text='Esto regenerará API_KEY y JWT_SECRET. La app móvil y el bot deberán '
                  'reautenticarse. ¿Continuar?')
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Continuar', Gtk.ResponseType.YES)
         resp = dialog.run()
         dialog.destroy()
         if resp == Gtk.ResponseType.YES:
@@ -4622,14 +4671,21 @@ class ConfigModule:
             buttons=Gtk.ButtonsType.NONE,
             text='Esto borra la sesión de WhatsApp actual. El bot pedirá un nuevo código '
                  'de vinculación. ¿Continuar?')
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Continuar', Gtk.ResponseType.YES)
         resp = dialog.run()
         dialog.destroy()
         if resp == Gtk.ResponseType.YES:
-            appdata = self.parent._appdata_dir()
-            if appdata:
-                sh(f'rm -rf "{appdata}/pedidos-bot/auth" && mkdir -p "{appdata}/pedidos-bot/auth"')
-            sh(f'systemctl restart {SERVICE}')
+            # Antes borraba la carpeta de sesión a mano y reiniciaba el servicio --
+            # dejaba bot_config.phone_encrypted/status desincronizados (la DB seguía
+            # mostrando el número viejo como vinculado). /api/bot/logout ya hace la
+            # limpieza correcta (DB + sesión) y regenera el QR solo, sin reiniciar.
+            run_in_background(lambda: http_post('/api/bot/logout', {}), self._on_relink_done)
+
+    def _on_relink_done(self, result):
+        if result and result.get('ok', True):
             self.status_label.set_text('✓ Sesión borrada. Revisa el módulo Bot WhatsApp para el QR.')
+        else:
+            self.status_label.set_text(f"Error: {(result or {}).get('error', 'no se pudo desvincular')}")
 
     def _clean_media(self, _btn=None):
         appdata = self.parent._appdata_dir()
@@ -4742,6 +4798,12 @@ class SecurityModule:
             fw_active = 'active' in sh('ufw status 2>/dev/null')
         elif fw == 'firewalld':
             fw_active = 'running' in sh('firewall-cmd --state 2>/dev/null')
+        elif fw == 'iptables':
+            # iptables no es un servicio con estado "running" -- "activo" acá
+            # significa que hay reglas reales más allá de la política default
+            # (-P INPUT ACCEPT sola == sin reglas == firewall de adorno).
+            rules = sh('iptables -S INPUT 2>/dev/null')
+            fw_active = any(line.startswith('-A') for line in rules.splitlines())
         self.card_fw.set_value(fw.upper() if fw != 'ninguno' else 'NINGUNO')
         if fw == 'ninguno':
             issues += 1
@@ -4770,6 +4832,7 @@ class SecurityModule:
 
         buf = self.view.get_buffer()
         buf.set_text('\n'.join(lines))
+        self.parent.set_badge('security', issues)
 
     def _set_card_pill(self, card, ok):
         """(Reservado para futuras mejoras visuales)"""
@@ -4878,6 +4941,7 @@ class LogsModule:
             message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.NONE,
             text='¿Vaciar el archivo server.log? Esto borra el historial de logs.')
+        dialog.add_buttons('Cancelar', Gtk.ResponseType.CANCEL, 'Vaciar', Gtk.ResponseType.YES)
         if dialog.run() == Gtk.ResponseType.YES:
             sh(f'> "{os.path.join(LOG_DIR, "server.log")}" 2>/dev/null')
             self.refresh()
@@ -5094,7 +5158,7 @@ class DashboardWindow(Gtk.ApplicationWindow):
         self._add_module('payments', 'Métodos de pago', PaymentsModule)
         self._add_module('email',   'Correo', EmailModule)
         self._add_module('config', 'Configuración', ConfigModule)
-        self._add_module('security', 'Seguridad', SecurityModule)
+        self._add_module('security', 'Seguridad', SecurityModule, badge_key='security')
         self._add_module('logs',   'Logs', LogsModule)
 
         # Spacer
@@ -5319,6 +5383,19 @@ class DashboardWindow(Gtk.ApplicationWindow):
                 self.modules[self.current_module].refresh()
             except Exception as e:
                 print(f'[dashboard] refresh_all {self.current_module}: {e}', file=sys.stderr)
+
+        # Los módulos con badge en el sidebar (pedidos pendientes, stock bajo,
+        # alertas de seguridad) sirven para avisar SIN tener que entrar a esa
+        # pestaña -- si solo se refrescaran cuando están visibles, el badge
+        # quedaría desactualizado apenas el admin cambia de pestaña, que es
+        # justo el caso de uso que un badge existe para cubrir.
+        for key in self.module_badges:
+            if key == self.current_module:
+                continue
+            try:
+                self.modules[key].refresh()
+            except Exception as e:
+                print(f'[dashboard] refresh_all (badge) {key}: {e}', file=sys.stderr)
 
     def show_toast(self, msg):
         """Muestra un mensaje temporal con animación slide-down."""
