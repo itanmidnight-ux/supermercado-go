@@ -5,6 +5,8 @@ const { jwtAuth, adminAuth, clientAuth } = require('../middleware/auth');
 const { getDB } = require('../db/database');
 const { sanitizeText } = require('../utils/sanitize');
 const { createStore, USE_S3 } = require('../utils/storage');
+const { productsCache } = require('../utils/memoryCache');
+const { raiseAlert } = require('../utils/securityAlert');
 
 // Disco local o S3-compatible segun S3_BUCKET (ver utils/storage.js) -- el
 // resto de este archivo no sabe ni le importa cual de los dos es.
@@ -25,7 +27,7 @@ function generatedFilename(originalname) {
   return `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 }
 
-function validateProduct({ name, price, aliases, category, description, sku, stock }) {
+function validateProduct({ name, price, aliases, category, description, sku, stock, low_stock_threshold }) {
   if (name !== undefined) {
     if (typeof name !== 'string' || name.trim().length === 0 || name.length > 200)
       return 'name debe ser texto de 1-200 caracteres';
@@ -56,24 +58,31 @@ function validateProduct({ name, price, aliases, category, description, sku, sto
     if (typeof stock !== 'number' || isNaN(stock) || stock < 0 || stock > 1_000_000)
       return 'stock debe ser número positivo menor a 1,000,000';
   }
+  if (low_stock_threshold !== undefined && low_stock_threshold !== null) {
+    if (typeof low_stock_threshold !== 'number' || isNaN(low_stock_threshold) || low_stock_threshold < 0 || low_stock_threshold > 1_000_000)
+      return 'low_stock_threshold debe ser número positivo menor a 1,000,000';
+  }
   return null;
 }
 
 router.get('/', clientAuth, async (req, res, next) => {
   try {
-    const { rows } = await getDB().query(`
-      SELECT p.*, string_agg(pi.filename, ',') AS image_filenames
-      FROM products p
-      LEFT JOIN product_images pi ON pi.product_id = p.id
-      GROUP BY p.id
-      ORDER BY p.favorite DESC, p.name ASC
-    `);
-    res.json(rows.map(p => ({
-      ...p,
-      aliases: JSON.parse(p.aliases || '[]'),
-      images: p.image_filenames ? p.image_filenames.split(',') : [],
-      image_filenames: undefined,
-    })));
+    const result = await productsCache.wrap('all', 15_000, async () => {
+      const { rows } = await getDB().query(`
+        SELECT p.*, string_agg(pi.filename, ',') AS image_filenames
+        FROM products p
+        LEFT JOIN product_images pi ON pi.product_id = p.id
+        GROUP BY p.id
+        ORDER BY p.favorite DESC, p.name ASC
+      `);
+      return rows.map(p => ({
+        ...p,
+        aliases: JSON.parse(p.aliases || '[]'),
+        images: p.image_filenames ? p.image_filenames.split(',') : [],
+        image_filenames: undefined,
+      }));
+    });
+    res.json(result);
   } catch (e) { next(e); }
 });
 
@@ -83,42 +92,47 @@ router.get('/', clientAuth, async (req, res, next) => {
 // (detalle interno de inventario, sin motivo para exponerlo a anónimos).
 router.get('/public', async (req, res, next) => {
   try {
-    const { rows } = await getDB().query(`
-      SELECT p.id, p.name, p.price, p.aliases, p.available, p.favorite,
-             p.no_fiado, p.category, p.description,
-             string_agg(pi.filename, ',') AS image_filenames
-      FROM products p
-      LEFT JOIN product_images pi ON pi.product_id = p.id
-      WHERE p.available = 1
-      GROUP BY p.id
-      ORDER BY p.favorite DESC, p.name ASC
-    `);
-    res.json(rows.map(p => ({
-      ...p,
-      aliases: JSON.parse(p.aliases || '[]'),
-      images: p.image_filenames ? p.image_filenames.split(',') : [],
-      image_filenames: undefined,
-    })));
+    const result = await productsCache.wrap('public', 15_000, async () => {
+      const { rows } = await getDB().query(`
+        SELECT p.id, p.name, p.price, p.aliases, p.available, p.favorite,
+               p.no_fiado, p.category, p.description,
+               string_agg(pi.filename, ',') AS image_filenames
+        FROM products p
+        LEFT JOIN product_images pi ON pi.product_id = p.id
+        WHERE p.available = 1
+        GROUP BY p.id
+        ORDER BY p.favorite DESC, p.name ASC
+      `);
+      return rows.map(p => ({
+        ...p,
+        aliases: JSON.parse(p.aliases || '[]'),
+        images: p.image_filenames ? p.image_filenames.split(',') : [],
+        image_filenames: undefined,
+      }));
+    });
+    res.json(result);
   } catch (e) { next(e); }
 });
 
 router.post('/', adminAuth, async (req, res, next) => {
   try {
-    const { name, price, aliases, category, description, sku, stock } = req.body;
+    const { name, price, aliases, category, description, sku, stock, low_stock_threshold } = req.body;
     if (!name || price == null) return res.status(400).json({ error: 'name y price requeridos' });
-    const err = validateProduct({ name, price, aliases, category, description, sku, stock });
+    const err = validateProduct({ name, price, aliases, category, description, sku, stock, low_stock_threshold });
     if (err) return res.status(400).json({ error: err });
     const db = getDB();
-    const { rows } = await db.query(`INSERT INTO products (name, price, aliases, category, description, sku, stock)
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    const { rows } = await db.query(`INSERT INTO products (name, price, aliases, category, description, sku, stock, low_stock_threshold)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         sanitizeText(name, 150), price, JSON.stringify(aliases || []),
         category ? sanitizeText(category, 80) : null,
         description ? sanitizeText(description, 2000) : null,
         sku ? sanitizeText(sku, 60) : null,
         stock ?? null,
+        low_stock_threshold ?? null,
       ]);
     const product = rows[0];
+    productsCache.flush();
     res.json({ ...product, aliases: JSON.parse(product.aliases || '[]') });
   } catch (e) { next(e); }
 });
@@ -127,10 +141,12 @@ router.put('/:id', adminAuth, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id || id <= 0) return res.status(400).json({ error: 'ID inválido' });
-    const { name, price, aliases, available, favorite, no_fiado, category, description, sku, stock } = req.body;
-    const err = validateProduct({ name, price, aliases, category, description, sku, stock });
+    const { name, price, aliases, available, favorite, no_fiado, category, description, sku, stock, low_stock_threshold } = req.body;
+    const err = validateProduct({ name, price, aliases, category, description, sku, stock, low_stock_threshold });
     if (err) return res.status(400).json({ error: err });
     const db = getDB();
+    const { rows: beforeRows } = await db.query('SELECT stock, low_stock_threshold FROM products WHERE id=$1', [id]);
+    const before = beforeRows[0];
     const { rows } = await db.query(`UPDATE products SET
       name        = COALESCE($1, name),
       price       = COALESCE($2, price),
@@ -141,8 +157,9 @@ router.put('/:id', adminAuth, async (req, res, next) => {
       category    = COALESCE($7, category),
       description = COALESCE($8, description),
       sku         = COALESCE($9, sku),
-      stock       = COALESCE($10, stock)
-      WHERE id = $11 RETURNING *`,
+      stock       = COALESCE($10, stock),
+      low_stock_threshold = COALESCE($11, low_stock_threshold)
+      WHERE id = $12 RETURNING *`,
       [
         name   ? sanitizeText(name, 150) : null,
         price  ?? null,
@@ -154,10 +171,19 @@ router.put('/:id', adminAuth, async (req, res, next) => {
         description !== undefined ? (description ? sanitizeText(description, 2000) : null) : null,
         sku !== undefined ? (sku ? sanitizeText(sku, 60) : null) : null,
         stock ?? null,
+        low_stock_threshold ?? null,
         id,
       ]);
     const product = rows[0];
     if (!product) return res.status(404).json({ error: 'No encontrado' });
+    if (before && product.low_stock_threshold != null &&
+        before.stock > product.low_stock_threshold && product.stock <= product.low_stock_threshold) {
+      // await (no fire-and-forget): raiseAlert ya atrapa sus propios errores,
+      // nunca lanza -- esperarla solo agrega el insert a `messages`, sin riesgo
+      // de romper esta respuesta, y evita que el cliente reciba el 200 antes
+      // de que la alerta exista en la tabla.
+      await raiseAlert('low_stock', `${product.name}: quedan ${product.stock} unidades (mínimo ${product.low_stock_threshold})`);
+    }
     res.json({ ...product, aliases: JSON.parse(product.aliases || '[]') });
   } catch (e) { next(e); }
 });
@@ -171,6 +197,7 @@ router.delete('/:id', adminAuth, async (req, res, next) => {
     const { rows: imgs } = await db.query('SELECT filename FROM product_images WHERE product_id=$1', [id]);
     await Promise.all(imgs.map(img => productImages.delete(img.filename)));
     await db.query('DELETE FROM products WHERE id = $1', [id]);
+    productsCache.flush();
     res.json({ success: true });
   } catch (e) { next(e); }
 });
