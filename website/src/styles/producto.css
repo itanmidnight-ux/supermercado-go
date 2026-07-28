@@ -52,7 +52,9 @@
   align-items: start;
 }
 
-@media (max-width: 860px) {
+/* Grid: 2 columnas solo en desktop (>=1025px, escala de tokens.css) --
+   en mobile y tablet se apila (galería primero, luego info/buybox). */
+@media (max-width: 1024px) {
   .product-detail {
     grid-template-columns: 1fr;
     gap: var(--sp-6);
@@ -65,7 +67,7 @@
   top: calc(var(--header-h) + var(--sp-5));
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1024px) {
   .product-gallery {
     position: static;
   }
@@ -75,12 +77,19 @@
   position: relative;
   aspect-ratio: 1 / 1;
   background: var(--surface);
-  border: 1px solid var(--surface-3);
+  border: 1.5px solid var(--surface-3);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.product-gallery__main:hover {
+  border-color: transparent;
+  box-shadow: var(--shadow-lg), var(--shadow-glow-brand);
 }
 
 .product-gallery__main img {

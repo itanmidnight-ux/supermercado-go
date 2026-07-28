@@ -18,13 +18,20 @@
 }
 
 /* ── Controles: búsqueda + orden ─────────────────────────── */
+/* Toolbar flotante: superficie propia + sombra sutil, separada del fondo
+   crema para que se lea como un bloque de control, no texto suelto. */
 .catalog__controls {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-4);
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .catalog__search {
@@ -96,6 +103,30 @@
   outline: none;
 }
 
+/* Mobile: la toolbar se apila (busqueda arriba, orden abajo) en vez de
+   apretarse en una fila -- ambos controles a ancho completo, cómodos
+   para el dedo. */
+@media (max-width: 639px) {
+  .catalog__controls {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--sp-4);
+  }
+
+  .catalog__search {
+    flex-basis: auto;
+    min-width: 0;
+  }
+
+  .catalog__sort {
+    justify-content: space-between;
+  }
+
+  .catalog__sort-select {
+    flex: 1 1 auto;
+  }
+}
+
 /* ── Chips de categoría ──────────────────────────────────── */
 .catalog__chips {
   display: flex;
@@ -120,47 +151,51 @@
 }
 
 .catalog__chip:hover {
-  border-color: var(--highlight);
-  color: var(--fg);
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--surface-2);
   transform: translateY(-2px);
 }
 
 .catalog__chip.is-active {
   background: var(--highlight);
   border-color: var(--highlight);
-  color: #0a0a0f;
+  color: var(--fg);
   box-shadow: var(--shadow-glow-highlight);
 }
 
+.catalog__chip.is-active:hover {
+  border-color: var(--highlight);
+  color: var(--fg);
+  background: var(--highlight);
+}
+
 /* ── Grid de productos ───────────────────────────────────── */
+/* Mobile-first, alineado a los 3 breakpoints estándar de tokens.css
+   (mobile <640 / tablet 640-1024 / desktop 1025+, + wide opcional 1441+). */
 .catalog__grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--sp-5);
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
 }
 
-@media (max-width: 1200px) {
-  .catalog__grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 900px) {
+@media (min-width: 640px) and (max-width: 1024px) {
   .catalog__grid {
     grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-4);
   }
 }
 
-@media (max-width: 640px) {
+@media (min-width: 1025px) {
   .catalog__grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--sp-3);
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-5);
   }
 }
 
-@media (max-width: 420px) {
+@media (min-width: 1441px) {
   .catalog__grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(5, 1fr);
   }
 }
 
@@ -227,24 +262,26 @@
 
 .catalog__skeleton-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--sp-5);
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
 }
 
-@media (max-width: 1200px) {
-  .catalog__skeleton-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 900px) {
+@media (min-width: 640px) and (max-width: 1024px) {
   .catalog__skeleton-grid {
     grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-4);
   }
 }
 
-@media (max-width: 640px) {
+@media (min-width: 1025px) {
   .catalog__skeleton-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-5);
+  }
+}
+
+@media (min-width: 1441px) {
+  .catalog__skeleton-grid {
+    grid-template-columns: repeat(5, 1fr);
   }
 }

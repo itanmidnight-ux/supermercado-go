@@ -60,8 +60,22 @@ export function staggerReveal(
 }
 
 /**
+ * Entrada con "rebote" (back.out) -- pensado para el look más vivo/alegre
+ * de la paleta nueva: badges de oferta, iconos, elementos puntuales que
+ * conviene que "salten" al aparecer en vez de solo desvanecer (fadeInUp).
+ * No reemplaza fadeInUp/staggerReveal, es una variante para casos puntuales.
+ */
+export function popIn(
+  selector: string | Element,
+  opts: { scale?: number; duration?: number; delay?: number } = {}
+): gsap.core.Tween {
+  const { scale = 0.7, duration = 0.55, delay = 0 } = opts;
+  return gsap.from(selector, { opacity: 0, scale, duration, delay, ease: 'back.out(1.7)' });
+}
+
+/**
  * Auto-detecta elementos con `data-reveal` y los anima al entrar en viewport.
- * Variantes vía `data-reveal="up|fade|stagger"` (default: "up").
+ * Variantes vía `data-reveal="up|fade|stagger|pop"` (default: "up").
  * Uso: <section data-reveal="up">...</section>
  *      <div data-reveal="stagger"><div data-reveal-item>...</div>...</div>
  */
@@ -87,6 +101,8 @@ export function initScrollReveal(): void {
       });
     } else if (variant === 'fade') {
       gsap.from(el, { opacity: 0, duration: 0.8, ease: 'power2.out', scrollTrigger });
+    } else if (variant === 'pop') {
+      gsap.from(el, { opacity: 0, scale: 0.7, duration: 0.55, ease: 'back.out(1.7)', scrollTrigger });
     } else {
       gsap.from(el, { opacity: 0, y: 40, duration: 0.8, ease: 'power3.out', scrollTrigger });
     }

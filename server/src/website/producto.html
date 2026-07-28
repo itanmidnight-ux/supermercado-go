@@ -11,10 +11,10 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/assets/producto-CyUw3k58.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/layout-DL_c9wR6.js">
-    <link rel="stylesheet" crossorigin href="/assets/layout-BbtxrmYY.css">
-    <link rel="stylesheet" crossorigin href="/assets/producto-CnX1Kzbm.css">
+    <script type="module" crossorigin src="/assets/producto-B2LeWRZd.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/layout-DMcKPOhc.js">
+    <link rel="stylesheet" crossorigin href="/assets/layout-FbwusHdU.css">
+    <link rel="stylesheet" crossorigin href="/assets/producto-elsANEel.css">
   </head>
   <body>
     <div id="site-header"></div>
@@ -60,18 +60,21 @@
           <p class="product-info__description" id="product-description"></p>
 
           <div class="product-buybox" id="product-buybox">
-            <div class="product-qty" id="product-qty">
-              <button type="button" class="product-qty__btn" id="qty-minus" aria-label="Restar cantidad">−</button>
-              <input type="number" class="product-qty__input" id="qty-input" value="1" min="1" readonly aria-label="Cantidad" />
-              <button type="button" class="product-qty__btn" id="qty-plus" aria-label="Sumar cantidad">+</button>
+            <p class="product-stock-hint" id="stock-hint" hidden></p>
+
+            <div class="product-buybox__actions">
+              <div class="product-qty" id="product-qty">
+                <button type="button" class="product-qty__btn" id="qty-minus" aria-label="Restar cantidad">−</button>
+                <input type="number" class="product-qty__input" id="qty-input" value="1" min="1" readonly aria-label="Cantidad" />
+                <button type="button" class="product-qty__btn" id="qty-plus" aria-label="Sumar cantidad">+</button>
+              </div>
+
+              <button class="btn btn-primary product-add-btn" id="add-to-cart-btn" type="button">
+                <span class="product-add-btn__check" id="add-btn-check" aria-hidden="true">✓</span>
+                <span id="add-btn-label">Agregar al carrito</span>
+              </button>
             </div>
-
-            <button class="btn btn-primary product-add-btn" id="add-to-cart-btn" type="button">
-              <span id="add-btn-label">Agregar al carrito</span>
-            </button>
           </div>
-
-          <p class="product-stock-hint" id="stock-hint" hidden></p>
         </div>
       </section>
 
