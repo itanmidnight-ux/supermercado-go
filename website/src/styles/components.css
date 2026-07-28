@@ -46,14 +46,15 @@
 }
 
 /* Primario: usado para conversión (agregar al carrito, comprar) -- lleva
-   el verde-lima exclusivo del sitio, no el ámbar de marca. */
+   el naranja real de marca (theme_accent), no un color inventado. */
 .btn-primary {
   background: var(--highlight);
-  color: #0a0a0f;
-  box-shadow: 0 0 0 rgba(198, 255, 61, 0);
+  color: var(--fg);
+  box-shadow: 0 0 0 rgba(230, 138, 46, 0);
 }
 
 .btn-primary:hover {
+  background: var(--highlight-dark);
   transform: translateY(-2px) scale(1.02);
   box-shadow: var(--shadow-glow-highlight);
 }
@@ -69,27 +70,48 @@
   border-color: var(--accent-blue);
   color: var(--accent-blue);
   transform: translateY(-2px);
-  box-shadow: 0 0 16px rgba(61, 139, 253, 0.25);
+  box-shadow: 0 0 16px rgba(47, 125, 196, 0.2);
 }
 
 /* ── Card de producto ────────────────────────────────────── */
+/* Borde sutil + sombra suave en reposo; al hover, barra degradé
+   verde→naranja (marca) revelada arriba, borde se retira y sombra pasa a
+   un glow verde elevado -- salto de calidad vs. el borde plano anterior. */
 .product-card {
   position: relative;
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border: 1px solid var(--surface-3);
+  border: 1.5px solid var(--surface-3);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: transform var(--dur-base) var(--ease-out),
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-base) var(--ease-spring),
               border-color var(--dur-base) var(--ease-out),
               box-shadow var(--dur-base) var(--ease-out);
 }
 
+.product-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand), var(--highlight));
+  opacity: 0;
+  transform: scaleX(0.6);
+  transform-origin: center;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+
 .product-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--highlight);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-6px);
+  border-color: transparent;
+  box-shadow: var(--shadow-lg), var(--shadow-glow-brand);
+}
+
+.product-card:hover::before {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .product-card__media {
@@ -129,7 +151,10 @@
 .product-card__price {
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--highlight);
+  /* verde (no --highlight): naranja sobre --surface blanco no cumple
+     AA para texto (~2.8:1) -- --brand sí (~5:1) y separa precio (info)
+     de acción (--highlight, en el botón/badge) */
+  color: var(--brand);
 }
 
 .product-card__footer {
@@ -152,13 +177,13 @@
 
 .badge--oferta {
   background: var(--highlight);
-  color: #0a0a0f;
+  color: var(--fg);
   box-shadow: var(--shadow-glow-highlight);
 }
 
 .badge--nuevo {
   background: var(--accent-blue);
-  color: var(--fg);
+  color: #fff;
 }
 
 .badge--agotado {
@@ -179,7 +204,10 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  /* Sobre fondo claro el barrido tiene que ser MÁS claro que --surface-2,
+     no más oscuro -- antes era rgba(255,255,255,0.06) pensado para tema
+     oscuro, ahí casi no se veía */
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
   animation: skeleton-shimmer 1.4s infinite;
 }
 
