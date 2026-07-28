@@ -4,6 +4,7 @@ import '../styles/components.css';
 import '../styles/carrito.css';
 import { mountLayout, authFetch, getToken } from './layout';
 import { gsap, fadeInUp } from './animations';
+import { icon } from './icons';
 
 /**
  * Convención de sesión (misma que producto.ts):
@@ -136,7 +137,7 @@ function buildCartItemRow(item: CartItem, imageFilename: string | null): HTMLEle
     media.appendChild(img);
   } else {
     const placeholder = el('span', 'cart-item__media--empty');
-    placeholder.textContent = '🛒';
+    placeholder.innerHTML = icon('cart', 28);
     media.appendChild(placeholder);
   }
 

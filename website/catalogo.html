@@ -16,6 +16,8 @@
     <div id="site-header"></div>
 
     <main class="container catalog">
+      <nav class="breadcrumb" id="catalog-breadcrumb" aria-label="Ruta de navegación"></nav>
+
       <section class="catalog__head" data-reveal="up">
         <h1 class="catalog__title">Catálogo</h1>
         <p class="catalog__subtitle">Todo lo que necesitás, a un clic.</p>
@@ -23,13 +25,36 @@
 
       <section class="catalog__controls" data-reveal="up">
         <div class="catalog__search">
-          <span class="catalog__search-icon" aria-hidden="true">🔎</span>
+          <span class="catalog__search-icon" data-icon="search" data-icon-size="16" aria-hidden="true"></span>
           <input
             type="search"
             class="catalog__search-input"
             id="catalog-search"
             placeholder="Buscar productos..."
             aria-label="Buscar productos"
+          />
+        </div>
+
+        <div class="catalog__price-filter">
+          <label for="catalog-price-min" class="catalog__price-label">Precio</label>
+          <input
+            type="number"
+            class="catalog__price-input"
+            id="catalog-price-min"
+            placeholder="Mínimo"
+            min="0"
+            inputmode="numeric"
+            aria-label="Precio mínimo"
+          />
+          <span class="catalog__price-sep" aria-hidden="true">–</span>
+          <input
+            type="number"
+            class="catalog__price-input"
+            id="catalog-price-max"
+            placeholder="Máximo"
+            min="0"
+            inputmode="numeric"
+            aria-label="Precio máximo"
           />
         </div>
 
@@ -49,11 +74,11 @@
       <section class="catalog__grid" id="catalog-grid" aria-live="polite"></section>
 
       <p class="catalog__empty" id="catalog-empty" hidden>
-        <span aria-hidden="true">🛒</span> No encontramos productos con esos filtros.
+        <span data-icon="cart" data-icon-size="18" aria-hidden="true"></span> No encontramos productos con esos filtros.
       </p>
 
       <p class="catalog__error" id="catalog-error" hidden>
-        <span aria-hidden="true">⚠️</span> No pudimos cargar el catálogo. Probá de nuevo en un momento.
+        <span data-icon="alert-triangle" data-icon-size="18" aria-hidden="true"></span> No pudimos cargar el catálogo. Probá de nuevo en un momento.
       </p>
     </main>
 

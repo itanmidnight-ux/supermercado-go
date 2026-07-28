@@ -4,6 +4,8 @@ import '../styles/components.css';
 import '../styles/catalogo.css';
 import { mountLayout } from './layout';
 import { staggerReveal } from './animations';
+import { renderBreadcrumb, type BreadcrumbItem } from './breadcrumb';
+import { icon } from './icons';
 
 mountLayout();
 
@@ -23,14 +25,33 @@ const grid = document.getElementById('catalog-grid') as HTMLElement;
 const chipsEl = document.getElementById('catalog-chips') as HTMLElement;
 const emptyEl = document.getElementById('catalog-empty') as HTMLElement;
 const errorEl = document.getElementById('catalog-error') as HTMLElement;
+const breadcrumbEl = document.getElementById('catalog-breadcrumb') as HTMLElement;
 const searchInput = document.getElementById('catalog-search') as HTMLInputElement;
 const sortSelect = document.getElementById('catalog-sort') as HTMLSelectElement;
+const priceMinInput = document.getElementById('catalog-price-min') as HTMLInputElement;
+const priceMaxInput = document.getElementById('catalog-price-max') as HTMLInputElement;
+
+const initialParams = new URLSearchParams(window.location.search);
 
 let allProducts: Product[] = [];
-let activeCategory: string | null = null; // null = "Todas"
+let activeCategory: string | null = initialParams.get('categoria'); // null = "Todas"
 let searchTerm = '';
 let sortMode: SortMode = 'destacados';
+let priceMin: number | null = null;
+let priceMax: number | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+let priceDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+function updateBreadcrumb(): void {
+  const items: BreadcrumbItem[] = [{ label: 'Inicio', href: '/index.html' }];
+  if (activeCategory) {
+    items.push({ label: 'Catálogo', href: '/catalogo.html' });
+    items.push({ label: activeCategory });
+  } else {
+    items.push({ label: 'Catálogo' });
+  }
+  renderBreadcrumb(breadcrumbEl, items);
+}
 
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 
@@ -57,6 +78,7 @@ function renderChips(categories: string[]): void {
     btn.addEventListener('click', () => {
       activeCategory = value;
       renderChips(categories);
+      updateBreadcrumb();
       renderGrid();
     });
     return btn;
@@ -76,6 +98,13 @@ function getFilteredSorted(): Product[] {
   if (searchTerm) {
     const term = searchTerm.toLowerCase();
     list = list.filter((p) => p.name.toLowerCase().includes(term));
+  }
+
+  if (priceMin !== null) {
+    list = list.filter((p) => p.price >= priceMin!);
+  }
+  if (priceMax !== null) {
+    list = list.filter((p) => p.price <= priceMax!);
   }
 
   const sorted = [...list];
@@ -137,8 +166,7 @@ function productCard(p: Product): HTMLAnchorElement {
   } else {
     const placeholder = document.createElement('span');
     placeholder.className = 'product-card__media--empty';
-    placeholder.textContent = '🛒';
-    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.innerHTML = icon('cart', 40);
     media.appendChild(placeholder);
   }
 
@@ -204,6 +232,12 @@ async function loadProducts(): Promise<void> {
       new Set(allProducts.map((p) => p.category).filter((c): c is string => Boolean(c)))
     ).sort((a, b) => a.localeCompare(b, 'es'));
 
+    // Si el ?categoria= de la URL no existe entre las categorías reales, se
+    // ignora (activeCategory queda huérfano y el chip "Todas" gana el estado
+    // is-active porque ninguno matchea) -- evita un filtro roto silencioso.
+    if (activeCategory && !categories.includes(activeCategory)) activeCategory = null;
+
+    updateBreadcrumb();
     renderChips(categories);
     renderGrid();
   } catch {
@@ -224,6 +258,23 @@ searchInput.addEventListener('input', () => {
 sortSelect.addEventListener('change', () => {
   sortMode = sortSelect.value as SortMode;
   renderGrid();
+});
+
+function readPriceInputs(): void {
+  const min = priceMinInput.value.trim();
+  const max = priceMaxInput.value.trim();
+  priceMin = min === '' ? null : Math.max(0, Number(min));
+  priceMax = max === '' ? null : Math.max(0, Number(max));
+  renderGrid();
+}
+
+priceMinInput.addEventListener('input', () => {
+  clearTimeout(priceDebounceTimer);
+  priceDebounceTimer = setTimeout(readPriceInputs, 250);
+});
+priceMaxInput.addEventListener('input', () => {
+  clearTimeout(priceDebounceTimer);
+  priceDebounceTimer = setTimeout(readPriceInputs, 250);
 });
 
 void loadProducts();

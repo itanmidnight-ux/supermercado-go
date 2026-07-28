@@ -11,10 +11,10 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/assets/carrito-CRf0v9T_.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/layout-DtJIUmyq.js">
-    <link rel="stylesheet" crossorigin href="/assets/layout-c8Q3Psrx.css">
-    <link rel="stylesheet" crossorigin href="/assets/carrito-BfdomOxU.css">
+    <script type="module" crossorigin src="/assets/carrito-91YU8AA7.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/layout-CRh1XZgP.js">
+    <link rel="stylesheet" crossorigin href="/assets/layout-BJxA2XGH.css">
+    <link rel="stylesheet" crossorigin href="/assets/carrito-CU4P-qhS.css">
   </head>
   <body>
     <div id="site-header"></div>
@@ -29,19 +29,19 @@
       </div>
 
       <section class="cart-state" id="cart-guest" hidden>
-        <span class="cart-state__emoji" aria-hidden="true">🔒</span>
+        <span class="cart-state__icon" data-icon="lock" data-icon-size="40" aria-hidden="true"></span>
         <p class="cart-state__text">Iniciá sesión para ver tu carrito.</p>
         <a class="btn btn-primary" href="/cuenta.html?redirect=carrito.html">Iniciar sesión</a>
       </section>
 
       <section class="cart-state" id="cart-empty" hidden>
-        <span class="cart-state__emoji" aria-hidden="true">🛒</span>
+        <span class="cart-state__icon" data-icon="cart" data-icon-size="40" aria-hidden="true"></span>
         <p class="cart-state__text">Tu carrito está vacío.</p>
         <a class="btn btn-secondary" href="/catalogo.html">Ir al catálogo</a>
       </section>
 
       <section class="cart-state" id="cart-error" hidden>
-        <span class="cart-state__emoji" aria-hidden="true">⚠️</span>
+        <span class="cart-state__icon" data-icon="alert-triangle" data-icon-size="40" aria-hidden="true"></span>
         <p class="cart-state__text" id="cart-error-text">No pudimos cargar tu carrito. Probá de nuevo en un momento.</p>
       </section>
 
@@ -85,7 +85,9 @@
             </div>
 
             <div class="cart-field" id="gps-field" hidden>
-              <button type="button" class="btn btn-secondary cart-gps-btn" id="gps-btn">📍 Compartir ubicación</button>
+              <button type="button" class="btn btn-secondary cart-gps-btn" id="gps-btn">
+                <span data-icon="map-pin" data-icon-size="18" aria-hidden="true"></span> Compartir ubicación
+              </button>
               <p class="cart-gps-status" id="gps-status"></p>
             </div>
 

@@ -31,8 +31,9 @@
   font-size: var(--fs-md);
 }
 
-.site-header__logo-emoji {
-  font-size: 1.5rem;
+.site-header__logo-icon {
+  display: inline-flex;
+  color: var(--brand);
 }
 
 .site-header__nav {
@@ -55,10 +56,86 @@
   color: var(--fg);
 }
 
-.site-header__link--cart {
+.site-header__link--cart,
+.site-header__link--account {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
+}
+
+.site-header__link-icon {
+  display: inline-flex;
+}
+
+/* ── Mega-menu "Catálogo" ────────────────────────────────── */
+.site-header__nav-item--mega {
+  position: relative;
+}
+
+.site-header__nav-item--mega .site-header__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-header__chevron {
+  display: inline-flex;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.site-header__nav-item--mega:hover .site-header__chevron,
+.site-header__nav-item--mega.is-open .site-header__chevron {
+  transform: rotate(180deg);
+}
+
+.mega-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  z-index: 60;
+}
+
+.site-header__nav-item--mega:hover .mega-menu,
+.site-header__nav-item--mega:focus-within .mega-menu,
+.site-header__nav-item--mega.is-open .mega-menu {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.mega-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.mega-menu__item:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.mega-menu__icon {
+  display: inline-flex;
+  color: var(--brand);
 }
 
 .site-header__cart-count {
@@ -119,6 +196,31 @@
     opacity: 1;
     pointer-events: auto;
   }
+
+  /* Mega-menu en mobile: no hay hover, se acomoda como acordeón estático
+     bajo el link (toggle propio del chevron, ver initMegaMenu en layout.ts).
+     Estas reglas pisan las de desktop (posición absoluta + hover). */
+  .mega-menu,
+  .site-header__nav-item--mega:hover .mega-menu,
+  .site-header__nav-item--mega:focus-within .mega-menu {
+    position: static;
+    transform: none;
+    opacity: 1;
+    grid-template-columns: 1fr;
+    box-shadow: none;
+    border: none;
+    padding: 0 0 0 var(--sp-4);
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: max-height var(--dur-base) var(--ease-out);
+  }
+
+  .site-header__nav-item--mega.is-open .mega-menu {
+    max-height: 320px;
+    pointer-events: auto;
+    padding-block: var(--sp-2);
+  }
 }
 
 .site-footer {
@@ -145,6 +247,11 @@
   color: var(--fg-muted);
 }
 
+.site-footer__logo-icon {
+  display: inline-flex;
+  color: var(--brand);
+}
+
 .site-footer__links {
   display: flex;
   flex-wrap: wrap;
@@ -160,6 +267,58 @@
 .site-footer__links a:hover {
   color: var(--highlight);
   text-decoration: underline;
+}
+
+.site-footer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  width: 100%;
+  margin-top: var(--sp-2);
+}
+
+.site-footer__payments {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.site-footer__payments-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.site-footer__payment-icon {
+  display: inline-flex;
+  color: var(--fg-dim);
+}
+
+.site-footer__social {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.site-footer__social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+
+.site-footer__social-link:hover {
+  background: var(--brand);
+  color: #fff;
+  transform: translateY(-2px);
 }
 
 .site-footer__copy {

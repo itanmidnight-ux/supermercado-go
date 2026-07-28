@@ -11,16 +11,17 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/assets/producto-DEzAkAva.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/layout-DtJIUmyq.js">
-    <link rel="stylesheet" crossorigin href="/assets/layout-c8Q3Psrx.css">
-    <link rel="stylesheet" crossorigin href="/assets/producto-B7OrNv_G.css">
+    <script type="module" crossorigin src="/assets/producto-CwCh5kPw.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/layout-CRh1XZgP.js">
+    <link rel="modulepreload" crossorigin href="/assets/breadcrumb-CjJfVVIE.js">
+    <link rel="stylesheet" crossorigin href="/assets/layout-BJxA2XGH.css">
+    <link rel="stylesheet" crossorigin href="/assets/producto-Q8TQdvOG.css">
   </head>
   <body>
     <div id="site-header"></div>
 
     <main class="container product-page">
-      <nav class="product-breadcrumb" id="product-breadcrumb" aria-label="Ruta de navegación"></nav>
+      <nav class="breadcrumb" id="product-breadcrumb" aria-label="Ruta de navegación"></nav>
 
       <div class="product-detail product-detail--loading" id="product-loading">
         <div class="product-gallery">
@@ -37,7 +38,7 @@
       </div>
 
       <p class="product-error" id="product-error" hidden>
-        <span aria-hidden="true">⚠️</span> No encontramos este producto.
+        <span data-icon="alert-triangle" data-icon-size="18" aria-hidden="true"></span> No encontramos este producto.
         <a href="/catalogo.html" class="product-error__link">Volver al catálogo</a>
       </p>
 
@@ -46,7 +47,7 @@
           <div class="product-gallery__main" id="gallery-main">
             <img id="gallery-main-img" alt="" hidden />
             <div class="product-gallery__placeholder" id="gallery-placeholder">
-              <span aria-hidden="true">🛒</span>
+              <span data-icon="cart" data-icon-size="48" aria-hidden="true"></span>
             </div>
           </div>
           <div class="product-gallery__thumbs" id="gallery-thumbs"></div>
@@ -57,7 +58,6 @@
           <h1 class="product-info__name" id="product-name"></h1>
           <div class="product-info__badges" id="product-badges"></div>
           <p class="product-info__price" id="product-price"></p>
-          <p class="product-info__description" id="product-description"></p>
 
           <div class="product-buybox" id="product-buybox">
             <p class="product-stock-hint" id="stock-hint" hidden></p>
@@ -77,18 +77,33 @@
 
             <div class="product-payment-methods" aria-label="Métodos de pago aceptados">
               <span class="product-payment-methods__label">Aceptamos</span>
-              <span class="payment-badge payment-badge--nequi">📱 Nequi</span>
-              <span class="payment-badge payment-badge--card">💳 Tarjeta</span>
-              <span class="payment-badge payment-badge--cod">💵 Contraentrega</span>
+              <span class="payment-badge payment-badge--nequi"><span data-icon="wallet" data-icon-size="14" aria-hidden="true"></span> Nequi</span>
+              <span class="payment-badge payment-badge--card"><span data-icon="credit-card" data-icon-size="14" aria-hidden="true"></span> Tarjeta</span>
+              <span class="payment-badge payment-badge--cod"><span data-icon="banknote" data-icon-size="14" aria-hidden="true"></span> Contraentrega</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="product-reviews" id="product-reviews" data-reveal="up">
-        <h2>Reseñas</h2>
-        <div class="reviews-summary" id="reviews-summary"></div>
-        <div class="reviews-list" id="reviews-list"></div>
+      <section class="product-tabs" id="product-tabs" data-reveal="up">
+        <div class="product-tabs__list" role="tablist" aria-label="Información del producto">
+          <button type="button" class="product-tabs__tab" id="tab-descripcion" role="tab" aria-selected="true" aria-controls="panel-descripcion">Descripción</button>
+          <button type="button" class="product-tabs__tab" id="tab-detalles" role="tab" aria-selected="false" aria-controls="panel-detalles" tabindex="-1">Detalles</button>
+          <button type="button" class="product-tabs__tab" id="tab-resenas" role="tab" aria-selected="false" aria-controls="panel-resenas" tabindex="-1">Reseñas</button>
+        </div>
+
+        <div class="product-tabs__panels">
+          <div class="product-tabs__panel" id="panel-descripcion" role="tabpanel" aria-labelledby="tab-descripcion" tabindex="0">
+            <p class="product-info__description" id="product-description"></p>
+          </div>
+          <div class="product-tabs__panel" id="panel-detalles" role="tabpanel" aria-labelledby="tab-detalles" tabindex="0" hidden>
+            <dl class="product-details-list" id="product-details-list"></dl>
+          </div>
+          <div class="product-tabs__panel" id="panel-resenas" role="tabpanel" aria-labelledby="tab-resenas" tabindex="0" hidden>
+            <div class="reviews-summary" id="reviews-summary"></div>
+            <div class="reviews-list" id="reviews-list"></div>
+          </div>
+        </div>
       </section>
 
       <section class="product-related" id="product-related" hidden>

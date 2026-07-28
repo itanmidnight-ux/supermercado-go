@@ -73,6 +73,10 @@
   margin-bottom: var(--sp-5);
 }
 
+.hero__eyebrow-icon {
+  display: inline-flex;
+}
+
 .hero__title {
   font-size: clamp(2.25rem, 5vw, var(--fs-3xl));
   margin-bottom: var(--sp-5);
@@ -94,6 +98,74 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-4);
+}
+
+/* ── Banner de ofertas (entre hero y categorías) ────────────── */
+.ofertas-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-6) var(--sp-6);
+  margin-top: var(--sp-4);
+  background: linear-gradient(120deg, var(--highlight), var(--highlight-dark));
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: var(--fg);
+  box-shadow: var(--shadow-glow-highlight);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.ofertas-banner:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), var(--shadow-glow-highlight);
+}
+
+.ofertas-banner__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--fg);
+}
+
+.ofertas-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ofertas-banner__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+}
+
+.ofertas-banner__subtitle {
+  font-size: var(--fs-sm);
+  opacity: 0.85;
+}
+
+.ofertas-banner__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .ofertas-banner {
+    flex-wrap: wrap;
+  }
+
+  .ofertas-banner__cta {
+    width: 100%;
+    justify-content: center;
+    padding-top: var(--sp-2);
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+  }
 }
 
 /* ── Categorías ──────────────────────────────────────────── */
@@ -154,17 +226,17 @@
   width: 64px;
   height: 64px;
   border-radius: var(--radius-full);
-  font-size: 2rem;
-  background: var(--brand);
   background: color-mix(in srgb, var(--brand) 14%, transparent);
   transition: transform var(--dur-base) var(--ease-spring, var(--ease-out));
 }
 
 /* Variedad de color por categoría (sin fotos reales todavía) -- que cada
-   tarjeta tenga su propio tinte en vez de repetir el mismo verde 6 veces. */
-.category-card:nth-child(3n+1) .category-card__icon { background: color-mix(in srgb, var(--brand) 14%, transparent); }
-.category-card:nth-child(3n+2) .category-card__icon { background: color-mix(in srgb, var(--highlight) 16%, transparent); }
-.category-card:nth-child(3n+3) .category-card__icon { background: color-mix(in srgb, var(--accent-blue) 14%, transparent); }
+   tarjeta tenga su propio tinte en vez de repetir el mismo verde 6 veces.
+   El SVG usa stroke="currentColor", así que basta con fijar `color` para
+   que el ícono adopte el mismo tinte que el fondo de su círculo. */
+.category-card:nth-child(3n+1) .category-card__icon { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.category-card:nth-child(3n+2) .category-card__icon { background: color-mix(in srgb, var(--highlight) 16%, transparent); color: var(--highlight-dark); }
+.category-card:nth-child(3n+3) .category-card__icon { background: color-mix(in srgb, var(--accent-blue) 14%, transparent); color: var(--accent-blue); }
 
 .category-card:hover .category-card__icon {
   transform: scale(1.12) rotate(-4deg);
@@ -184,7 +256,7 @@
 }
 
 .product-card__media--placeholder {
-  font-size: 3rem;
+  display: flex;
   color: var(--fg-dim);
 }
 
@@ -206,7 +278,8 @@
 }
 
 .trust-item__icon {
-  font-size: 2rem;
+  display: inline-flex;
+  color: var(--brand);
 }
 
 .trust-item__title {

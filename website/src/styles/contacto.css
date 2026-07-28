@@ -63,7 +63,7 @@
   justify-content: center;
   background: var(--surface-2);
   border-radius: var(--radius-md);
-  font-size: 1.25rem;
+  color: var(--brand);
 }
 
 .contacto__card-body h3 {

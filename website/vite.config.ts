@@ -13,6 +13,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         catalogo: resolve(__dirname, 'catalogo.html'),
+        ofertas: resolve(__dirname, 'ofertas.html'),
         producto: resolve(__dirname, 'producto.html'),
         carrito: resolve(__dirname, 'carrito.html'),
         cuenta: resolve(__dirname, 'cuenta.html'),
