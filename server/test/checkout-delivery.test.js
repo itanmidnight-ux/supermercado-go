@@ -1,7 +1,7 @@
 'use strict';
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('checkout-delivery');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 
 const request = require('supertest');
 const { initDB, getDB } = require('../src/db/database');
@@ -19,7 +19,7 @@ async function registerAndLogin(phone, email) {
 }
 
 async function makeProduct(name) {
-  const admin = await request(app).post('/api/auth/token').send({ username: 'jesus', password: 'admin-test-pw' });
+  const admin = await request(app).post('/api/auth/token').send({ username: 'admin', password: 'admin-test-pw' });
   const res = await request(app).post('/api/products').set('Authorization', `Bearer ${admin.body.token}`)
     .send({ name, price: 5000, aliases: [] });
   return res.body.id;

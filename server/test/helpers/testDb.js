@@ -22,10 +22,31 @@ function uniqueSchemaName(prefix) {
 // Fija las env vars que necesita database.js -- respeta cualquier valor ya
 // definido (ej. exportado a mano contra un Postgres real) y solo rellena
 // defaults razonables para correr localmente.
+const ENV_BACKUP = {};
+
+// Guarda vars de entorno relevantes antes de que un test suite las modifique
+function backupEnv() {
+  for (const k of ['PG_SCHEMA', 'JWT_SECRET', 'API_KEY', 'SEED_PASSWORD_ADMIN', 'SEED_PASSWORD_JESUS', 'SEED_PASSWORD_JOHANA', 'SEED_PASSWORD_FELIPE', 'SEED_PASSWORD_FABIAN', 'NODE_ENV', 'PG_HOST', 'PG_PORT', 'PG_DATABASE', 'PG_USER', 'PG_PASSWORD', 'BOT_ENABLED']) {
+    if (k in process.env) ENV_BACKUP[k] = process.env[k];
+    else delete ENV_BACKUP[k];
+  }
+}
+
+// Restaura las vars guardadas y limpia las que no estaban antes
+function restoreEnv() {
+  for (const k of Object.keys(ENV_BACKUP)) {
+    if (ENV_BACKUP[k] !== undefined) process.env[k] = ENV_BACKUP[k];
+  }
+  for (const k of ['PG_SCHEMA']) {
+    if (!(k in ENV_BACKUP)) delete process.env[k];
+  }
+}
+
 function setupTestEnv(prefix) {
+  backupEnv();
   process.env.NODE_ENV    = 'test';
   process.env.PG_HOST     = process.env.PG_HOST     || '127.0.0.1';
-  process.env.PG_PORT     = process.env.PG_PORT     || '5432';
+  process.env.PG_PORT     = process.env.PG_PORT     || '5433';
   process.env.PG_DATABASE = process.env.PG_DATABASE || 'supermercado';
   process.env.PG_USER     = process.env.PG_USER     || 'pedidosbot';
   process.env.PG_PASSWORD = process.env.PG_PASSWORD || 'pedidosbot';
@@ -42,6 +63,7 @@ async function teardownTestSchema() {
     if (schema) await getDB().query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
   } catch (_) { /* pool ya pudo haberse cerrado -- no es fatal para el test */ }
   await closeDB();
+  restoreEnv();
 }
 
 module.exports = { setupTestEnv, teardownTestSchema, uniqueSchemaName };

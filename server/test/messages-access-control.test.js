@@ -1,15 +1,27 @@
 'use strict';
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('messages-access-control');
-process.env.SEED_PASSWORD_JESUS  = 'admin-test-pw';
-process.env.SEED_PASSWORD_JOHANA = 'worker-a-pw';
-process.env.SEED_PASSWORD_FELIPE = 'worker-b-pw';
+process.env.SEED_PASSWORD_ADMIN  = 'admin-test-pw';
 
 const request = require('supertest');
+const bcrypt = require('bcrypt');
 const { initDB, getDB } = require('../src/db/database');
 const app = require('../src/app');
 
-beforeAll(async () => { await initDB(); });
+beforeAll(async () => {
+  await initDB();
+  const db = getDB();
+  const hashA = await bcrypt.hash('worker-a-pw', 10);
+  const hashB = await bcrypt.hash('worker-b-pw', 10);
+  await db.query(
+    'INSERT INTO users (username, password_hash, pin, display_name, role, active) VALUES ($1,$2,$3,$4,$5,$6)',
+    ['johana', hashA, hashA, 'Johana', 'worker', 1]
+  );
+  await db.query(
+    'INSERT INTO users (username, password_hash, pin, display_name, role, active) VALUES ($1,$2,$3,$4,$5,$6)',
+    ['felipe', hashB, hashB, 'Felipe', 'worker', 1]
+  );
+});
 afterAll(async () => { await teardownTestSchema(); });
 
 async function login(username, password) {
@@ -21,7 +33,7 @@ describe('Chats -- solo visibles al trabajador que reclamó el pedido (o admin)'
   let adminToken, workerAToken, workerBToken, phone;
 
   beforeAll(async () => {
-    adminToken  = await login('jesus', 'admin-test-pw');
+    adminToken  = await login('admin', 'admin-test-pw');
     workerAToken = await login('johana', 'worker-a-pw');
     workerBToken = await login('felipe', 'worker-b-pw');
 

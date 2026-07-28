@@ -1,7 +1,7 @@
 'use strict';
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('profile-security');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 
 const request = require('supertest');
 const { initDB } = require('../src/db/database');

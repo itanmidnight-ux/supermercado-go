@@ -1,14 +1,21 @@
 'use strict';
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('order-tracking');
-process.env.SEED_PASSWORD_JESUS  = 'admin-test-pw';
-process.env.SEED_PASSWORD_JOHANA = 'worker-test-pw';
+process.env.SEED_PASSWORD_ADMIN  = 'admin-test-pw';
 
 const request = require('supertest');
-const { initDB } = require('../src/db/database');
+const bcrypt = require('bcrypt');
+const { initDB, getDB } = require('../src/db/database');
 const app = require('../src/app');
 
-beforeAll(async () => { await initDB(); });
+beforeAll(async () => {
+  await initDB();
+  const hash = await bcrypt.hash('worker-test-pw', 10);
+  await getDB().query(
+    'INSERT INTO users (username, password_hash, pin, display_name, role, active) VALUES ($1,$2,$3,$4,$5,$6)',
+    ['johana', hash, hash, 'Johana', 'worker', 1]
+  );
+});
 afterAll(async () => { await teardownTestSchema(); });
 
 async function workerToken() {
@@ -23,7 +30,7 @@ async function makeClientWithOrder(phone, email) {
   const login = await request(app).post('/api/auth/token').send({ username: '57' + phone, password: 'password123' });
   const token = login.body.token;
 
-  const admin = await request(app).post('/api/auth/token').send({ username: 'jesus', password: 'admin-test-pw' });
+  const admin = await request(app).post('/api/auth/token').send({ username: 'admin', password: 'admin-test-pw' });
   const prod = await request(app).post('/api/products').set('Authorization', `Bearer ${admin.body.token}`)
     .send({ name: `Producto Track ${phone}`, price: 3000, aliases: [] });
 

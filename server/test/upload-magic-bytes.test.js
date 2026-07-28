@@ -3,7 +3,7 @@ const os = require('os');
 
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('upload-magic-bytes');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 process.env.APPDATA = os.tmpdir();
 
 const request = require('supertest');
@@ -14,7 +14,7 @@ beforeAll(async () => { await initDB(); });
 afterAll(async () => { await teardownTestSchema(); });
 
 async function loginStaff() {
-  const res = await request(app).post('/api/auth/token').send({ username: 'jesus', password: 'admin-test-pw' });
+  const res = await request(app).post('/api/auth/token').send({ username: 'admin', password: 'admin-test-pw' });
   return res.body.token;
 }
 

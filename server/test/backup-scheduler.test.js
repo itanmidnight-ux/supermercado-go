@@ -8,7 +8,7 @@ const execFileAsync = promisify(execFile);
 
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('backup-scheduler');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 const BACKUP_DIR = path.join(os.tmpdir(), `backup-sched-dir-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 process.env.BACKUP_DIR = BACKUP_DIR;
 

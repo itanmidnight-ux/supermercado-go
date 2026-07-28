@@ -1,7 +1,7 @@
 'use strict';
 const { setupTestEnv, teardownTestSchema } = require('./helpers/testDb');
 setupTestEnv('jwt-revocation');
-process.env.SEED_PASSWORD_JESUS = 'admin-test-pw';
+process.env.SEED_PASSWORD_ADMIN = 'admin-test-pw';
 
 const request = require('supertest');
 const { initDB } = require('../src/db/database');
@@ -11,7 +11,7 @@ beforeAll(async () => { await initDB(); });
 afterAll(async () => { await teardownTestSchema(); });
 
 test('logout revoca el token: un request posterior con el mismo token da 401', async () => {
-  const login = await request(app).post('/api/auth/token').send({ username: 'jesus', password: 'admin-test-pw' });
+  const login = await request(app).post('/api/auth/token').send({ username: 'admin', password: 'admin-test-pw' });
   const token = login.body.token;
   expect(token).toBeTruthy();
 
