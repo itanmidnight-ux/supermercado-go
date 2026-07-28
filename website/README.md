@@ -47,6 +47,16 @@ website/
         └── footer.html
 ```
 
+## Páginas
+
+Producto/venta: `index.html`, `catalogo.html`, `producto.html`, `carrito.html`,
+`cuenta.html`, `login.html`, `contacto.html`.
+
+Contenido informativo (linkeadas desde el footer, no del nav principal):
+`sobre-nosotros.html`, `preguntas-frecuentes.html`, `envios-y-devoluciones.html`,
+`terminos.html`, `privacidad.html`. Comparten estilos de texto largo en
+`src/styles/paginas-info.css` (`.info-page`, `.prose`, `.accordion`, etc.).
+
 ## Patrón de header/footer para páginas nuevas
 
 Ver comentario completo al inicio de `src/scripts/layout.ts`. Resumen:

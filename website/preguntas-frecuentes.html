@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Preguntas frecuentes — Supermercado GO</title>
+    <meta name="description" content="Respuestas a las preguntas más comunes sobre pagos, entregas, cuentas y pedidos en Supermercado GO." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="site-header"></div>
+
+    <main class="container info-page">
+      <section class="info-page__head" data-reveal="up">
+        <p class="info-page__eyebrow">Ayuda</p>
+        <h1 class="info-page__title">Preguntas frecuentes</h1>
+        <p class="info-page__subtitle">Todo lo que necesitás saber antes de hacer tu pedido.</p>
+      </section>
+
+      <div class="accordion" id="faq-accordion" data-reveal="up">
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿Qué métodos de pago aceptan?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p>
+                Aceptamos pago con <strong>Nequi</strong>, <strong>tarjeta</strong> (Visa) y
+                <strong>contra entrega</strong> (efectivo al recibir el pedido). Elegís el
+                método que prefieras al momento de finalizar tu compra en el carrito.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿A qué zonas hacen entregas?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p>
+                Cubrimos Cúcuta y sus alrededores. Si tenés dudas sobre si llegamos a tu
+                dirección, escribinos por WhatsApp desde la página de
+                <a href="/contacto.html">Contacto</a> y te confirmamos antes de que hagas el pedido.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿Cuánto tardan las entregas?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p>
+                Los pedidos confirmados dentro del horario de atención se entregan el mismo
+                día. Si el pedido se hace fuera de horario, se entrega al día siguiente hábil.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿Cómo creo una cuenta?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p>
+                Entrá a <a href="/cuenta.html">Mi cuenta</a> y completá el formulario de
+                registro con tu nombre, teléfono y una contraseña. Con tu cuenta creada podés
+                guardar tus datos de entrega y ver el historial de tus pedidos.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿Cómo hago un pedido?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p>
+                Elegí tus productos en el <a href="/catalogo.html">Catálogo</a>, agregalos al
+                carrito, revisá tu <a href="/carrito.html">carrito</a>, completá tu dirección
+                de entrega y el método de pago, y confirmá. Te avisamos por WhatsApp cuando
+                el pedido esté en camino.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿Qué hago si un producto llega en mal estado?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p>
+                Escribinos por WhatsApp dentro de las 24 horas siguientes a la entrega,
+                contanos qué producto llegó mal y adjuntá una foto si es posible. Te lo
+                reponemos o te devolvemos el valor pagado por ese producto. Mirá también
+                nuestra página de <a href="/envios-y-devoluciones.html">Envíos y devoluciones</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion__item">
+          <button class="accordion__trigger" type="button" aria-expanded="false">
+            <span>¿Cuál es el horario de atención?</span>
+            <span class="accordion__icon" aria-hidden="true">+</span>
+          </button>
+          <div class="accordion__panel">
+            <div class="accordion__panel-inner">
+              <p id="faq-horario">Consultá el horario actualizado en nuestra página de Contacto.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="info-page__footnote">
+        ¿No encontraste lo que buscabas? Escribinos desde
+        <a href="/contacto.html">Contacto</a>.
+      </p>
+    </main>
+
+    <div id="site-footer"></div>
+
+    <script type="module" src="/src/scripts/preguntas-frecuentes.ts"></script>
+  </body>
+</html>
