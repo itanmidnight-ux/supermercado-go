@@ -19,7 +19,7 @@
 # ================================================================================
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
+from gi.repository import Gtk, Gdk, GLib, GdkPixbuf, Pango
 import cairo
 import subprocess, os, re, sys, datetime, secrets, json, threading, math
 import urllib.request, urllib.error
@@ -1086,6 +1086,19 @@ def fmt_money(v):
         return '$0'
 
 
+_WEEKDAYS_ES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+_WEEKDAYS_ES_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+
+def weekday_es(d, short=False):
+    """Nombre del día en español, sin depender del locale del sistema --
+    strftime('%A'/'%a') usa LC_TIME del proceso, que en un servidor nuevo
+    sin es_CO.UTF-8/es_ES.UTF-8 generado devuelve el nombre en inglés
+    (dashboard 100% en español mostrando "Monday")."""
+    names = _WEEKDAYS_ES_SHORT if short else _WEEKDAYS_ES
+    return names[d.weekday()]
+
+
 def fmt_relative(iso_dt):
     """ISO datetime → texto relativo ('hace 5 min', 'hace 2 h', '—')."""
     if not iso_dt:
@@ -2024,10 +2037,10 @@ class SalesModule:
         btn = Gtk.Button()
         btn.set_relief(Gtk.ReliefStyle.NONE)
         btn.get_style_context().add_class('stat-card')
-        btn.connect('clicked', lambda *_: self._show_day_detail(iso, d.strftime('%A %d/%m').capitalize()))
+        btn.connect('clicked', lambda *_: self._show_day_detail(iso, f"{weekday_es(d)} {d.strftime('%d/%m')}"))
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        lbl_date = Gtk.Label(label=d.strftime('%a %d/%m').capitalize(), xalign=0)
+        lbl_date = Gtk.Label(label=f"{weekday_es(d, short=True)} {d.strftime('%d/%m')}", xalign=0)
         lbl_date.get_style_context().add_class('stat-label')
         vbox.pack_start(lbl_date, False, False, 0)
 
@@ -3194,7 +3207,8 @@ class EmployeesModule:
             else:
                 self.card_avg_time.set_value('—')
             top = employees[0]
-            self.card_best.set_value(top[2][:20])
+            name = top[2]
+            self.card_best.set_value(name[:20] + '…' if len(name) > 20 else name)
         else:
             self.card_total_emp.set_value('0')
             self.card_total_del.set_value('0')
@@ -3669,9 +3683,12 @@ class ConnectionsModule:
         """, (ip,))
         store = Gtk.ListStore(str, str, str, str)
         tree = Gtk.TreeView(model=store)
-        for i, colname in enumerate(['Minuto', 'Requests', 'Login fallido', 'Ruta']):
+        for i, (colname, w) in enumerate([('Minuto', 130), ('Requests', 80), ('Login fallido', 100), ('Ruta', 260)]):
             renderer = Gtk.CellRendererText()
+            renderer.set_property('ellipsize', Pango.EllipsizeMode.END)
             col = Gtk.TreeViewColumn(colname, renderer, text=i)
+            col.set_resizable(True)
+            col.set_min_width(w)
             tree.append_column(col)
         for minute, requests, auth_fail_real, c401, c403, c404, last_path in history:
             store.append([minute, str(requests), str(auth_fail_real), last_path or '—'])
@@ -3791,11 +3808,13 @@ class DataModule:
         # store: id, fecha, producto, cliente, estado, total
         self.store = Gtk.ListStore(int, str, str, str, str, str)
         tree = Gtk.TreeView(model=self.store)
-        for colname, idx in [('#Pedido', 0), ('Fecha', 1), ('Producto', 2),
-                              ('Cliente', 3), ('Estado', 4), ('Total', 5)]:
+        for colname, idx, w in [('#Pedido', 0, 70), ('Fecha', 1, 90), ('Producto', 2, 200),
+                                 ('Cliente', 3, 160), ('Estado', 4, 100), ('Total', 5, 100)]:
             renderer = Gtk.CellRendererText()
+            renderer.set_property('ellipsize', Pango.EllipsizeMode.END)
             col = Gtk.TreeViewColumn(colname, renderer, text=idx)
             col.set_resizable(True)
+            col.set_min_width(w)
             tree.append_column(col)
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
