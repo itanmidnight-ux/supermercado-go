@@ -148,12 +148,26 @@
 }
 
 .category-card__icon {
-  font-size: 2.5rem;
-  transition: transform var(--dur-base) var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  font-size: 2rem;
+  background: var(--brand);
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  transition: transform var(--dur-base) var(--ease-spring, var(--ease-out));
 }
 
+/* Variedad de color por categoría (sin fotos reales todavía) -- que cada
+   tarjeta tenga su propio tinte en vez de repetir el mismo verde 6 veces. */
+.category-card:nth-child(3n+1) .category-card__icon { background: color-mix(in srgb, var(--brand) 14%, transparent); }
+.category-card:nth-child(3n+2) .category-card__icon { background: color-mix(in srgb, var(--highlight) 16%, transparent); }
+.category-card:nth-child(3n+3) .category-card__icon { background: color-mix(in srgb, var(--accent-blue) 14%, transparent); }
+
 .category-card:hover .category-card__icon {
-  transform: scale(1.15) rotate(-4deg);
+  transform: scale(1.12) rotate(-4deg);
 }
 
 .category-card__name {
