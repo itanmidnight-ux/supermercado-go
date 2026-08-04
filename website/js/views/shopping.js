@@ -142,21 +142,8 @@
             <!-- Address (for delivery) -->
             <div class="checkout-card mb-2" id="addressCard">
               <h3><i class="fas fa-map-marker-alt"></i> Direccion de Entrega</h3>
-              <div class="form-group">
-                <label class="form-label">Direccion completa *</label>
-                <input type="text" class="form-input" id="checkoutAddress" placeholder="Ej: Cra 5 # 12-34, Barrio Centro" value="">
-                <div class="form-error">La direccion es obligatoria</div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                <div class="form-group">
-                  <label class="form-label">Barrio</label>
-                  <input type="text" class="form-input" id="checkoutNeighborhood" placeholder="Ej: Centro">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Referencia</label>
-                  <input type="text" class="form-input" id="checkoutRef" placeholder="Ej: Frente al parque">
-                </div>
-              </div>
+              <div id="checkoutAddressSelector"></div>
+              <a href="#/direcciones" style="font-size:13px;color:var(--green);display:inline-block;margin-top:8px;"><i class="fas fa-plus"></i> Agregar nueva dirección</a>
             </div>
 
             <!-- Payment Method -->
@@ -220,6 +207,24 @@
       </div>
     `;
 
+    (async () => {
+      await Addresses.load();
+      const addrs = Addresses.getAll();
+      const selector = document.getElementById('checkoutAddressSelector');
+      if (addrs.length === 0) {
+        selector.innerHTML = `<p style="font-size:13px;color:var(--gray-500);">No tienes direcciones guardadas. <a href="#/direcciones" style="color:var(--green);">Agrega una</a> o usa el campo de abajo.</p>
+          <div class="form-group mt-2"><input type="text" class="form-input" id="checkoutAddress" placeholder="Ej: Cra 5 # 12-34, Barrio Centro"></div>`;
+        return;
+      }
+      selector.innerHTML = addrs.map((a, i) => `
+        <label class="option-card ${i === 0 ? 'selected' : ''}" data-address-id="${a.id}" style="display:block;text-align:left;">
+          <input type="radio" name="checkout_address" value="${a.id}" ${i === 0 ? 'checked' : ''} style="margin-right:8px;">
+          <strong>${a.label || 'Dirección'}</strong><br>
+          <span style="font-size:12px;color:var(--gray-500);">${a.address}${a.neighborhood ? ', ' + a.neighborhood : ''}</span>
+        </label>
+      `).join('') + `<a href="#/direcciones" style="font-size:12px;color:var(--green);display:inline-block;margin-top:8px;">+ Usar una dirección nueva</a>`;
+    })();
+
     // State
     let fulfillmentType = 'delivery';
     let paymentMethod = 'efectivo';
@@ -267,19 +272,24 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner spinner-sm spinner-white"></span> Procesando...';
 
-      // Validate
-      const address = document.getElementById('checkoutAddress').value.trim();
-      if (fulfillmentType === 'delivery' && !address) {
-        document.getElementById('checkoutAddress').closest('.form-group').classList.add('error');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirmar Pedido';
-        App.toast('La direccion de entrega es obligatoria', 'error');
-        return;
+      // Validate / resolve address
+      let fullAddress = 'Recogida en tienda';
+      if (fulfillmentType === 'delivery') {
+        const selectedRadio = document.querySelector('input[name="checkout_address"]:checked');
+        if (selectedRadio) {
+          const addr = Addresses.getAll().find(a => a.id === selectedRadio.value);
+          fullAddress = addr.address + (addr.neighborhood ? ', ' + addr.neighborhood : '') + (addr.detail ? ' (' + addr.detail + ')' : '');
+        } else {
+          const freeText = document.getElementById('checkoutAddress');
+          if (!freeText || !freeText.value.trim()) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirmar Pedido';
+            App.toast('La dirección de entrega es obligatoria', 'error');
+            return;
+          }
+          fullAddress = freeText.value.trim();
+        }
       }
-
-      const fullAddress = fulfillmentType === 'delivery'
-        ? address + (document.getElementById('checkoutNeighborhood').value.trim() ? ', ' + document.getElementById('checkoutNeighborhood').value.trim() : '') + (document.getElementById('checkoutRef').value.trim() ? ' (' + document.getElementById('checkoutRef').value.trim() + ')' : '')
-        : 'Recogida en tienda';
 
       const notes = document.getElementById('checkoutNotes').value.trim();
       const orderItems = Cart.toOrderItems();

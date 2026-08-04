@@ -51,6 +51,7 @@ const Auth = (() => {
     const mobileOrdersLink = document.getElementById('mobileOrdersLink');
     const favoritesBtn = document.getElementById('favoritesBtn');
     const mobileFavoritesLink = document.getElementById('mobileFavoritesLink');
+    const mobileAddressesLink = document.getElementById('mobileAddressesLink');
     const notifBtn = document.getElementById('notifBtn');
     const mobileNavUser = document.getElementById('mobileNavUser');
     const mobileNavUserName = document.getElementById('mobileNavUserName');
@@ -63,6 +64,7 @@ const Auth = (() => {
       if (mobileOrdersLink) mobileOrdersLink.style.display = 'flex';
       if (favoritesBtn) favoritesBtn.style.display = 'flex';
       if (mobileFavoritesLink) mobileFavoritesLink.style.display = 'flex';
+      if (mobileAddressesLink) mobileAddressesLink.style.display = 'flex';
       if (notifBtn) notifBtn.style.display = 'flex';
       if (mobileNavUser) mobileNavUser.style.display = 'flex';
       if (mobileNavUserName) mobileNavUserName.textContent = user.name || 'Usuario';
@@ -74,6 +76,7 @@ const Auth = (() => {
       if (mobileOrdersLink) mobileOrdersLink.style.display = 'none';
       if (favoritesBtn) favoritesBtn.style.display = 'none';
       if (mobileFavoritesLink) mobileFavoritesLink.style.display = 'none';
+      if (mobileAddressesLink) mobileAddressesLink.style.display = 'none';
       if (notifBtn) notifBtn.style.display = 'none';
       if (mobileNavUser) mobileNavUser.style.display = 'none';
       if (mobileAuthBtn) mobileAuthBtn.style.display = 'flex';

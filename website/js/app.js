@@ -174,6 +174,8 @@
       Views.renderFavorites(app);
     } else if (hash === '#/notificaciones') {
       Views.renderNotifications(app);
+    } else if (hash === '#/direcciones') {
+      Views.renderAddresses(app);
     } else {
       Views.renderHome(app);
     }
