@@ -37,6 +37,9 @@ const Favorites = (() => {
 
   async function toggle(productId) {
     const wasFavorite = ids.has(productId);
+    // Guardamos el item completo antes de filtrarlo, para poder restaurarlo
+    // (no solo su id) si el DELETE de más abajo falla.
+    const removedItem = wasFavorite ? items.find(i => i.product_id === productId) : null;
     // Optimistic update
     if (wasFavorite) {
       ids.delete(productId);
@@ -54,8 +57,18 @@ const Favorites = (() => {
         await load(); // refetch to get full product data for the new favorite
       }
     } catch (err) {
-      // Revert optimistic update on failure
-      if (wasFavorite) ids.add(productId); else ids.delete(productId);
+      // Revert optimistic update on failure. Si lo que falló fue un DELETE,
+      // hay que devolver tanto el id como el item completo a `items` —
+      // si solo se restaura `ids`, los suscriptores de onChange (p.ej. la
+      // vista de favoritos, que remueve del DOM las cards que ya no están
+      // en `items`) nunca ven que el producto volvió, y la card queda
+      // desaparecida aunque el favorito siga existiendo en el servidor.
+      if (wasFavorite) {
+        ids.add(productId);
+        if (removedItem) items.push(removedItem);
+      } else {
+        ids.delete(productId);
+      }
       notifyListeners();
       App.toast(err.message, 'error');
     }
