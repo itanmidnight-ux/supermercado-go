@@ -1628,6 +1628,21 @@
     redirectToProduct(id) {
       window.location.hash = '#/producto/' + id;
     },
+    api,
+    toast,
+    money,
+    formatDate,
+    statusChip,
+    unitLabel,
+    productImgHTML,
+    getCategoryIcon,
+    productCardHTML,
+    bindAddToCartButtons,
+    get settings() { return settings; },
+    get categories() { return categories; },
+    get featuredProducts() { return featuredProducts; },
+    get banners() { return banners; },
+    router,
   };
 
   // ═══════════════════════════════════════════════════════════════════
