@@ -8,9 +8,6 @@
 
   // ─── App State ─────────────────────────────────────────────────────
   let settings = null;
-  let categories = [];
-  let featuredProducts = [];
-  let banners = [];
   let currentRoute = '';
 
   // ─── Category Icon Map ─────────────────────────────────────────────
@@ -1177,9 +1174,6 @@
     productImgHTML,
     getCategoryIcon,
     get settings() { return settings; },
-    get categories() { return categories; },
-    get featuredProducts() { return featuredProducts; },
-    get banners() { return banners; },
     router,
   };
 
