@@ -16,7 +16,7 @@ router.get('/', (req, res) => {
 
   let query = 'SELECT * FROM banners';
   if (!isAdmin) {
-    query += ' WHERE is_active = 1 AND (starts_at IS NULL OR starts_at <= datetime("now","localtime")) AND (ends_at IS NULL OR ends_at >= datetime("now","localtime"))';
+    query += " WHERE is_active = 1 AND (starts_at IS NULL OR starts_at <= datetime('now','localtime')) AND (ends_at IS NULL OR ends_at >= datetime('now','localtime'))";
   }
   query += ' ORDER BY sort_order ASC';
 
@@ -120,7 +120,7 @@ router.put('/reorder', authMiddleware(['admin']), (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Se requiere un arreglo de IDs' });
 
-  const updateStmt = db.prepare('UPDATE banners SET sort_order = ?, updated_at = datetime("now","localtime") WHERE id = ?');
+  const updateStmt = db.prepare("UPDATE banners SET sort_order = ?, updated_at = datetime('now','localtime') WHERE id = ?");
   const txn = db.transaction(() => {
     order.forEach((id, index) => {
       updateStmt.run(index + 1, id);
