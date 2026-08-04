@@ -32,7 +32,7 @@ function getDb() {
  * @returns {*} Resultado de la función
  */
 function runInTransaction(fn) {
-  return db.transaction(fn)();
+  return db.transaction(fn)(db);
 }
 
 module.exports = { db, getDb, runInTransaction };
