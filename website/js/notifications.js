@@ -59,10 +59,20 @@ const Notifications = (() => {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
 
+  // Clears in-memory state (called explicitly on logout, not by stopPolling()
+  // itself — stopPolling() also runs as startPolling()'s self-guard on every
+  // re-login/profile-refresh, where wiping state would cause an unwanted
+  // flash to 0 for a still-logged-in user).
+  function reset() {
+    items = [];
+    unreadCount = 0;
+    notifyListeners();
+  }
+
   function onChange(callback) {
     listeners.push(callback);
     return () => { listeners = listeners.filter(fn => fn !== callback); };
   }
 
-  return { load, getUnreadCount, getAll, markRead, startPolling, stopPolling, onChange };
+  return { load, getUnreadCount, getAll, markRead, startPolling, stopPolling, reset, onChange };
 })();

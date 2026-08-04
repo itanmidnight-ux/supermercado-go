@@ -357,7 +357,12 @@
     setupMobileNav();
     Cart.onChange(() => updateBadges());
     Auth.onChange(() => {
-      if (Auth.isLogged()) { Notifications.startPolling(); } else { Notifications.stopPolling(); }
+      if (Auth.isLogged()) {
+        Notifications.startPolling();
+      } else {
+        Notifications.stopPolling();
+        Notifications.reset(); // Clear stale unread count/items so a different user logging in on the same tab never briefly sees this user's data.
+      }
       router();
     });
 
