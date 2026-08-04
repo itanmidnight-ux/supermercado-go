@@ -182,6 +182,7 @@
 
     // Bind add-to-cart buttons
     bindAddToCartButtons(container);
+    bindFavoriteButtons(container);
   }
 
   // ─── Product Card HTML ─────────────────────────────────────────────
@@ -198,6 +199,11 @@
         <div class="product-card-img">
           ${App.productImgHTML(p.image)}
           ${hasOffer ? `<span class="product-offer-badge">OFERTA</span>` : ''}
+          ${Auth.isLogged() && Auth.getUser().role === 'client' ? `
+            <button class="favorite-btn ${Favorites.isFavorite(p.id) ? 'active' : ''}" data-product-id="${p.id}" onclick="event.stopPropagation();" title="${Favorites.isFavorite(p.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
+              <i class="${Favorites.isFavorite(p.id) ? 'fas' : 'far'} fa-heart"></i>
+            </button>
+          ` : ''}
         </div>
         <div class="product-card-body">
           ${p.brand ? `<div class="product-card-brand">${p.brand}</div>` : ''}
@@ -237,6 +243,21 @@
         } catch (err) {
           App.toast(err.message, 'error');
         }
+      });
+    });
+  }
+
+  // ─── Bind Favorite Buttons ─────────────────────────────────────────
+  function bindFavoriteButtons(container) {
+    container.querySelectorAll('.favorite-btn').forEach(btn => {
+      btn.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        const pid = this.dataset.productId;
+        await Favorites.toggle(pid);
+        const nowFav = Favorites.isFavorite(pid);
+        this.classList.toggle('active', nowFav);
+        this.querySelector('i').className = (nowFav ? 'fas' : 'far') + ' fa-heart';
+        this.title = nowFav ? 'Quitar de favoritos' : 'Agregar a favoritos';
       });
     });
   }
@@ -312,6 +333,7 @@
 
         grid.innerHTML = products.map(p => productCardHTML(p)).join('');
         bindAddToCartButtons(grid);
+        bindFavoriteButtons(grid);
 
         // Pagination
         if (totalPages > 1) {
@@ -408,6 +430,11 @@
                 <span style="font-size:14px;color:var(--gray-500);" id="detailSubtotal">Subtotal: ${App.money(displayPrice * (inCart ? cartQty : 1))}</span>
               </div>
               <div class="detail-actions">
+                ${Auth.isLogged() && Auth.getUser().role === 'client' ? `
+                  <button class="btn btn-outline btn-lg favorite-btn-detail ${Favorites.isFavorite(p.id) ? 'active' : ''}" id="detailFavoriteBtn" title="${Favorites.isFavorite(p.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
+                    <i class="${Favorites.isFavorite(p.id) ? 'fas' : 'far'} fa-heart"></i>
+                  </button>
+                ` : ''}
                 ${outOfStock
                   ? `<button class="btn btn-outline btn-lg btn-block" disabled><i class="fas fa-ban"></i> Producto Agotado</button>`
                   : inCart
@@ -464,6 +491,16 @@
         });
       }
 
+      const favBtn = document.getElementById('detailFavoriteBtn');
+      if (favBtn) {
+        favBtn.addEventListener('click', async () => {
+          await Favorites.toggle(p.id);
+          const nowFav = Favorites.isFavorite(p.id);
+          favBtn.classList.toggle('active', nowFav);
+          favBtn.querySelector('i').className = (nowFav ? 'fas' : 'far') + ' fa-heart';
+        });
+      }
+
     } catch (err) {
       container.innerHTML = `
         <div class="empty-state">
@@ -489,6 +526,7 @@
   function exposeOnApp() {
     window.App.productCardHTML = productCardHTML;
     window.App.bindAddToCartButtons = bindAddToCartButtons;
+    window.App.bindFavoriteButtons = bindFavoriteButtons;
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', exposeOnApp);

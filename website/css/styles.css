@@ -2017,3 +2017,26 @@ ul { list-style: none; }
   .header, .footer, .floating-cart, .cart-summary-bar { display: none; }
   .main { margin-top: 0; }
 }
+
+/* ─── Favorite Button ──────────────────────────────────────────────── */
+.favorite-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.9);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--gray-400);
+  transition: var(--transition);
+  z-index: 2;
+}
+.favorite-btn:hover { transform: scale(1.1); }
+.favorite-btn.active { color: var(--red); }
+.favorite-btn-detail.active { color: var(--red); border-color: var(--red); }
+.favorite-btn-detail.active i { color: var(--red); }

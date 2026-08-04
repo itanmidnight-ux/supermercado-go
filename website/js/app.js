@@ -170,6 +170,8 @@
       Views.renderDeliveryZone(app);
     } else if (hash === '#/acerca') {
       Views.renderAbout(app);
+    } else if (hash === '#/favoritos') {
+      Views.renderFavorites(app);
     } else {
       Views.renderHome(app);
     }
@@ -328,6 +330,12 @@
     if (Auth.isLogged()) {
       await Auth.fetchProfile();
     }
+
+    await Favorites.load();
+    Favorites.onChange(() => {
+      // Re-renderizar la vista actual si el usuario está mirando el catálogo o favoritos,
+      // para que el corazón se actualice en toda la página, no solo en el botón clickeado.
+    });
 
     // Setup UI
     setupHeaderScroll();

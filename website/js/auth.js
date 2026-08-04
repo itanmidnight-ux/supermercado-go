@@ -49,6 +49,8 @@ const Auth = (() => {
     const authLabel = document.getElementById('authLabel');
     const ordersBtn = document.getElementById('ordersBtn');
     const mobileOrdersLink = document.getElementById('mobileOrdersLink');
+    const favoritesBtn = document.getElementById('favoritesBtn');
+    const mobileFavoritesLink = document.getElementById('mobileFavoritesLink');
     const mobileNavUser = document.getElementById('mobileNavUser');
     const mobileNavUserName = document.getElementById('mobileNavUserName');
     const mobileAuthBtn = document.getElementById('mobileAuthBtn');
@@ -58,6 +60,8 @@ const Auth = (() => {
       if (authLabel) authLabel.textContent = user.name ? user.name.split(' ')[0] : 'Cuenta';
       if (ordersBtn) ordersBtn.style.display = 'flex';
       if (mobileOrdersLink) mobileOrdersLink.style.display = 'flex';
+      if (favoritesBtn) favoritesBtn.style.display = 'flex';
+      if (mobileFavoritesLink) mobileFavoritesLink.style.display = 'flex';
       if (mobileNavUser) mobileNavUser.style.display = 'flex';
       if (mobileNavUserName) mobileNavUserName.textContent = user.name || 'Usuario';
       if (mobileAuthBtn) mobileAuthBtn.style.display = 'none';
@@ -66,6 +70,8 @@ const Auth = (() => {
       if (authLabel) authLabel.textContent = 'Ingresar';
       if (ordersBtn) ordersBtn.style.display = 'none';
       if (mobileOrdersLink) mobileOrdersLink.style.display = 'none';
+      if (favoritesBtn) favoritesBtn.style.display = 'none';
+      if (mobileFavoritesLink) mobileFavoritesLink.style.display = 'none';
       if (mobileNavUser) mobileNavUser.style.display = 'none';
       if (mobileAuthBtn) mobileAuthBtn.style.display = 'flex';
       if (mobileLogoutBtn) mobileLogoutBtn.style.display = 'none';
