@@ -172,6 +172,8 @@
       Views.renderAbout(app);
     } else if (hash === '#/favoritos') {
       Views.renderFavorites(app);
+    } else if (hash === '#/notificaciones') {
+      Views.renderNotifications(app);
     } else {
       Views.renderHome(app);
     }
@@ -337,6 +339,15 @@
       // para que el corazón se actualice en toda la página, no solo en el botón clickeado.
     });
 
+    if (Auth.isLogged()) { Notifications.startPolling(); }
+    Notifications.onChange(({ unreadCount }) => {
+      const badge = document.getElementById('notifBadge');
+      if (badge) {
+        badge.textContent = unreadCount;
+        badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+      }
+    });
+
     // Setup UI
     setupHeaderScroll();
     setupSearch();
@@ -345,7 +356,10 @@
     setupModals();
     setupMobileNav();
     Cart.onChange(() => updateBadges());
-    Auth.onChange(() => router());
+    Auth.onChange(() => {
+      if (Auth.isLogged()) { Notifications.startPolling(); } else { Notifications.stopPolling(); }
+      router();
+    });
 
     // Initial route
     router();
