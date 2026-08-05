@@ -199,6 +199,11 @@
                 </div>
               </div>
               ${Cart.getSubtotal() < freeMin ? `<p style="font-size:12px;color:var(--green);margin-top:12px;"><i class="fas fa-info-circle"></i> Agrega ${App.money(freeMin - Cart.getSubtotal())} mas para envio gratis</p>` : ''}
+              <div class="form-group mt-2" style="display:flex;gap:8px;">
+                <input type="text" class="form-input" id="promoCodeInput" placeholder="Código promocional" style="text-transform:uppercase;">
+                <button class="btn btn-outline" id="promoApplyBtn" type="button">Aplicar</button>
+              </div>
+              <div id="promoResult"></div>
               <button class="btn btn-primary btn-lg btn-block mt-3" id="placeOrderBtn" style="border-radius:var(--radius-full);padding:16px;"><i class="fas fa-check-circle"></i> Confirmar Pedido</button>
               <p style="text-align:center;font-size:12px;color:var(--gray-400);margin-top:10px;"><i class="fas fa-lock"></i> Pago seguro al momento de la entrega</p>
             </div>
@@ -228,10 +233,12 @@
     // State
     let fulfillmentType = 'delivery';
     let paymentMethod = 'efectivo';
+    let appliedPromo = null; // { code, id, name, description, discount }
 
     function updateSummary() {
       const dFee = Cart.getDeliveryFee(freeMin, fee, fulfillmentType);
-      const total = Cart.getSubtotal() + dFee;
+      const discount = appliedPromo ? appliedPromo.discount : 0;
+      const total = Cart.getSubtotal() + dFee - discount;
       const deliveryLine = document.getElementById('checkoutDeliveryLine');
       if (deliveryLine) {
         if (dFee === 0) {
@@ -239,6 +246,18 @@
         } else {
           deliveryLine.innerHTML = `<span>Envio</span><span>${App.money(dFee)}</span>`;
         }
+      }
+      let discountLine = document.getElementById('checkoutDiscountLine');
+      if (discount > 0) {
+        if (!discountLine) {
+          discountLine = document.createElement('div');
+          discountLine.id = 'checkoutDiscountLine';
+          discountLine.className = 'summary-line discount';
+          document.getElementById('checkoutTotalLine').before(discountLine);
+        }
+        discountLine.innerHTML = `<span>Descuento</span><span>-${App.money(discount)}</span>`;
+      } else if (discountLine) {
+        discountLine.remove();
       }
       const totalLine = document.getElementById('checkoutTotalLine');
       if (totalLine) totalLine.innerHTML = `<span>Total</span><span>${App.money(total)}</span>`;
@@ -276,6 +295,32 @@
       card.classList.add('selected');
       card.querySelector('input').checked = true;
       paymentMethod = card.dataset.value;
+    });
+
+    // Promo code
+    document.getElementById('promoApplyBtn').addEventListener('click', async function () {
+      const code = document.getElementById('promoCodeInput').value.trim().toUpperCase();
+      const resultEl = document.getElementById('promoResult');
+      if (!code) return;
+      this.disabled = true;
+      this.textContent = 'Validando...';
+      try {
+        const res = await App.api('/api/promotions/validate', {
+          method: 'POST',
+          headers: Auth.getHeaders(),
+          body: JSON.stringify({ code, subtotal: Cart.getSubtotal() }),
+        });
+        appliedPromo = { code, ...res.data };
+        resultEl.innerHTML = `<p style="font-size:13px;color:var(--green);margin-top:6px;"><i class="fas fa-check-circle"></i> ${res.data.description}</p>`;
+        updateSummary();
+      } catch (err) {
+        appliedPromo = null;
+        resultEl.innerHTML = `<p style="font-size:13px;color:var(--red);margin-top:6px;"><i class="fas fa-exclamation-circle"></i> ${err.message}</p>`;
+        updateSummary();
+      } finally {
+        this.disabled = false;
+        this.textContent = 'Aplicar';
+      }
     });
 
     // Place order
@@ -316,6 +361,7 @@
             fulfillment_type: fulfillmentType,
             payment_method: paymentMethod,
             notes: notes || null,
+            promo_code: appliedPromo ? appliedPromo.code : undefined,
           }),
         });
 
