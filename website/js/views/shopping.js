@@ -256,6 +256,18 @@
       updateSummary();
     });
 
+    // Saved address selection (event delegation: the selector's innerHTML is
+    // populated asynchronously above, so the listener is attached to the
+    // parent container, which exists synchronously in the template).
+    document.getElementById('checkoutAddressSelector').addEventListener('click', function (e) {
+      const card = e.target.closest('.option-card');
+      if (!card) return;
+      this.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const input = card.querySelector('input');
+      if (input) input.checked = true;
+    });
+
     // Payment method selection
     document.getElementById('paymentOptions').addEventListener('click', function (e) {
       const card = e.target.closest('.payment-card');
