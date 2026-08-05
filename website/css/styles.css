@@ -1121,6 +1121,13 @@ ul { list-style: none; }
   color: var(--green);
 }
 
+/* ─── Rating Stars ──────────────────────────────────────────────────── */
+.rating-stars { display: flex; gap: 6px; font-size: 24px; }
+.rating-stars:not(.readonly) i { cursor: pointer; color: var(--gray-300); transition: var(--transition); }
+.rating-stars:not(.readonly) i:hover { color: var(--gold); }
+.rating-stars i.fas { color: var(--gold); }
+.rating-stars.readonly i { cursor: default; }
+
 /* ─── Form Elements ────────────────────────────────────────────────────────── */
 .form-group {
   margin-bottom: 16px;

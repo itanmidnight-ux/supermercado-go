@@ -321,6 +321,25 @@
         ${['pending', 'confirmed'].includes(o.status) ? `
           <button class="btn btn-danger btn-block mt-3" id="cancelOrderBtn"><i class="fas fa-times-circle"></i> Cancelar Pedido</button>
         ` : ''}
+
+        ${['delivered', 'picked_up'].includes(o.status) && !o.rating ? `
+          <div class="checkout-card mt-3" id="rateOrderBlock">
+            <h4 style="font-size:14px;font-weight:700;margin-bottom:8px;">¿Cómo estuvo tu pedido?</h4>
+            <div class="rating-stars" id="ratingStars">
+              ${[1, 2, 3, 4, 5].map(n => `<i class="far fa-star" data-star="${n}"></i>`).join('')}
+            </div>
+            <textarea class="form-textarea mt-2" id="ratingComment" placeholder="Comentario (opcional)" rows="2"></textarea>
+            <button class="btn btn-primary btn-block mt-2" id="submitRatingBtn" disabled>Enviar Calificación</button>
+          </div>
+        ` : o.rating ? `
+          <div class="checkout-card mt-3">
+            <h4 style="font-size:14px;font-weight:700;margin-bottom:8px;">Tu calificación</h4>
+            <div class="rating-stars readonly">
+              ${[1, 2, 3, 4, 5].map(n => `<i class="${n <= o.rating ? 'fas' : 'far'} fa-star"></i>`).join('')}
+            </div>
+            ${o.rating_comment ? `<p style="font-size:13px;color:var(--gray-600);margin-top:6px;">${o.rating_comment}</p>` : ''}
+          </div>
+        ` : ''}
       `;
 
       // Cancel order
@@ -342,6 +361,39 @@
           } catch (err) {
             cancelBtn.disabled = false;
             cancelBtn.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Pedido';
+            App.toast(err.message, 'error');
+          }
+        });
+      }
+
+      // Rating
+      let selectedRating = 0;
+      const starsEl = document.getElementById('ratingStars');
+      if (starsEl) {
+        const submitBtn = document.getElementById('submitRatingBtn');
+        starsEl.querySelectorAll('[data-star]').forEach(star => {
+          star.addEventListener('click', () => {
+            selectedRating = parseInt(star.dataset.star);
+            starsEl.querySelectorAll('[data-star]').forEach(s => {
+              s.className = parseInt(s.dataset.star) <= selectedRating ? 'fas fa-star' : 'far fa-star';
+            });
+            submitBtn.disabled = false;
+          });
+        });
+        submitBtn.addEventListener('click', async () => {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Enviando...';
+          try {
+            await App.api('/api/orders/' + orderId + '/rate', {
+              method: 'POST',
+              headers: Auth.getHeaders(),
+              body: JSON.stringify({ rating: selectedRating, comment: document.getElementById('ratingComment').value.trim() || undefined }),
+            });
+            App.toast('¡Gracias por tu calificación!');
+            openOrderDetail(orderId); // re-render to show the read-only stars
+          } catch (err) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Enviar Calificación';
             App.toast(err.message, 'error');
           }
         });

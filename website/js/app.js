@@ -143,6 +143,11 @@
     const loader = document.getElementById('initialLoader');
     if (loader) loader.remove();
 
+    if (Auth.isLogged() && Auth.getUser().role !== 'client') {
+      Views.renderRoleBlocked(app);
+      return;
+    }
+
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'instant' });
 
