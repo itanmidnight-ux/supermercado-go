@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SupermercadosGo - Panel de Repartidor</title>
+  <link rel="stylesheet" href="css/worker.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <i class="fas fa-motorcycle"></i>
+        <h1>SupermercadosGo</h1>
+        <p>Panel de Repartidor</p>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+          <input type="email" id="loginEmail" placeholder="repartidor@delivery.com" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-lock"></i> Contraseña</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" required>
+        </div>
+        <div id="loginError" class="error-msg" style="display:none;"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+          <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- WORKER PANEL -->
+  <div id="workerPanel" class="worker-panel" style="display:none;">
+    <header class="worker-topbar">
+      <div class="worker-logo"><i class="fas fa-motorcycle"></i> SupermercadosGo</div>
+      <div class="worker-user" id="workerUser"></div>
+      <button class="btn btn-outline btn-sm" id="logoutBtn"><i class="fas fa-sign-out-alt"></i></button>
+    </header>
+
+    <!-- TAB NAVIGATION -->
+    <nav class="worker-tabs">
+      <button class="worker-tab active" data-tab="available"><i class="fas fa-list-check"></i> Disponibles</button>
+      <button class="worker-tab" data-tab="delivery"><i class="fas fa-truck"></i> En Entrega</button>
+      <button class="worker-tab" data-tab="history"><i class="fas fa-clock-rotate-left"></i> Historial</button>
+    </nav>
+
+    <!-- TAB CONTENT -->
+    <div class="worker-content">
+      <div class="worker-tab-content active" id="tab-available"></div>
+      <div class="worker-tab-content" id="tab-delivery"></div>
+      <div class="worker-tab-content" id="tab-history"></div>
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" style="display:none;">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Detalle</h3>
+        <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="../admin-panel/js/api.js"></script>
+  <script src="js/worker.js"></script>
+</body>
+</html>

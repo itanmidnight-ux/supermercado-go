@@ -54,19 +54,19 @@ const config = {
   // Base de datos
   dbPath: strDefault('DB_PATH', './data/supermercados.db'),
 
-  // JWT
-  jwtSecret: strDefault('JWT_SECRET', 'supermercados-go-jwt-secret-dev'),
+  // JWT — OBLIGATORIO en cualquier entorno (no hay fallback predecible)
+  jwtSecret: required('JWT_SECRET') || (() => { throw new Error('JWT_SECRET es obligatorio. Define la variable de entorno JWT_SECRET.'); })(),
   jwtExpiresIn: strDefault('JWT_EXPIRES_IN', '24h'),
 
-  // API
-  apiKey: strDefault('API_KEY', 'supermercados-go-api-key-dev'),
+  // API — OBLIGATORIO en cualquier entorno
+  apiKey: required('API_KEY') || (() => { throw new Error('API_KEY es obligatorio. Define la variable de entorno API_KEY.'); })(),
   corsOrigins: strDefault('CORS_ORIGINS', '*'),
 
   // Datos del negocio
   business: {
     name: strDefault('BUSINESS_NAME', 'Supermercados Go'),
     phone: strDefault('BUSINESS_PHONE', '+573044016277'),
-    email: strDefault('BUSINESS_EMAIL', 'carrierjawerly@gmail.com'),
+    email: strDefault('BUSINESS_EMAIL', 'admin@supermercado.go'),
     address: strDefault('BUSINESS_ADDRESS', 'KDX 1-2B Los Mangos'),
     city: strDefault('BUSINESS_CITY', 'Cúcuta'),
     department: strDefault('BUSINESS_DEPARTMENT', 'Norte de Santander'),
@@ -95,6 +95,15 @@ const config = {
     verifyToken: strDefault('WA_VERIFY_TOKEN', ''),
     accessToken: strDefault('WA_ACCESS_TOKEN', ''),
     phoneId: strDefault('WA_PHONE_ID', ''),
+  },
+
+  // SMTP / Correo
+  smtp: {
+    host: strDefault('SMTP_HOST', ''),
+    port: intDefault('SMTP_PORT', 587),
+    user: strDefault('SMTP_USER', ''),
+    pass: strDefault('SMTP_PASS', ''),
+    from: strDefault('SMTP_FROM', ''),
   },
 
   nodeEnv,

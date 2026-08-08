@@ -1,6 +1,87 @@
+# Dependencies
 node_modules/
+.pnp.*
+.dart_tool/
+.flutter-plugins-dependencies
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+.gradle/
+*.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Server data
 server/data/
-server/.env
+server/data/uploads/
+
+# Logs
 *.log
-.worktrees/
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Backups
+backups/
+*.backup
+*.bak
+
+# Temporary files
+.tmp/
+temp/
+
+# Playwright
+.playwright-mcp/
+
+# Project-specific
 .superpowers/
+.worktrees/
+
+# Android keystore
+*.keystore
+*.jks
+
+# Flutter/Android build artifacts
+app/android/.gradle/
+app/android/app/build/
+app/android/local.properties
+app/android/gradlew
+app/android/gradlew.bat
+app/android/gradle/wrapper/gradle-wrapper.jar
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Website build
+website/.next/
+website/out/
+
+# Gradle wrapper lock files
+*.lock

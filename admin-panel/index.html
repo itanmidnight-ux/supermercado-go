@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SupermercadosGo - Panel de Administración</title>
+  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <i class="fas fa-shield-halved"></i>
+        <h1>SupermercadosGo</h1>
+        <p>Panel de Administración</p>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+          <input type="email" id="loginEmail" placeholder="admin@supermercado.go" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-lock"></i> Contraseña</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" required>
+        </div>
+        <div id="loginError" class="error-msg" style="display:none;"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+          <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div id="adminPanel" class="admin-panel" style="display:none;">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <i class="fas fa-shield-halved"></i>
+        <span>Admin Panel</span>
+        <button class="sidebar-close" id="sidebarClose"><i class="fas fa-times"></i></button>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-tab="dashboard"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+        <a href="#" class="nav-item" data-tab="workers"><i class="fas fa-motorcycle"></i><span>Trabajadores</span></a>
+        <a href="#" class="nav-item" data-tab="products"><i class="fas fa-boxes-stacked"></i><span>Productos</span></a>
+        <a href="#" class="nav-item" data-tab="orders"><i class="fas fa-receipt"></i><span>Pedidos</span></a>
+        <a href="#" class="nav-item" data-tab="clients"><i class="fas fa-users"></i><span>Clientes</span></a>
+        <a href="#" class="nav-item" data-tab="analytics"><i class="fas fa-chart-pie"></i><span>Analíticas</span></a>
+        <a href="#" class="nav-item" data-tab="records"><i class="fas fa-file-export"></i><span>Registros</span></a>
+        <a href="#" class="nav-item" data-tab="settings"><i class="fas fa-gear"></i><span>Configuración</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="admin-info">
+          <div class="admin-avatar"><i class="fas fa-user-shield"></i></div>
+          <div><span id="adminName">Admin</span><br><small>Administrador</small></div>
+        </div>
+        <button class="btn btn-outline btn-sm" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Salir</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <header class="topbar">
+        <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+        <h2 id="pageTitle">Dashboard</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline btn-sm" id="viewStoreBtn" style="margin-right:8px;"><i class="fas fa-store"></i> Ver Tienda</button>
+          <span class="admin-badge" id="adminBadge">Admin</span>
+        </div>
+      </header>
+
+      <div class="content-area" id="contentArea">
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="tab-dashboard"></div>
+        <!-- Workers Tab -->
+        <div class="tab-content" id="tab-workers"></div>
+        <!-- Products Tab -->
+        <div class="tab-content" id="tab-products"></div>
+        <!-- Orders Tab -->
+        <div class="tab-content" id="tab-orders"></div>
+        <!-- Clients Tab -->
+        <div class="tab-content" id="tab-clients"></div>
+        <!-- Analytics Tab -->
+        <div class="tab-content" id="tab-analytics"></div>
+        <!-- Records Tab -->
+        <div class="tab-content" id="tab-records"></div>
+        <!-- Settings Tab -->
+        <div class="tab-content" id="tab-settings"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" style="display:none;">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Título</h3>
+        <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

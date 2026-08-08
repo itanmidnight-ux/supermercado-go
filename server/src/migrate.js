@@ -598,8 +598,11 @@ migrations.push({
     const adminExists = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
     if (!adminExists) {
       const adminId = uuidv4();
-      const randomPassword = crypto.randomBytes(12).toString('hex');
-      const hash = require('crypto').createHash('sha256').update(randomPassword).digest('hex');
+      // Generate random 12-char password — admin MUST change on first login
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+      let adminPassword = '';
+      for (let i = 0; i < 12; i++) adminPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+      const hash = require('crypto').createHash('sha256').update(adminPassword).digest('hex');
       const now = new Date().toISOString();
 
       db.prepare(`
@@ -608,21 +611,16 @@ migrations.push({
       `).run(
         adminId,
         'Administrador',
-        'admin@supermercadosgo.com',
+        'admin@supermercado.go',
         '+573044016277',
         hash,
         now,
         now
       );
 
-      // Guardar credenciales en archivo seguro
-      const credPath = path.join(dbDir, 'PRIMER_ACCESO.txt');
-      const credContent = `═══════════════════════════════════════════\n  SUPERMERCADOS GO — Primer Acceso Admin\n═══════════════════════════════════════════\n\nEmail:    admin@supermercadosgo.com\nContraseña: ${randomPassword}\n\nIMPORTANTE: Cambie la contraseña después del primer ingreso.\n═══════════════════════════════════════════\n`;
-      fs.writeFileSync(credPath, credContent, { mode: 0o600 });
-      console.log(`[MIGRATE] Admin creado. Credenciales en: ${credPath}`);
-      console.log(`[MIGRATE] Email: admin@supermercadosgo.com`);
-      console.log(`[MIGRATE] Contraseña: ${randomPassword}`);
-      console.log('[MIGRATE] ⚠ Cambie la contraseña después del primer ingreso.');
+      console.log('[MIGRATE] Admin creado: admin@supermercado.go');
+      console.log(`[MIGRATE] ⚠️  Contraseña temporal: ${adminPassword}`);
+      console.log('[MIGRATE] ⚠️  DEBE cambiar la contraseña en el primer inicio de sesión.');
     }
   }
 });
@@ -704,6 +702,173 @@ migrations.push({
       CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);
       CREATE INDEX IF NOT EXISTS idx_favorites_product ON favorites(product_id);
     `);
+  }
+});
+
+// 0017 — Campo NIT e imágenes adicionales en products
+migrations.push({
+  version: 17,
+  up() {
+    if (!columnExists(db, 'products', 'nit')) {
+      db.exec(`ALTER TABLE products ADD COLUMN nit TEXT`);
+    }
+    if (!columnExists(db, 'products', 'images')) {
+      db.exec(`ALTER TABLE products ADD COLUMN images TEXT DEFAULT '[]'`);
+    }
+    console.log('[MIGRATE] 017: Campos nit e images agregados a products');
+  }
+});
+
+// 0018 — Campos de delivery en orders (assigned_to, verification_code, worker location)
+migrations.push({
+  version: 18,
+  up() {
+    if (!columnExists(db, 'orders', 'assigned_to')) {
+      db.exec(`ALTER TABLE orders ADD COLUMN assigned_to TEXT`);
+    }
+    if (!columnExists(db, 'orders', 'verification_code')) {
+      db.exec(`ALTER TABLE orders ADD COLUMN verification_code TEXT`);
+    }
+    if (!columnExists(db, 'orders', 'worker_lat')) {
+      db.exec(`ALTER TABLE orders ADD COLUMN worker_lat REAL`);
+    }
+    if (!columnExists(db, 'orders', 'worker_lng')) {
+      db.exec(`ALTER TABLE orders ADD COLUMN worker_lng REAL`);
+    }
+    if (!columnExists(db, 'orders', 'customer_lat')) {
+      db.exec(`ALTER TABLE orders ADD COLUMN customer_lat REAL`);
+    }
+    if (!columnExists(db, 'orders', 'customer_lng')) {
+      db.exec(`ALTER TABLE orders ADD COLUMN customer_lng REAL`);
+    }
+    console.log('[MIGRATE] 018: Campos de delivery agregados a orders');
+  }
+});
+
+// 0019 — Tabla worker_locations para tracking en tiempo real
+migrations.push({
+  version: 19,
+  up() {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS worker_locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        worker_id TEXT NOT NULL REFERENCES users(id),
+        order_id TEXT NOT NULL REFERENCES orders(id),
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_worker_locations_order ON worker_locations(order_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_locations_worker ON worker_locations(worker_id);
+    `);
+    console.log('[MIGRATE] 019: Tabla worker_locations creada');
+  }
+});
+
+// 0020 — Agregar 'delivering' al CHECK constraint de orders
+migrations.push({
+  version: 20,
+  up() {
+    // SQLite no permite ALTER CHECK, recreamos la tabla con el CHECK actualizado
+    db.pragma('foreign_keys = OFF');
+    db.exec(`DROP TABLE IF EXISTS orders_new;`);
+    db.exec(`
+      CREATE TABLE orders_new (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id),
+        items TEXT DEFAULT '[]',
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending','confirmed','preparing','ready','assigned','in_transit','delivering','delivered','cancelled','picked_up')),
+        subtotal INTEGER DEFAULT 0,
+        delivery_fee INTEGER DEFAULT 0,
+        discount INTEGER DEFAULT 0,
+        tax_total INTEGER DEFAULT 0,
+        total INTEGER DEFAULT 0,
+        payment_method TEXT DEFAULT 'efectivo',
+        payment_status TEXT DEFAULT 'pending',
+        delivery_address TEXT,
+        delivery_lat REAL,
+        delivery_lng REAL,
+        fulfillment_type TEXT DEFAULT 'delivery' CHECK(fulfillment_type IN ('delivery','pickup')),
+        pickup_code TEXT,
+        pickup_ready_at TEXT,
+        scheduled_for TEXT,
+        worker_id TEXT REFERENCES users(id),
+        client_name TEXT,
+        client_phone TEXT,
+        worker_name TEXT,
+        cancelled_reason TEXT,
+        cancelled_by TEXT,
+        rating INTEGER,
+        rating_comment TEXT,
+        invoice_id TEXT,
+        notes TEXT,
+        assigned_to TEXT,
+        verification_code TEXT,
+        worker_lat REAL,
+        worker_lng REAL,
+        customer_lat REAL,
+        customer_lng REAL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      INSERT INTO orders_new (
+        id, user_id, items, status, subtotal, delivery_fee, discount, tax_total, total,
+        payment_method, payment_status, delivery_address, delivery_lat, delivery_lng,
+        fulfillment_type, pickup_code, pickup_ready_at, scheduled_for, worker_id,
+        client_name, client_phone, worker_name, cancelled_reason, cancelled_by,
+        rating, rating_comment, invoice_id, notes, assigned_to, verification_code,
+        worker_lat, worker_lng, customer_lat, customer_lng, created_at, updated_at
+      )
+      SELECT
+        id, user_id, items, status, subtotal, delivery_fee, discount, tax_total, total,
+        payment_method, payment_status, delivery_address, delivery_lat, delivery_lng,
+        fulfillment_type, pickup_code, pickup_ready_at, scheduled_for, worker_id,
+        client_name, client_phone, worker_name, cancelled_reason, cancelled_by,
+        rating, rating_comment, invoice_id, notes, assigned_to, verification_code,
+        worker_lat, worker_lng, customer_lat, customer_lng, created_at, updated_at
+      FROM orders;
+
+      DROP TABLE orders;
+      ALTER TABLE orders_new RENAME TO orders;
+    `);
+
+    // Recrear índices
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+      CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+      CREATE INDEX IF NOT EXISTS idx_orders_worker ON orders(worker_id);
+    `);
+
+    console.log('[MIGRATE] 020: CHECK constraint de orders actualizado con delivering');
+    db.pragma('foreign_keys = ON');
+  }
+});
+
+// ─── Migración 021: PIN de verificación para admin/trabajador ───
+migrations.push({
+  version: 21,
+  up() {
+    // Agregar columnas para PIN de verificación
+    const cols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+    
+    if (!cols.includes('pin_code')) {
+      db.exec(`ALTER TABLE users ADD COLUMN pin_code TEXT`);
+    }
+    if (!cols.includes('pin_attempts')) {
+      db.exec(`ALTER TABLE users ADD COLUMN pin_attempts INTEGER DEFAULT 0`);
+    }
+    if (!cols.includes('pin_blocked_until')) {
+      db.exec(`ALTER TABLE users ADD COLUMN pin_blocked_until TEXT`);
+    }
+    if (!cols.includes('pin_verified')) {
+      db.exec(`ALTER TABLE users ADD COLUMN pin_verified INTEGER DEFAULT 0`);
+    }
+
+    // Asignar PIN por defecto al admin existente
+    db.exec(`UPDATE users SET pin_code = '9703' WHERE email = 'admin@supermercado.go'`);
+
+    console.log('[MIGRATE] 021: Columnas pin_code, pin_attempts, pin_blocked_until, pin_verified agregadas');
   }
 });
 
