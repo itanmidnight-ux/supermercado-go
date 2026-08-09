@@ -14,6 +14,30 @@ export interface User {
   role?: string;
 }
 
+// Sincronizar sesión con los paneles estáticos (admin-panel / worker-panel)
+// que usan claves separadas de localStorage (admin_token / worker_token).
+// Así, si el usuario inicia sesión en la web, el panel abre su sesión directamente.
+function syncPanelSession(user: User | null, token: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    const role = user?.role;
+    // Limpiar ambas claves siempre (evita tokens huérfanos del otro rol)
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('worker_token');
+    localStorage.removeItem('worker_user');
+    if (role === 'admin' && token) {
+      localStorage.setItem('admin_token', token);
+      localStorage.setItem('admin_user', JSON.stringify(user));
+    } else if (role === 'worker' && token) {
+      localStorage.setItem('worker_token', token);
+      localStorage.setItem('worker_user', JSON.stringify(user));
+    }
+  } catch {
+    // localStorage no disponible (SSR)
+  }
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -50,13 +74,15 @@ export const useAuthStore = create<AuthState>()(
           });
           const data = await res.json();
           if (res.ok && data.token) {
+            const usr = { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, avatar: data.user.avatar, role: data.user.role };
             set({
-              user: { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, avatar: data.user.avatar, role: data.user.role },
+              user: usr,
               token: data.token,
               isLoggedIn: true,
               loading: false,
               pinVerified: false,
             });
+            syncPanelSession(usr, data.token);
             return true;
           }
           set({ error: data.error || 'Credenciales incorrectas', loading: false });
@@ -77,12 +103,14 @@ export const useAuthStore = create<AuthState>()(
           });
           const data = await res.json();
           if (res.ok && data.token) {
+            const usr = { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, role: data.user.role };
             set({
-              user: { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, role: data.user.role },
+              user: usr,
               token: data.token,
               isLoggedIn: true,
               loading: false,
             });
+            syncPanelSession(usr, data.token);
             return true;
           }
           set({ error: data.error || 'Error al registrarse', loading: false });
@@ -93,7 +121,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => set({ user: null, token: null, isLoggedIn: false, pinVerified: false, error: null }),
+      logout: () => {
+        set({ user: null, token: null, isLoggedIn: false, pinVerified: false, error: null });
+        syncPanelSession(null, null);
+      },
 
       verifyPin: async (pin: string) => {
         const { token } = get();

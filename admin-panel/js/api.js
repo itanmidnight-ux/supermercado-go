@@ -53,7 +53,9 @@ const API = (() => {
       const data = await res.json().catch(() => ({}));
       clearAuth();
       if (onAuthError) onAuthError(data.error || 'Sesión expirada');
-      throw new Error(data.error || 'Token de autenticación inválido');
+      const e = new Error(data.error || 'Token de autenticación inválido');
+      e.isAuthError = true;
+      throw e;
     }
 
     // Handle 403 — no permissions
@@ -130,7 +132,9 @@ const API = (() => {
       if (res.status === 401) {
         clearAuth();
         if (onAuthError) onAuthError('Sesión expirada');
-        throw new Error('Token de autenticación inválido');
+        const e = new Error('Token de autenticación inválido');
+        e.isAuthError = true;
+        throw e;
       }
 
       const data = await res.json();

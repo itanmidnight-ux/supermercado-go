@@ -18,10 +18,11 @@ const router = Router();
 const VALID_TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['preparing', 'cancelled'],
-  preparing: ['ready', 'cancelled'],
-  ready: ['assigned', 'picked_up', 'cancelled'],
-  assigned: ['in_transit', 'cancelled'],
+  preparing: ['ready', 'delivering', 'cancelled'],
+  ready: ['assigned', 'picked_up', 'delivering', 'cancelled'],
+  assigned: ['in_transit', 'delivering', 'cancelled'],
   in_transit: ['delivered', 'cancelled'],
+  delivering: ['delivered', 'cancelled'],
   delivered: [],
   cancelled: [],
   picked_up: [],
@@ -31,7 +32,7 @@ const VALID_TRANSITIONS = {
  * POST /api/orders — Crear nuevo pedido [client]
  */
 router.post('/', authMiddleware(['client']), (req, res) => {
-  const { items, delivery_address, delivery_lat, delivery_lng, fulfillment_type, notes, promo_code, scheduled_for } = req.body;
+  const { items, delivery_address, delivery_lat, delivery_lng, fulfillment_type, notes, promo_code, scheduled_for, customer_lat, customer_lng } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'El pedido debe contener al menos un producto' });
@@ -152,13 +153,13 @@ router.post('/', authMiddleware(['client']), (req, res) => {
           id, user_id, status, subtotal, delivery_fee, discount, tax_total, total,
           payment_method, delivery_address, delivery_lat, delivery_lng,
           fulfillment_type, pickup_code, scheduled_for,
-          client_name, client_phone, notes, created_at, updated_at
-        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, 'efectivo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          client_name, client_phone, customer_lat, customer_lng, notes, created_at, updated_at
+        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, 'efectivo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         orderId, userId, subtotal, deliveryFee, discount, taxTotal, total,
         delivery_address || null, delivery_lat || null, delivery_lng || null,
         fulfillment_type || 'delivery', pickupCode, scheduled_for || null,
-        user.name, user.phone, notes || null, now, now
+        user.name, user.phone, customer_lat || null, customer_lng || null, notes || null, now, now
       );
 
       // Insertar order_items
@@ -286,7 +287,7 @@ router.get('/:id', authMiddleware(), (req, res) => {
  * PUT /api/orders/:id/status — Cambiar estado del pedido [admin, worker]
  */
 router.put('/:id/status', authMiddleware(['admin', 'worker']), (req, res) => {
-  const { status } = req.body;
+  const { status, assigned_to, verification_code, worker_lat, worker_lng } = req.body;
   if (!status) return res.status(400).json({ error: 'El campo "status" es obligatorio' });
 
   const validStatuses = Object.keys(VALID_TRANSITIONS);
@@ -307,8 +308,34 @@ router.put('/:id/status', authMiddleware(['admin', 'worker']), (req, res) => {
 
       const now = nowBogota();
 
-      // Actualizar estado
-      dbTx.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, now, req.params.id);
+      // Actualizar estado y campos de delivery
+      let updateSql = 'UPDATE orders SET status = ?, updated_at = ?';
+      let updateParams = [status, now];
+
+      if (assigned_to) {
+        updateSql += ', assigned_to = ?';
+        updateParams.push(assigned_to);
+      }
+      if (verification_code) {
+        updateSql += ', verification_code = ?';
+        updateParams.push(verification_code);
+      }
+      if (worker_lat !== undefined && worker_lat !== null) {
+        updateSql += ', worker_lat = ?';
+        updateParams.push(worker_lat);
+      }
+      if (worker_lng !== undefined && worker_lng !== null) {
+        updateSql += ', worker_lng = ?';
+        updateParams.push(worker_lng);
+      }
+      if (status === 'preparing' || status === 'in_transit' || status === 'delivering') {
+        updateSql += ', worker_id = ?';
+        updateParams.push(req.user.id);
+      }
+
+      updateSql += ' WHERE id = ?';
+      updateParams.push(req.params.id);
+      dbTx.prepare(updateSql).run(...updateParams);
 
       // Si es pickup y cambia a ready, registrar pickup_ready_at
       if (status === 'ready' && order.fulfillment_type === 'pickup') {
@@ -318,7 +345,6 @@ router.put('/:id/status', authMiddleware(['admin', 'worker']), (req, res) => {
 
       // Si es in_transit, notificar al cliente
       if (status === 'in_transit') {
-        // Obtener nombre del trabajador
         const worker = dbTx.prepare('SELECT name FROM users WHERE id = ?').get(order.worker_id || req.user.id);
         if (worker) {
           dbTx.prepare('UPDATE orders SET worker_name = ? WHERE id = ?').run(worker.name, req.params.id);
@@ -356,6 +382,44 @@ router.put('/:id/status', authMiddleware(['admin', 'worker']), (req, res) => {
     if (err.message.includes('No se puede cambiar')) return res.status(422).json({ error: err.message });
     throw err;
   }
+});
+
+/**
+ * PUT /api/orders/:id — Actualizar campos de la orden [admin, worker]
+ */
+router.put('/:id', authMiddleware(['admin', 'worker']), (req, res) => {
+  const order = db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
+
+  const allowedFields = ['assigned_to', 'verification_code', 'worker_lat', 'worker_lng', 'customer_lat', 'customer_lng', 'notes', 'payment_method'];
+  const sets = [];
+  const values = [];
+
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      values.push(req.body[field]);
+    }
+  }
+
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
+  }
+
+  sets.push('updated_at = ?');
+  values.push(nowBogota());
+  values.push(req.params.id);
+
+  db.prepare(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+
+  const updated = db.prepare(`
+    SELECT o.*, u_w.name as worker_name
+    FROM orders o LEFT JOIN users u_w ON u_w.id = o.worker_id
+    WHERE o.id = ?
+  `).get(req.params.id);
+  updated.items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id);
+
+  res.json({ data: updated, message: 'Pedido actualizado' });
 });
 
 /**

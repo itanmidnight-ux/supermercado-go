@@ -1,19 +1,79 @@
 #!/usr/bin/env bash
 # ============================================================================
-# compilar-apk.sh — Compilar Supermercados Go (Flutter) a APK
-# Compatible: Ubuntu, Debian, Kali Linux, CentOS, Fedora, Arch
+#  ███████╗██╗   ██╗███████╗███████╗███████╗██████╗ ██╗   ██╗███████╗
+#  ██╔════╝╚██╗ ██╔╝██╔════╝██╔════╝██╔════╝██╔══██╗╚██╗ ██╔╝██╔════╝
+#  ███████╗ ╚████╔╝ ███████╗███████╗█████╗  ██████╔╝ ╚████╔╝ ███████╗
+#  ╚════██║  ╚██╔╝  ╚════██║╚════██║██╔══╝  ██╔══██╗  ╚██╔╝  ╚════██║
+#  ███████║   ██║   ███████║███████║███████╗██║  ██║   ██║   ███████║
+#  ╚══════╝   ╚═╝   ╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝
+#  compilar-apk.sh — Compilador de APK Flutter
+#  Compatible: Ubuntu · Debian · Kali · CentOS · Fedora · Arch
 # ============================================================================
 set -euo pipefail
 
-# ── Colores ─────────────────────────────────────────────────────────────────
-V='\033[0;32m' Y='\033[1;33m' R='\033[0;31m' B='\033[0;34m'
-C='\033[0;36m' W='\033[1;37m' G='\033[0;90m' N='\033[0m' BLD='\033[1m'
+# ── Colores y formato ──────────────────────────────────────────────────────
+V='\033[0;32m'    # verde
+Y='\033[1;33m'    # amarillo brillante
+R='\033[0;31m'    # rojo
+B='\033[0;34m'    # azul
+C='\033[0;36m'    # cyan
+M='\033[0;35m'    # magenta
+W='\033[1;37m'    # blanco brillante
+G='\033[0;90m'    # gris
+H='\033[0;92m'    # verde claro
+S='\033[0;93m'    # amarillo claro
+P='\033[0;95m'    # magenta claro
+T='\033[0;96m'    # cyan claro
+N='\033[0m'       # reset
+BLD='\033[1m'     # negrita
+DIM='\033[2m'     # dim
+UL='\033[4m'      # subrayado
+IT='\033[3m'      # itálica
 
-ok()   { echo -e "${V}[✓]${N} $1"; }
-warn() { echo -e "${Y}[!]${N} $1"; }
-fail() { echo -e "${R}[✗]${N} $1"; }
-info() { echo -e "${B}[i]${N} $1"; }
-step() { echo -e "\n${C}${BLD}── $1 ──${N}"; }
+ok()      { echo -e "  ${H}✔${N} ${V}$1${N}"; }
+warn()    { echo -e "  ${Y}⚠${N} ${Y}$1${N}"; }
+fail()    { echo -e "  ${R}✖${N} ${R}$1${N}"; }
+info()    { echo -e "  ${T}ℹ${N} ${C}$1${N}"; }
+step()    { echo -e "\n  ${M}◆${N} ${BLD}${M}$1${N}"; echo -e "  ${G}────────────────────────────────────────────────────────────${N}"; }
+header()  { echo -e "\n  ${T}▸${N} ${BLD}${T}$1${N}"; }
+success() { echo -e "  ${V}▶${N} ${BLD}${V}$1${N}"; }
+dim()     { echo -e "  ${G}$1${N}"; }
+
+# Barra de progreso animada
+progress() {
+  local msg="$1" total="${2:-20}" delay="${3:-0.05}"
+  echo -en "  ${C}⏳ ${msg}${N} "
+  for ((i=0; i<=total; i++)); do
+    printf "\r  ${C}⏳ ${msg}${N} ["
+    for ((j=0; j<i; j++)); do printf "${V}█${N}"; done
+    for ((j=i; j<total; j++)); do printf "${G}░${N}"; done
+    printf "] ${BLD}%3d%%${N}" $((i * 100 / total))
+    sleep "$delay"
+  done
+  printf "\n"
+}
+
+# Separador decorativo
+divider() {
+  echo -e "  ${G}══════════════════════════════════════════════════════════════${N}"
+}
+
+# Caja decorativa
+box() {
+  local w=58
+  echo -e "  ${V}╔$(printf '═%.0s' $(seq 1 $w))╗${N}"
+  echo -e "  ${V}║${N} $1$(printf '%*s' $((w - ${#1} - 1)))${V}║${N}"
+  echo -e "  ${V}╚$(printf '═%.0s' $(seq 1 $w))╝${N}"
+}
+
+# Iconos emoji decorativos
+declare -A ICONS=(
+  [check]="✔" [cross]="✖" [warn]="⚠" [info]="ℹ"
+  [rocket]="🚀" [gear]="⚙" [lock]="🔒" [server]="🖥️"
+  [db]="💾" [globe]="🌐" [shield]="🛡️" [fire]="🔥"
+  [star]="⭐" [heart]="💚" [bolt]="⚡" [box]="📦"
+  [key]="🔑" [user]="👤" [phone]="📱" [mail]="📧"
+)
 
 # ── Variables ───────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -220,17 +280,36 @@ check_apk() {
 # ── Menú principal ─────────────────────────────────────────────────────────
 main_menu() {
   echo -e ""
-  echo -e "${V}╔══════════════════════════════════════════════════════════════╗${N}"
-  echo -e "${V}║${N}  ${W}${BLD}🛒 Supermercados Go — Compilar APK${N}                           ${V}║${N}"
-  echo -e "${V}║${N}  ${G}Compatible: Ubuntu · Debian · Kali · CentOS · Fedora · Arch${N}     ${V}║${N}"
-  echo -e "${V}╚══════════════════════════════════════════════════════════════╝${N}"
   echo -e ""
-  echo -e "  ${V}1)${N} ${BLD}Compilar APK Release${N} (optimizado, firmado)"
-  echo -e "  ${Y}2)${N} ${BLD}Compilar APK Debug${N} (rápido, para pruebas)"
-  echo -e "  ${B}3)${N} ${BLD}Instalar en dispositivo conectado${N} (adb)"
-  echo -e "  ${G}0)${N} Salir"
+  echo -e "  ${V}╔════════════════════════════════════════════════════════════════════╗${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}  ${BLD}${V}📦 SUPERMERCADOS GO — Compilador APK${N}                            ${V}║${N}"
+  echo -e "  ${V}║${N}  ${G}Flutter · Android SDK · JDK 17${N}                                   ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}╚════════════════════════════════════════════════════════════════════╝${N}"
   echo -e ""
-  echo -en "  ${C}${BLD}Opción:${N} "
+  echo -e "  ${BLD}${T}Selecciona una opción:${N}"
+  echo -e ""
+  echo -e "  ${V}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${V}│${N}  ${V}${BLD}1) 📦 Compilar APK Release${N}                                       ${V}│${N}"
+  echo -e "  ${V}│${N}     ${G}Optimizado, firmado, listo para producción${N}                      ${V}│${N}"
+  echo -e "  ${V}└──────────────────────────────────────────────────────────────────┘${N}"
+  echo -e ""
+  echo -e "  ${Y}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${Y}│${N}  ${Y}${BLD}2) 🐛 Compilar APK Debug${N}                                         ${Y}│${N}"
+  echo -e "  ${Y}│${N}     ${G}Rápido, para pruebas en desarrollo${N}                             ${Y}│${N}"
+  echo -e "  ${Y}└──────────────────────────────────────────────────────────────────┘${N}"
+  echo -e ""
+  echo -e "  ${C}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${C}│${N}  ${C}${BLD}3) 📱 Instalar en dispositivo${N}                                     ${C}│${N}"
+  echo -e "  ${C}│${N}     ${G}Vía adb en dispositivo conectado${N}                                ${C}│${N}"
+  echo -e "  ${C}└──────────────────────────────────────────────────────────────────┘${N}"
+  echo -e ""
+  echo -e "  ${G}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${G}│${N}  ${G}${BLD}0) ⚡ Salir${N}                                                      ${G}│${N}"
+  echo -e "  ${G}└──────────────────────────────────────────────────────────────────┘${N}"
+  echo -e ""
+  echo -en "  ${C}${BLD}▸ Opción:${N} "
   local opt; read -r opt
   case "$opt" in
     1) build_apk release; check_apk ;;
@@ -249,7 +328,7 @@ main_menu() {
         fail "adb no encontrado. Instala platform-tools del Android SDK"
       fi
       ;;
-    0) exit 0 ;;
+    0) echo -e "\n  ${V}¡Hasta luego! 👋${N}\n"; exit 0 ;;
     *) fail "Opción inválida"; exit 1 ;;
   esac
 }

@@ -48,7 +48,7 @@ class AppStrings {
   static const String businessName = 'Supermercados Go';
   static const String businessCity = 'Cúcuta';
   static const String businessPhone = '+573044016277';
-  static const String businessEmail = 'carrierjawerly@gmail.com';
+  static const String businessEmail = 'admin@supermercado.go';
   static const String businessAddress = 'KDX 1-2B Los Mangos';
   static const String businessHours = '6:00 AM - 6:00 PM';
 }

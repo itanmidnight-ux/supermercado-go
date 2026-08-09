@@ -1,4 +1,5 @@
 // src/middleware/error.js — Manejador centralizado de errores
+const config = require('../config');
 
 /**
  * Manejador de errores para Express.
@@ -48,8 +49,5 @@ function errorHandler(err, req, res, _next) {
 
   res.status(status).json({ error: message });
 }
-
-// Para poder acceder a config en el errorHandler
-const config = require('../config');
 
 module.exports = { errorHandler };

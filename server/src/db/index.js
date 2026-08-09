@@ -7,15 +7,25 @@ const config = require('../config');
 // Asegurar que el directorio de datos existe
 const dbDir = path.dirname(path.resolve(config.dbPath));
 if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+  fs.mkdirSync(dbDir, { recursive: true, mode: 0o750 });
 }
 
-const db = new Database(path.resolve(config.dbPath));
+const dbPath = path.resolve(config.dbPath);
+const db = new Database(dbPath);
 
 // Configuración pragma para rendimiento y seguridad
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 5000');
+db.pragma('secure_delete = ON');      // Sobrescribe datos eliminados
+db.pragma('synchronous = NORMAL');    // Balance entre integridad y rendimiento
+
+// Asegurar permisos del archivo de BD (solo propietario puede leer/escribir)
+try {
+  fs.chmodSync(dbPath, 0o640);
+} catch {
+  // Ignorar si no se pueden cambiar permisos (e.g., en desarrollo)
+}
 
 /**
  * Obtiene la instancia de la base de datos.
@@ -35,4 +45,15 @@ function runInTransaction(fn) {
   return db.transaction(fn)(db);
 }
 
-module.exports = { db, getDb, runInTransaction };
+/**
+ * Crea un backup de la base de datos.
+ * @returns {string} Ruta del archivo de backup
+ */
+function backupDb() {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(dbDir, `backup-${timestamp}.db`);
+  db.backup(backupPath);
+  return backupPath;
+}
+
+module.exports = { db, getDb, runInTransaction, backupDb };

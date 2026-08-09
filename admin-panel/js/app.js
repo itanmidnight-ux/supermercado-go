@@ -1120,7 +1120,8 @@
       doc.save(`SupermercadosGo_${type}_${dateRange.from}_${dateRange.to}.pdf`);
       toast('Reporte exportado exitosamente');
     } catch (err) {
-      toast('Error generando reporte: ' + err.message, 'error');
+      // Los errores de autenticación ya fueron manejados por API.onAuthError (login)
+      if (!err.isAuthError) toast('Error generando reporte: ' + err.message, 'error');
     }
   }
 

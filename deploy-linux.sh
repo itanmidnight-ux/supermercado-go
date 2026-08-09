@@ -1,19 +1,79 @@
 #!/usr/bin/env bash
 # ============================================================================
-# deploy-linux.sh — Supermercados Go — Despliegue universal Linux
-# Compatible: Ubuntu, Debian, Kali Linux, CentOS, Fedora, Arch, openSUSE
+#  ███████╗██╗   ██╗███████╗███████╗███████╗██████╗ ██╗   ██╗███████╗
+#  ██╔════╝╚██╗ ██╔╝██╔════╝██╔════╝██╔════╝██╔══██╗╚██╗ ██╔╝██╔════╝
+#  ███████╗ ╚████╔╝ ███████╗███████╗█████╗  ██████╔╝ ╚████╔╝ ███████╗
+#  ╚════██║  ╚██╔╝  ╚════██║╚════██║██╔══╝  ██╔══██╗  ╚██╔╝  ╚════██║
+#  ███████║   ██║   ███████║███████║███████╗██║  ██║   ██║   ███████║
+#  ╚══════╝   ╚═╝   ╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝
+#  deploy-linux.sh — Despliegue universal Linux
+#  Compatible: Ubuntu · Debian · Kali · CentOS · Fedora · Arch · openSUSE
 # ============================================================================
 set -euo pipefail
 
-# ── Colores ─────────────────────────────────────────────────────────────────
-V='\033[0;32m' Y='\033[1;33m' R='\033[0;31m' B='\033[0;34m'
-C='\033[0;36m' M='\033[0;35m' W='\033[1;37m' G='\033[0;90m' N='\033[0m' BLD='\033[1m'
+# ── Colores y formato ──────────────────────────────────────────────────────
+V='\033[0;32m'    # verde
+Y='\033[1;33m'    # amarillo brillante
+R='\033[0;31m'    # rojo
+B='\033[0;34m'    # azul
+C='\033[0;36m'    # cyan
+M='\033[0;35m'    # magenta
+W='\033[1;37m'    # blanco brillante
+G='\033[0;90m'    # gris
+H='\033[0;92m'    # verde claro
+S='\033[0;93m'    # amarillo claro
+P='\033[0;95m'    # magenta claro
+T='\033[0;96m'    # cyan claro
+N='\033[0m'       # reset
+BLD='\033[1m'     # negrita
+DIM='\033[2m'     # dim
+UL='\033[4m'      # subrayado
+IT='\033[3m'      # itálica
 
-ok()   { echo -e "${V}[✓]${N} $1"; }
-warn() { echo -e "${Y}[!]${N} $1"; }
-fail() { echo -e "${R}[✗]${N} $1"; }
-info() { echo -e "${B}[i]${N} $1"; }
-step() { echo -e "\n${C}${BLD}── $1 ──${N}"; }
+ok()      { echo -e "  ${H}✔${N} ${V}$1${N}"; }
+warn()    { echo -e "  ${Y}⚠${N} ${Y}$1${N}"; }
+fail()    { echo -e "  ${R}✖${N} ${R}$1${N}"; }
+info()    { echo -e "  ${T}ℹ${N} ${C}$1${N}"; }
+step()    { echo -e "\n  ${M}◆${N} ${BLD}${M}$1${N}"; echo -e "  ${G}────────────────────────────────────────────────────────────${N}"; }
+header()  { echo -e "\n  ${T}▸${N} ${BLD}${T}$1${N}"; }
+success() { echo -e "  ${V}▶${N} ${BLD}${V}$1${N}"; }
+dim()     { echo -e "  ${G}$1${N}"; }
+
+# Barra de progreso animada
+progress() {
+  local msg="$1" total="${2:-20}" delay="${3:-0.05}"
+  echo -en "  ${C}⏳ ${msg}${N} "
+  for ((i=0; i<=total; i++)); do
+    printf "\r  ${C}⏳ ${msg}${N} ["
+    for ((j=0; j<i; j++)); do printf "${V}█${N}"; done
+    for ((j=i; j<total; j++)); do printf "${G}░${N}"; done
+    printf "] ${BLD}%3d%%${N}" $((i * 100 / total))
+    sleep "$delay"
+  done
+  printf "\n"
+}
+
+# Separador decorativo
+divider() {
+  echo -e "  ${G}══════════════════════════════════════════════════════════════${N}"
+}
+
+# Caja decorativa
+box() {
+  local w=58
+  echo -e "  ${V}╔$(printf '═%.0s' $(seq 1 $w))╗${N}"
+  echo -e "  ${V}║${N} $1$(printf '%*s' $((w - ${#1} - 1)))${V}║${N}"
+  echo -e "  ${V}╚$(printf '═%.0s' $(seq 1 $w))╝${N}"
+}
+
+# Iconos emoji decorativos
+declare -A ICONS=(
+  [check]="✔" [cross]="✖" [warn]="⚠" [info]="ℹ"
+  [rocket]="🚀" [gear]="⚙" [lock]="🔒" [server]="🖥️"
+  [db]="💾" [globe]="🌐" [shield]="🛡️" [fire]="🔥"
+  [star]="⭐" [heart]="💚" [bolt]="⚡" [box]="📦"
+  [key]="🔑" [user]="👤" [phone]="📱" [mail]="📧"
+)
 
 # ── Rutas ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -154,8 +214,25 @@ install_node() {
 # ── Crear .env ─────────────────────────────────────────────────────────────
 create_env() {
   step "Configurando variables de entorno"
+
+  # ⚠️ Seguridad crítica: Preservar secretos existentes si el .env ya existe.
+  # Regenerar JWT_SECRET/API_KEY invalida TODOS los tokens de sesión activos
+  # y requiere reloguear a todos los usuarios (admin, worker, clientes).
   JWT_SECRET=$(gen_secret)
   API_KEY=$(gen_secret)
+  if [ -f "$ENV_FILE" ]; then
+    local old_jwt old_api
+    old_jwt=$(grep -E "^JWT_SECRET=" "$ENV_FILE" | head -1 | cut -d= -f2-)
+    old_api=$(grep -E "^API_KEY=" "$ENV_FILE" | head -1 | cut -d= -f2-)
+    if [ -n "$old_jwt" ]; then
+      JWT_SECRET="$old_jwt"
+      ok "JWT_SECRET preservado (sesiones existentes siguen válidas)"
+    fi
+    if [ -n "$old_api" ]; then
+      API_KEY="$old_api"
+      ok "API_KEY preservada"
+    fi
+  fi
 
   ask "Nombre del negocio" "$BUSINESS_NAME" BUSINESS_NAME
   ask "Teléfono del negocio" "$BUSINESS_PHONE" BUSINESS_PHONE
@@ -166,6 +243,37 @@ create_env() {
   ask "Pedido mínimo para envío gratis (COP)" "$FREE_DELIVERY_MIN" FREE_DELIVERY_MIN
   ask "Zona de operación" "$OPERATING_ZONE" OPERATING_ZONE
   ask "Puerto del servidor" "$PORT" PORT
+
+  # ── Configuración SMTP (solo en modo producción) ──────────────────────
+  SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""
+  if [ "$DEPLOY_MODE" = "production" ]; then
+    echo ""
+    header "Configuración de Correo Electrónico (SMTP)"
+    info "Necesario para: recuperación de contraseña, notificaciones por correo"
+    echo ""
+    if ask_yes "¿Deseas configurar el envío de correos SMTP ahora?" "s"; then
+      echo -e "  ${G}Ejemplos de servidores SMTP:${N}"
+      echo -e "  ${C}  Gmail:     smtp.gmail.com:587${N}"
+      echo -e "  ${C}  Outlook:   smtp-mail.outlook.com:587${N}"
+      echo -e "  ${C}  Yahoo:     smtp.mail.yahoo.com:587${N}"
+      echo -e "  ${C}  Hostinger: smtp.hostinger.com:465${N}"
+      echo ""
+      ask "Servidor SMTP" "smtp.gmail.com" SMTP_HOST
+      ask "Puerto SMTP" "587" SMTP_PORT
+      ask "Correo SMTP (remitente)" "$BUSINESS_EMAIL" SMTP_USER
+      ask "Contraseña de aplicación SMTP" "" SMTP_PASS
+      echo ""
+      if [ -n "$SMTP_HOST" ] && [ -n "$SMTP_USER" ] && [ -n "$SMTP_PASS" ]; then
+        ok "SMTP configurado: ${SMTP_USER}@${SMTP_HOST}:${SMTP_PORT}"
+      else
+        warn "SMTP incompleto — se omitirá configuración de correo"
+        SMTP_HOST=""; SMTP_USER=""; SMTP_PASS=""
+      fi
+    else
+      info "Configuración SMTP omitida. Podrás agregarla después en .env"
+    fi
+    echo ""
+  fi
 
   cat > "$ENV_FILE" << ENVEOF
 # Generado por deploy-linux.sh — $(date -Iseconds)
@@ -197,6 +305,13 @@ OPERATING_ZONE=${OPERATING_ZONE}
 
 # CORS (en producción poner dominios separados por coma, o * para todo)
 CORS_ORIGINS=*
+
+# SMTP / Correo Electrónico
+SMTP_HOST=${SMTP_HOST}
+SMTP_PORT=${SMTP_PORT}
+SMTP_USER=${SMTP_USER}
+SMTP_PASS=${SMTP_PASS}
+SMTP_FROM=${SMTP_USER}
 ENVEOF
   ok ".env creado en ${ENV_FILE}"
 }
@@ -229,13 +344,54 @@ run_migrations() {
   cd "$SCRIPT_DIR"
 }
 
+# ── Construir sitio web ─────────────────────────────────────────────────────
+build_website() {
+  local WEBSITE_DIR="${SCRIPT_DIR}/website"
+  if [ -d "$WEBSITE_DIR" ] && [ -f "$WEBSITE_DIR/package.json" ]; then
+    step "Construyendo sitio web (Next.js)"
+    cd "$WEBSITE_DIR"
+    as_real_user "cd '$WEBSITE_DIR' && npm install 2>&1 | tail -3 && npm run build 2>&1 | tail -10"
+    fix_ownership
+    ok "Sitio web construido"
+    cd "$SCRIPT_DIR"
+  fi
+}
+
+# ── Verificar paneles admin/worker ───────────────────────────────────────────
+verify_panels() {
+  step "Verificando paneles de administración y trabajador"
+  local ADMIN_DIR="${SCRIPT_DIR}/admin-panel"
+  local WORKER_DIR="${SCRIPT_DIR}/worker-panel"
+  
+  if [ -f "$ADMIN_DIR/index.html" ]; then
+    ok "Panel de administración encontrado"
+  else
+    warn "Panel de administración no encontrado en $ADMIN_DIR"
+  fi
+  
+  if [ -f "$WORKER_DIR/index.html" ]; then
+    ok "Panel de trabajador encontrado"
+  else
+    warn "Panel de trabajador no encontrado en $WORKER_DIR"
+  fi
+  
+  # Verificar que api.js esté compartido
+  if [ -f "$ADMIN_DIR/js/api.js" ]; then
+    ok "API compartida (api.js) disponible"
+  fi
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MODO 1: DESPLIEGUE COMO SERVIDOR (Producción)
 # ═══════════════════════════════════════════════════════════════════════════
 deploy_production() {
   DEPLOY_MODE="production"
-  echo -e "\n${V}${BLD}══ MODO PRODUCCIÓN ══${N}"
-  info "Se instalará Node.js, PM2, se configurará firewall y systemd"
+  echo -e ""
+  echo -e "  ${V}${BLD}═══════════════════════════════════════════════════════════════════${N}"
+  echo -e "  ${V}${BLD}  🚀  MODO PRODUCCIÓN — Despliegue Completo${N}"
+  echo -e "  ${V}${BLD}═══════════════════════════════════════════════════════════════════${N}"
+  echo -e ""
+  info "Se instalará: Node.js, PM2, firewall, Nginx, systemd"
   echo -e ""
 
   # 1. Instalar Node.js
@@ -257,7 +413,13 @@ deploy_production() {
   install_server_deps
   run_migrations
 
-  # 5. Firewall
+  # 5. Construir sitio web
+  build_website
+
+  # 6. Verificar paneles
+  verify_panels
+
+  # 7. Firewall
   step "Configurando firewall"
   if command -v ufw &>/dev/null; then
     $SUDO ufw allow ${PORT}/tcp 2>/dev/null && ok "Puerto ${PORT} abierto en UFW"
@@ -374,9 +536,13 @@ EOF
 # ═══════════════════════════════════════════════════════════════════════════
 deploy_dev() {
   DEPLOY_MODE="development"
-  echo -e "\n${Y}${BLD}══ MODO DESARROLLO / PRUEBA ══${N}"
-  info "Solo se instalarán dependencias mínimas y se iniciará el servidor"
-  info "NO se configurará: firewall, Nginx, systemd, PM2"
+  echo -e ""
+  echo -e "  ${Y}${BLD}═══════════════════════════════════════════════════════════════════${N}"
+  echo -e "  ${Y}${BLD}  🧪  MODO DESARROLLO — Prueba Rápida${N}"
+  echo -e "  ${Y}${BLD}═══════════════════════════════════════════════════════════════════${N}"
+  echo -e ""
+  info "Solo: Node.js, base de datos, servidor en primer plano"
+  warn "NO se configura: firewall, Nginx, systemd, PM2"
   echo -e ""
 
   # 1. Node.js
@@ -384,8 +550,16 @@ deploy_dev() {
 
   # 2. .env con defaults de desarrollo
   step "Creando .env de desarrollo"
+  # Preservar secretos existentes para no invalidar sesiones activas
   JWT_SECRET=$(gen_secret)
   API_KEY=$(gen_secret)
+  if [ -f "$ENV_FILE" ]; then
+    local old_jwt old_api
+    old_jwt=$(grep -E "^JWT_SECRET=" "$ENV_FILE" | head -1 | cut -d= -f2-)
+    old_api=$(grep -E "^API_KEY=" "$ENV_FILE" | head -1 | cut -d= -f2-)
+    [ -n "$old_jwt" ] && JWT_SECRET="$old_jwt"
+    [ -n "$old_api" ] && API_KEY="$old_api"
+  fi
   mkdir -p "$DATA_DIR/uploads"
 
   cat > "$ENV_FILE" << ENVEOF
@@ -408,6 +582,13 @@ DELIVERY_FEE_DEFAULT=${DELIVERY_FEE}
 FREE_DELIVERY_MIN=${FREE_DELIVERY_MIN}
 OPERATING_ZONE=${OPERATING_ZONE}
 CORS_ORIGINS=*
+
+# SMTP (vacío en desarrollo — el servidor no enviará correos)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
 ENVEOF
   fix_ownership
   ok ".env de desarrollo creado"
@@ -447,7 +628,11 @@ ENVEOF
 # MODO 3: DETENER SERVICIOS
 # ═══════════════════════════════════════════════════════════════════════════
 stop_services() {
-  step "Deteniendo servicios de ${APP_NAME}"
+  echo -e ""
+  echo -e "  ${R}${BLD}═══════════════════════════════════════════════════════════════════${N}"
+  echo -e "  ${R}${BLD}  🛑  DETENIENDO SERVICIOS${N}"
+  echo -e "  ${R}${BLD}═══════════════════════════════════════════════════════════════════${N}"
+  echo -e ""
   local stopped=0
 
   # PM2
@@ -493,32 +678,46 @@ show_summary() {
   [ -f "$cred_file" ] && admin_pass=$(grep -oP '(?<=Contraseña: ).*' "$cred_file" 2>/dev/null || true)
 
   echo -e ""
-  echo -e "${V}╔══════════════════════════════════════════════════════════════╗${N}"
-  echo -e "${V}║${N}  ${W}${BLD}${BUSINESS_NAME} — Despliegue Exitoso${N}                       ${V}║${N}"
-  echo -e "${V}╠══════════════════════════════════════════════════════════════╣${N}"
-  echo -e "${V}║${N}  ${BLD}🔗 URLs de acceso:${N}                                        ${V}║${N}"
-  echo -e "${V}║${N}                                                              ${V}║${N}"
-  echo -e "${V}║${N}  Sitio Web:  ${C}http://${ip}:${PORT}${N}" | head -c 56; echo "${V}║${N}"
-  echo -e "${V}║${N}  API:        ${C}http://${ip}:${PORT}/api${N}" | head -c 56; echo "${V}║${N}"
-  echo -e "${V}║${N}  Health:     ${C}http://${ip}:${PORT}/api/health${N}" | head -c 56; echo "${V}║${N}"
-  echo -e "${V}╠══════════════════════════════════════════════════════════════╣${N}"
-  echo -e "${V}║${N}  ${BLD}📱 Configurar la app Flutter:${N}                               ${V}║${N}"
-  echo -e "${V}║${N}                                                              ${V}║${N}"
-  echo -e "${V}║${N}  1. Abre la app Supermercados Go                            ${V}║${N}"
-  echo -e "${V}║${N}  2. En la pantalla de login pulsa                                ${V}║${N}"
-  echo -e "${V}║${N}     ${Y}"Conectar con servidor"${N}                                     ${V}║${N}"
-  echo -e "${V}║${N}  3. Ingresa esta URL:                                          ${V}║${N}"
-  echo -e "${V}║${N}     ${BLD}${C}http://${ip}:${PORT}${N}" | head -c 56; echo "${V}║${N}"
-  echo -e "${V}║${N}                                                              ${V}║${N}"
-  echo -e "${V}║${N}  ${BLD}👤 Cuenta Admin:${N}                                             ${V}║${N}"
-  echo -e "${V}║${N}     Email:    ${C}admin@supermercadosgo.com${N}" | head -c 56; echo "${V}║${N}"
+  echo -e ""
+  echo -e "  ${V}╔════════════════════════════════════════════════════════════════════╗${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}  ${BLD}${V}🛒 ${BUSINESS_NAME}${N}                                                    ${V}║${N}"
+  echo -e "  ${V}║${N}  ${H}${BLD}Despliegue completado exitosamente${N}                               ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}╠════════════════════════════════════════════════════════════════════╣${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}  ${T}${BLD}🌐 URLs de Acceso${N}                                                ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}     ${C}${BLD}▸ Sitio Web:${N}    ${H}http://${ip}:${PORT}${N}                          ${V}║${N}"
+  echo -e "  ${V}║${N}     ${C}${BLD}▸ API REST:${N}     ${H}http://${ip}:${PORT}/api${N}                       ${V}║${N}"
+  echo -e "  ${V}║${N}     ${C}${BLD}▸ Health:${N}       ${H}http://${ip}:${PORT}/api/health${N}                    ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}╠════════════════════════════════════════════════════════════════════╣${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}  ${M}${BLD}📱 Configurar la App Flutter${N}                                     ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}     ${G}1.${N} Abre la app ${BLD}Supermercados Go${N}                                ${V}║${N}"
+  echo -e "  ${V}║${N}     ${G}2.${N} En login pulsa ${S}${BLD}\"Conectar con servidor\"${N}                   ${V}║${N}"
+  echo -e "  ${V}║${N}     ${G}3.${N} Ingresa la URL:                                              ${V}║${N}"
+  echo -e "  ${V}║${N}        ${BLD}${T}http://${ip}:${PORT}${N}                                            ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}╠════════════════════════════════════════════════════════════════════╣${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}  ${S}${BLD}🔑 Cuenta de Administrador${N}                                       ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}     ${G}${BLD}Email:${N}    ${C}admin@supermercadosgo.com${N}                              ${V}║${N}"
   if [ -n "$admin_pass" ]; then
-    echo -e "${V}║${N}     Password: ${C}${admin_pass}${N}" | head -c 56; echo "${V}║${N}"
+    echo -e "  ${V}║${N}     ${G}${BLD}Password:${N} ${C}${admin_pass}${N}                                       ${V}║${N}"
   else
-    echo -e "${V}║${N}     Password: ${C}ver ${cred_file}${N}" | head -c 56; echo "${V}║${N}"
+    echo -e "  ${V}║${N}     ${G}${BLD}Password:${N} ${C}ver ${cred_file}${N}                                     ${V}║${N}"
   fi
-  echo -e "${V}║${N}     ${R}⚠ Cambia la contraseña después del primer inicio${N}" | head -c 56; echo "${V}║${N}"
-  echo -e "${V}╚══════════════════════════════════════════════════════════════╝${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}     ${R}${BLD}⚠  Cambia la contraseña después del primer inicio${N}              ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}╚════════════════════════════════════════════════════════════════════╝${N}"
+  echo -e ""
+  echo -e "  ${G}Documentación: https://supermercadosgo.com/docs${N}"
+  echo -e "  ${G}Soporte: contacto@supermercadosgo.com${N}"
   echo -e ""
 }
 
@@ -527,33 +726,44 @@ show_summary() {
 # ═══════════════════════════════════════════════════════════════════════════
 main_menu() {
   echo -e ""
-  echo -e "${V}╔══════════════════════════════════════════════════════════════╗${N}"
-  echo -e "${V}║${N}  ${W}${BLD}🛒 Supermercados Go — Despliegue en Linux${N}                    ${V}║${N}"
-  echo -e "${V}║${N}  ${G}Compatible: Ubuntu · Debian · Kali · CentOS · Fedora · Arch${N}     ${V}║${N}"
-  echo -e "${V}╚══════════════════════════════════════════════════════════════╝${N}"
   echo -e ""
-  echo -e "  ${BLD}Selecciona el modo de despliegue:${N}"
+  echo -e "  ${V}╔════════════════════════════════════════════════════════════════════╗${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}║${N}  ${BLD}${V}🛒 SUPERMERCADOS GO${N}                                             ${V}║${N}"
+  echo -e "  ${V}║${N}  ${G}Despliegue en Linux — Ubuntu · Debian · Kali · CentOS · Fedora${N}    ${V}║${N}"
+  echo -e "  ${V}║${N}                                                                      ${V}║${N}"
+  echo -e "  ${V}╚════════════════════════════════════════════════════════════════════╝${N}"
   echo -e ""
-  echo -e "  ${V}1)${N} ${BLD}🖥️  Servidor (Producción)${N}"
-  echo -e "     Instala todo: Node.js, PM2, firewall, Nginx, systemd"
-  echo -e "     Ideal para el servidor real de la app y el sitio web"
+  echo -e "  ${BLD}${T}Selecciona el modo de despliegue:${N}"
   echo -e ""
-  echo -e "  ${Y}2)${N} ${BLD}🧪 Desarrollo / Prueba${N}"
-  echo -e "     Solo lo necesario: Node.js, base de datos, servidor"
-  echo -e "     Sin firewall, sin Nginx, sin systemd"
+  echo -e "  ${V}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${V}│${N}  ${V}${BLD}1) 🖥️  Servidor (Producción)${N}                                    ${V}│${N}"
+  echo -e "  ${V}│${N}     ${G}Instala todo: Node.js, PM2, firewall, Nginx, systemd${N}         ${V}│${N}"
+  echo -e "  ${V}│${N}     ${G}Ideal para el servidor real de la app${N}                         ${V}│${N}"
+  echo -e "  ${V}└──────────────────────────────────────────────────────────────────┘${N}"
   echo -e ""
-  echo -e "  ${R}3)${N} ${BLD}🛑 Detener servicios${N}"
-  echo -e "     Detiene PM2, systemd y procesos del servidor"
+  echo -e "  ${Y}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${Y}│${N}  ${Y}${BLD}2) 🧪 Desarrollo / Prueba${N}                                       ${Y}│${N}"
+  echo -e "  ${Y}│${N}     ${G}Solo lo necesario: Node.js, base de datos, servidor${N}           ${Y}│${N}"
+  echo -e "  ${Y}│${N}     ${G}Sin firewall, sin Nginx, sin systemd${N}                          ${Y}│${N}"
+  echo -e "  ${Y}└──────────────────────────────────────────────────────────────────┘${N}"
   echo -e ""
-  echo -e "  ${G}0)${N} Salir"
+  echo -e "  ${R}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${R}│${N}  ${R}${BLD}3) 🛑 Detener servicios${N}                                          ${R}│${N}"
+  echo -e "  ${R}│${N}     ${G}Detiene PM2, systemd y procesos del servidor${N}                  ${R}│${N}"
+  echo -e "  ${R}└──────────────────────────────────────────────────────────────────┘${N}"
   echo -e ""
-  echo -en "  ${C}${BLD}Opción [0-3]:${N} "
+  echo -e "  ${G}┌──────────────────────────────────────────────────────────────────┐${N}"
+  echo -e "  ${G}│${N}  ${G}${BLD}0) ⚡ Salir${N}                                                      ${G}│${N}"
+  echo -e "  ${G}└──────────────────────────────────────────────────────────────────┘${N}"
+  echo -e ""
+  echo -en "  ${C}${BLD}▸ Opción [0-3]:${N} "
   local opt; read -r opt
   case "$opt" in
     1) deploy_production ;;
     2) deploy_dev ;;
     3) stop_services; show_summary ;;
-    0) echo -e "${G}¡Hasta luego!${N}"; exit 0 ;;
+    0) echo -e "\n  ${V}¡Hasta luego! 👋${N}\n"; exit 0 ;;
     *) fail "Opción inválida"; exit 1 ;;
   esac
 }

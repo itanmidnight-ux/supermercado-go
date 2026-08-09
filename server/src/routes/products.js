@@ -74,8 +74,8 @@ router.get('/:id', (req, res) => {
  */
 router.post('/', authMiddleware(['admin']), (req, res) => {
   const { name, description, price, cost, compare_price, stock, stock_min, stock_max,
-    sku, barcode, category_id, image, unit, tax_rate, is_weighed,
-    is_offer, offer_price, brand, expiry_date, supplier_id } = req.body;
+    sku, barcode, category_id, image, images, unit, tax_rate, is_weighed,
+    is_offer, offer_price, brand, expiry_date, supplier_id, nit } = req.body;
 
   if (!name || price === undefined || price === null) {
     return res.status(400).json({ error: 'El nombre y el precio son obligatorios' });
@@ -88,16 +88,16 @@ router.post('/', authMiddleware(['admin']), (req, res) => {
     db.prepare(`
       INSERT INTO products (
         id, name, description, price, cost, compare_price, stock, stock_min, stock_max,
-        sku, barcode, category_id, image, unit, tax_rate, is_weighed,
-        is_offer, offer_price, brand, expiry_date, supplier_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sku, barcode, category_id, image, images, unit, tax_rate, is_weighed,
+        is_offer, offer_price, brand, expiry_date, supplier_id, nit, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, name, description || '', roundCOP(price), roundCOP(cost || 0), roundCOP(compare_price || 0),
       stock || 0, stock_min || 0, stock_max || null,
-      sku || null, barcode || null, category_id || null, image || null, unit || 'un',
-      tax_rate || 0, is_weighed ? 1 : 0,
+      sku || null, barcode || null, category_id || null, image || null, images || '[]',
+      unit || 'un', tax_rate || 0, is_weighed ? 1 : 0,
       is_offer ? 1 : 0, offer_price ? roundCOP(offer_price) : null, brand || null,
-      expiry_date || null, supplier_id || null, now, now
+      expiry_date || null, supplier_id || null, nit || null, now, now
     );
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
@@ -121,8 +121,8 @@ router.put('/:id', authMiddleware(['admin']), (req, res) => {
 
   const fields = [
     'name', 'description', 'price', 'cost', 'compare_price', 'stock', 'stock_min', 'stock_max',
-    'sku', 'barcode', 'category_id', 'image', 'unit', 'tax_rate', 'is_weighed',
-    'is_offer', 'offer_price', 'brand', 'expiry_date', 'supplier_id', 'is_active',
+    'sku', 'barcode', 'category_id', 'image', 'images', 'unit', 'tax_rate', 'is_weighed',
+    'is_offer', 'offer_price', 'brand', 'expiry_date', 'supplier_id', 'is_active', 'nit',
   ];
 
   const sets = [];

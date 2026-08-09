@@ -1942,6 +1942,199 @@ class LogsTab(BaseTab):
         return True
 
 
+# ── ImportTab ─────────────────────────────────────────────────────────────────
+class ImportTab(BaseTab):
+    def __init__(self):
+        super().__init__("📥 Importar Productos")
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        vbox.set_border_width(16)
+        lbl_info = Gtk.Label()
+        lbl_info.set_markup(
+            "<b>Importador inteligente de productos desde Excel</b>\n\n"
+            "· Arrastre o seleccione un archivo Excel (.xlsx, .xls)\n"
+            "· El sistema detectara automaticamente las columnas\n"
+            "· Crea categorías nuevas si no existen\n"
+            "· Detecta duplicados por SKU, codigo de barras o nombre\n"
+        )
+        vbox.pack_start(lbl_info, False, False, 0)
+
+        # File chooser
+        hbox_file = Gtk.Box(spacing=8)
+        lbl_file = Gtk.Label(label="Archivo Excel:")
+        self.file_entry = Gtk.Entry()
+        self.file_entry.set_editable(False)
+        self.file_entry.set_placeholder_text("Seleccione un archivo .xlsx o .xls")
+        btn_file = make_button("📂 Examinar")
+        btn_file.connect("clicked", self.choose_file)
+        hbox_file.pack_start(lbl_file, False, False, 0)
+        hbox_file.pack_start(self.file_entry, True, True, 0)
+        hbox_file.pack_start(btn_file, False, False, 0)
+        vbox.pack_start(hbox_file, False, False, 0)
+
+        # Buttons
+        hbox_btns = Gtk.Box(spacing=8)
+        btn_preview = make_button("🔍 Vista Previa")
+        btn_preview.connect("clicked", self.do_preview)
+        btn_import = make_button("📥 Importar Productos", "btn-warning")
+        btn_import.connect("clicked", self.do_import)
+        hbox_btns.pack_start(btn_preview, False, False, 0)
+        hbox_btns.pack_start(btn_import, False, False, 0)
+        vbox.pack_start(hbox_btns, False, False, 0)
+
+        # Results area
+        self.result_label = Gtk.Label(label="")
+        self.result_label.set_selectable(True)
+        self.result_label.set_xalign(0)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        sw.set_min_content_height(300)
+        sw.add(self.result_label)
+        vbox.pack_start(sw, True, True, 0)
+
+        self.pack_start(vbox, True, True, 0)
+
+    def choose_file(self, btn):
+        dlg = Gtk.FileChooserDialog(
+            title="Seleccionar archivo Excel",
+            action=Gtk.FileChooserAction.OPEN,
+            transient_for=self.get_toplevel(),
+            modal=True,
+        )
+        dlg.add_button("Cancelar", Gtk.ResponseType.CANCEL)
+        dlg.add_button("Abrir", Gtk.ResponseType.OK)
+
+        filtro = Gtk.FileFilter()
+        filtro.set_name("Archivos Excel")
+        filtro.add_pattern("*.xlsx")
+        filtro.add_pattern("*.xls")
+        dlg.add_filter(filtro)
+
+        dlg.set_current_folder(os.path.expanduser("~/Descargas"))
+        if dlg.run() == Gtk.ResponseType.OK:
+            self.file_entry.set_text(dlg.get_filename())
+        dlg.destroy()
+
+    def do_preview(self, btn):
+        path = self.file_entry.get_text()
+        if not path:
+            self.error_snackbar("Seleccione un archivo Excel primero")
+            return
+        self.result_label.set_markup("<i>Analizando archivo...</i>")
+
+        def task():
+            url = f"{BASE_URL}/api/products/preview-excel"
+            boundary = "----SupermercadosGoBoundary"
+            import mimetypes
+            content_type = "multipart/form-data; boundary=" + boundary
+
+            with open(path, "rb") as f:
+                file_data = f.read()
+
+            filename = os.path.basename(path)
+            body = b"--" + boundary.encode() + b"\r\n"
+            body += b'Content-Disposition: form-data; name="file"; filename="' + filename.encode() + b'"\r\n'
+            body += b"Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
+            body += file_data + b"\r\n"
+            body += b"--" + boundary.encode() + b"--\r\n"
+
+            req = urllib.request.Request(url, data=body, headers={
+                "Content-Type": content_type,
+                "Authorization": f"Bearer {api.token}"
+            }, method="POST")
+
+            try:
+                resp = urllib.request.urlopen(req, timeout=30)
+                return json.loads(resp.read().decode())
+            except Exception as e:
+                return {"error": str(e)}
+
+        def done(r):
+            if "error" in r:
+                self.result_label.set_markup(f'<b>Error:</b> {r["error"]}')
+                return
+            text = "<b>Vista Previa del Archivo:</b>\n"
+            text += '<span color="#009a53"><b>✓ Totales:</b> %d filas detectadas</span>\n' % r.get("total_rows", 0)
+            text += '<b>Columnas mapeadas:</b>\n'
+            mapping = r.get("mapping", {})
+            for k, v in mapping.items():
+                text += f"  · {k} → {v}\n"
+            sample = r.get("sample", [])
+            if sample:
+                text += "\n<b>Muestra de primeros productos:</b>\n"
+                for idx, s in enumerate(sample):
+                    name = s.get("name", "")
+                    price = s.get("price", "")
+                    cat = s.get("category_id", "")
+                    sku = s.get("sku", "")
+                    text += f"  {idx+1}. {name} | ${price} | {cat} | SKU: {sku}\n"
+            self.result_label.set_markup(text)
+        run_in_thread(task, done)
+
+    def do_import(self, btn):
+        path = self.file_entry.get_text()
+        if not path:
+            self.error_snackbar("Seleccione un archivo Excel primero")
+            return
+        self.result_label.set_markup("<b>Importando productos...</b>")
+
+        def task():
+            url = f"{BASE_URL}/api/products/import-excel"
+            boundary = "----SupermercadosGoImport"
+            filename = os.path.basename(path)
+
+            with open(path, "rb") as f:
+                file_data = f.read()
+
+            body = b"--" + boundary.encode() + b"\r\n"
+            body += b'Content-Disposition: form-data; name="file"; filename="' + filename.encode() + b'"\r\n'
+            body += b"Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
+            body += file_data + b"\r\n"
+            body += b"--" + boundary.encode() + b"--\r\n"
+
+            req = urllib.request.Request(url, data=body, headers={
+                "Content-Type": "multipart/form-data; boundary=" + boundary,
+                "Authorization": f"Bearer {api.token}"
+            }, method="POST")
+
+            try:
+                resp = urllib.request.urlopen(req, timeout=60)
+                return json.loads(resp.read().decode())
+            except Exception as e:
+                return {"error": str(e)}
+
+        def done(r):
+            if "error" in r:
+                self.result_label.set_markup(f'<b><span color="red">Error:</span></b> {r["error"]}')
+                return
+            results = r.get("results", r)
+            text = f'<b><span color="green"> Importacion completada!</span></b>\n\n'
+            text += f'<b>Creados:</b> {results.get("created", 0)}\n'
+            text += f'<b>Actualizados:</b> {results.get("updated", 0)}\n'
+            text += f'<b>Omitidos:</b> {results.get("skipped", 0)}\n'
+            text += f'<b>Total procesado:</b> {results.get("total", 0)}\n\n'
+            text += f'<b>Mapeo usado:</b>\n'
+            mapping = results.get("mapping", {})
+            for k, v in mapping.items():
+                text += f"  · {k} → {v}\n"
+            errors = results.get("errors", [])
+            if errors:
+                text += f'\n<b><span color="#e74c3c">Errores ({len(errors)}):</span></b>\n'
+                for e in errors[:15]:
+                    text += f"  · {e}\n"
+                if len(errors) > 15:
+                    text += f"  ... y {len(errors) - 15} mas\n"
+            self.result_label.set_markup(text)
+            self.show_snackbar("Importacion completada!")
+        box = self.get_children()[0]
+        # add result label
+        for ch in box.get_children():
+            if isinstance(ch, Gtk.ScrolledWindow):
+                child = ch.get_child()
+                if isinstance(child, Gtk.Label):
+                    self.result_label = child
+        run_in_thread(task, done)
+
+
 # ── Main Window ──────────────────────────────────────────────────────────────
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app=None):
@@ -1972,7 +2165,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.notebook.set_scrollable(True)
         tabs = [
             MonitoreoTab, PedidosTab, VentasTab, EmpleadosTab, ProductosTab,
-            UsuariosTab, InventarioTab, KardexTab, ComprasTab, FacturacionTab,
+            ImportTab, UsuariosTab, InventarioTab, KardexTab, ComprasTab, FacturacionTab,
             CajaTab, ReportesTab, PromocionesTab, AuditoriaTab, ConfiguracionTab,
             SeguridadTab, LogsTab,
         ]

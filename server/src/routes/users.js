@@ -4,6 +4,8 @@ const { Router } = express;
 const { db } = require('../db');
 const { nowBogota } = require('../utils/dates');
 const { authMiddleware } = require('../middleware/auth');
+const { hashPassword } = require('../utils/passwords');
+const { v4: uuidv4 } = require('uuid');
 
 const router = Router();
 
@@ -34,6 +36,42 @@ router.get('/', authMiddleware(['admin']), (req, res) => {
     data: users,
     pagination: { page: Number(page), limit: Number(limit), total: count.total, pages: Math.ceil(count.total / Number(limit)) },
   });
+});
+
+/**
+ * POST /api/users — Crear usuario [admin]
+ */
+router.post('/', authMiddleware(['admin']), async (req, res) => {
+  const { name, email, phone, password, role, avatar } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Nombre, email y contraseña son obligatorios' });
+  }
+
+  const validRoles = ['admin', 'worker', 'client'];
+  const userRole = validRoles.includes(role) ? role : 'client';
+
+  // Check if email already exists
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existing) {
+    return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
+  }
+
+  const hashedPassword = await hashPassword(password);
+  const id = uuidv4();
+  const now = nowBogota();
+
+  db.prepare(`
+    INSERT INTO users (id, name, email, phone, password, role, avatar, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(id, name, email, phone || null, hashedPassword, userRole, avatar || null, now, now);
+
+  const user = db.prepare(`
+    SELECT id, name, email, phone, role, avatar, is_active, created_at
+    FROM users WHERE id = ?
+  `).get(id);
+
+  res.status(201).json({ data: user, message: 'Usuario creado exitosamente' });
 });
 
 /**

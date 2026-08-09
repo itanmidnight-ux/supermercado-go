@@ -4,7 +4,7 @@ import '../services/api_service.dart';
 class SettingsProvider extends ChangeNotifier {
   String _businessName = 'Supermercados Go';
   String _businessPhone = '+573044016277';
-  String _businessEmail = 'carrierjawerly@gmail.com';
+  String _businessEmail = 'admin@supermercado.go';
   String _businessAddress = 'KDX 1-2B Los Mangos';
   String _businessHours = '6:00 AM - 6:00 PM';
   String _businessTagline = 'Tu supermercado a la puerta de tu casa';

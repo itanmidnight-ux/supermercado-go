@@ -56,7 +56,8 @@ const config = {
 
   // JWT — OBLIGATORIO en cualquier entorno (no hay fallback predecible)
   jwtSecret: required('JWT_SECRET') || (() => { throw new Error('JWT_SECRET es obligatorio. Define la variable de entorno JWT_SECRET.'); })(),
-  jwtExpiresIn: strDefault('JWT_EXPIRES_IN', '24h'),
+  // 7 días: reduce la frecuencia de "sesión expirada" en paneles sin sacrificar seguridad
+  jwtExpiresIn: strDefault('JWT_EXPIRES_IN', '7d'),
 
   // API — OBLIGATORIO en cualquier entorno
   apiKey: required('API_KEY') || (() => { throw new Error('API_KEY es obligatorio. Define la variable de entorno API_KEY.'); })(),

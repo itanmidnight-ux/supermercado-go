@@ -1,0 +1,50 @@
+[Unit]
+Description=Supermercados Go - Backend API Server
+Documentation=https://github.com/supermercados-go
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=supermercadosgo
+Group=supermercadosgo
+WorkingDirectory=/opt/supermercados-go/server
+ExecStart=/opt/nodejs/bin/node src/index.js
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Variables de entorno
+EnvironmentFile=/opt/supermercados-go/server/.env
+
+# Seguridad del servicio
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/supermercados-go/server/data
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Recursos
+LimitNOFILE=65536
+LimitNPROC=512
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=supermercados-go
+
+[Install]
+WantedBy=multi-user.target

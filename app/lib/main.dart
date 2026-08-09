@@ -17,6 +17,8 @@ import 'providers/order_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/connectivity_provider.dart';
 import 'services/storage_service.dart';
+import 'theme/app_theme.dart';
+import 'theme/app_colors.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/server_config_dialog.dart';
 import 'widgets/app_drawer.dart';
@@ -28,6 +30,52 @@ import 'widgets/money_text.dart';
 import 'widgets/quantity_stepper.dart';
 import 'widgets/product_card.dart';
 import 'widgets/order_status_chip.dart';
+// Client screens
+import 'screens/client/login_screen.dart';
+import 'screens/client/home_screen.dart';
+import 'screens/client/product_detail_screen.dart';
+import 'screens/client/cart_screen.dart';
+import 'screens/client/checkout_screen.dart';
+import 'screens/client/my_orders_screen.dart';
+import 'screens/client/order_detail_screen_client.dart';
+import 'screens/client/order_tracking_screen.dart';
+// Worker screens
+import 'screens/worker/worker_home_screen.dart';
+import 'screens/worker/worker_orders_screen.dart';
+import 'screens/worker/picking_screen.dart';
+import 'screens/worker/scanner_screen.dart';
+import 'screens/worker/substitution_screen.dart';
+import 'screens/worker/delivery_proof_screen.dart';
+import 'screens/worker/route_screen.dart';
+import 'screens/worker/earnings_screen.dart';
+import 'screens/worker/history_screen.dart';
+import 'screens/worker/cash_session_screen.dart';
+// Admin screens
+import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/admin/admin_products_screen.dart';
+import 'screens/admin/admin_product_form_screen.dart';
+import 'screens/admin/admin_categories_screen.dart';
+import 'screens/admin/admin_category_form_screen.dart';
+import 'screens/admin/admin_orders_screen.dart';
+import 'screens/admin/admin_users_screen.dart';
+import 'screens/admin/admin_user_form_screen.dart';
+import 'screens/admin/admin_settings_screen.dart';
+import 'screens/admin/admin_inventory_screen.dart';
+import 'screens/admin/admin_kardex_screen.dart';
+import 'screens/admin/admin_stock_count_screen.dart';
+import 'screens/admin/admin_suppliers_screen.dart';
+import 'screens/admin/admin_supplier_form_screen.dart';
+import 'screens/admin/admin_purchases_screen.dart';
+import 'screens/admin/admin_purchase_form_screen.dart';
+import 'screens/admin/admin_invoices_screen.dart';
+import 'screens/admin/admin_invoice_config_screen.dart';
+import 'screens/admin/admin_reports_screen.dart';
+import 'screens/admin/admin_promotions_screen.dart';
+import 'screens/admin/admin_promo_form_screen.dart';
+import 'screens/admin/admin_workers_perf_screen.dart';
+import 'screens/admin/admin_audit_screen.dart';
+import 'screens/admin/admin_barcode_print_screen.dart';
+import 'screens/admin/admin_banners_screen.dart';
 
 // ======================== BANNER MODEL ========================
 class Banner {
@@ -72,64 +120,9 @@ class SupermercadosGoApp extends StatelessWidget {
     return MaterialApp(
       title: AppStrings.appName,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: AppColors.primary,
-        brightness: Brightness.light,
-        primaryColor: AppColors.primary,
-        scaffoldBackgroundColor: AppColors.background,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          iconTheme: IconThemeData(color: Colors.white),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        ),
-        cardTheme: CardThemeData(
-          elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          color: AppColors.surface,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.gray,
-          type: BottomNavigationBarType.fixed,
-        ),
-        chipTheme: ChipThemeData(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-        ),
-        dividerTheme: const DividerThemeData(
-          color: AppColors.lightGray,
-          thickness: 1,
-        ),
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       initialRoute: '/login',
       onGenerateRoute: _onGenerateRoute,
     );
@@ -140,20 +133,20 @@ class SupermercadosGoApp extends StatelessWidget {
     final name = settings.name ?? '/';
 
     final routes = <String, WidgetBuilder>{
-      '/login': (_) => _buildWithOffline(const _LoginScreen()),
+      '/login': (_) => _buildWithOffline(const LoginScreen()),
       '/': (_) => const _AuthGate(),
-      '/home': (_) => _buildWithOffline(const _HomeScreen()),
-      '/product': (_) => _buildWithOffline(_ProductDetailScreen(
+      '/home': (_) => _buildWithOffline(const HomeScreen()),
+      '/product': (_) => _buildWithOffline(ProductDetailScreen(
           productId: args?['id'] as int? ?? 0)),
-      '/cart': (_) => _buildWithOffline(const _CartScreen()),
-      '/checkout': (_) => _buildWithOffline(const _CheckoutScreen()),
+      '/cart': (_) => _buildWithOffline(const CartScreen()),
+      '/checkout': (_) => _buildWithOffline(const CheckoutScreen()),
       '/search': (_) => _buildWithOffline(const _SearchScreen()),
       '/category': (_) => _buildWithOffline(_CategoryScreen(
           categoryId: args?['id'] as int? ?? 0)),
-      '/my-orders': (_) => _buildWithOffline(const _MyOrdersScreen()),
-      '/order': (_) => _buildWithOffline(_OrderDetailScreen(
+      '/my-orders': (_) => _buildWithOffline(const MyOrdersScreen()),
+      '/order': (_) => _buildWithOffline(OrderDetailScreenClient(
           orderId: args?['id'] as int? ?? 0)),
-      '/order-tracking': (_) => _buildWithOffline(_OrderTrackingScreen(
+      '/order-tracking': (_) => _buildWithOffline(OrderTrackingScreen(
           orderId: args?['id'] as int? ?? 0)),
       '/addresses': (_) => _buildWithOffline(const _AddressesScreen()),
       '/address-picker': (_) => _buildWithOffline(const _AddressPickerScreen()),
@@ -168,53 +161,53 @@ class SupermercadosGoApp extends StatelessWidget {
           orderId: args?['id'] as int? ?? 0)),
       '/invoice': (_) => _buildWithOffline(_InvoiceScreen(
           orderId: args?['id'] as int? ?? 0)),
-      '/worker/home': (_) => _buildWithOffline(const _WorkerHomeScreen()),
-      '/worker/orders': (_) => _buildWithOffline(const _WorkerOrdersScreen()),
-      '/worker/delivery': (_) => _buildWithOffline(_WorkerDeliveryScreen(
+      '/worker/home': (_) => _buildWithOffline(const WorkerHomeScreen()),
+      '/worker/orders': (_) => _buildWithOffline(const WorkerOrdersScreen()),
+      '/worker/delivery': (_) => _buildWithOffline(const WorkerHomeScreen()),
+      '/worker/picking': (_) => _buildWithOffline(PickingScreen(
           orderId: args?['id'] as int? ?? 0)),
-      '/worker/picking': (_) => _buildWithOffline(_WorkerPickingScreen(
-          orderId: args?['id'] as int? ?? 0)),
-      '/worker/scanner': (_) => _buildWithOffline(const _WorkerScannerScreen()),
-      '/worker/substitute': (_) => _buildWithOffline(_WorkerSubstituteScreen(
-          orderId: args?['id'] as int?, itemId: args?['item_id'] as int?)),
-      '/worker/delivery-proof': (_) => _buildWithOffline(_WorkerDeliveryProofScreen(
-          orderId: args?['id'] as int? ?? 0)),
-      '/worker/route': (_) => _buildWithOffline(const _WorkerRouteScreen()),
-      '/worker/earnings': (_) => _buildWithOffline(const _WorkerEarningsScreen()),
-      '/worker/history': (_) => _buildWithOffline(const _WorkerHistoryScreen()),
-      '/worker/cash': (_) => _buildWithOffline(const _WorkerCashScreen()),
-      '/admin/dashboard': (_) => _buildWithOffline(const _AdminDashboardScreen()),
-      '/admin/products': (_) => _buildWithOffline(const _AdminProductsScreen()),
-      '/admin/product-form': (_) => _buildWithOffline(_AdminProductFormScreen(
+      '/worker/scanner': (_) => _buildWithOffline(ScannerScreen(
+          orderId: args?['order_id'] as int? ?? 0, itemId: args?['item_id'] as int?)),
+      '/worker/substitute': (_) => _buildWithOffline(SubstitutionScreen(
+          orderId: args?['order_id'] as int? ?? 0, item: args?['item'])),
+      '/worker/delivery-proof': (_) => _buildWithOffline(DeliveryProofScreen(
+          orderId: args?['order_id'] as int? ?? 0)),
+      '/worker/route': (_) => _buildWithOffline(const RouteScreen()),
+      '/worker/earnings': (_) => _buildWithOffline(const EarningsScreen()),
+      '/worker/history': (_) => _buildWithOffline(const HistoryScreen()),
+      '/worker/cash': (_) => _buildWithOffline(const CashSessionScreen()),
+      '/admin/dashboard': (_) => _buildWithOffline(const AdminDashboardScreen()),
+      '/admin/products': (_) => _buildWithOffline(const AdminProductsScreen()),
+      '/admin/product-form': (_) => _buildWithOffline(AdminProductFormScreen(
           productId: args?['id'] as int?)),
-      '/admin/categories': (_) => _buildWithOffline(const _AdminCategoriesScreen()),
-      '/admin/category-form': (_) => _buildWithOffline(_AdminCategoryFormScreen(
+      '/admin/categories': (_) => _buildWithOffline(const AdminCategoriesScreen()),
+      '/admin/category-form': (_) => _buildWithOffline(AdminCategoryFormScreen(
           categoryId: args?['id'] as int?)),
-      '/admin/orders': (_) => _buildWithOffline(const _AdminOrdersScreen()),
-      '/admin/users': (_) => _buildWithOffline(const _AdminUsersScreen()),
-      '/admin/user-form': (_) => _buildWithOffline(_AdminUserFormScreen(
+      '/admin/orders': (_) => _buildWithOffline(const AdminOrdersScreen()),
+      '/admin/users': (_) => _buildWithOffline(const AdminUsersScreen()),
+      '/admin/user-form': (_) => _buildWithOffline(AdminUserFormScreen(
           userId: args?['id'] as int?)),
-      '/admin/settings': (_) => _buildWithOffline(const _AdminSettingsScreen()),
-      '/admin/inventory': (_) => _buildWithOffline(const _AdminInventoryScreen()),
-      '/admin/kardex': (_) => _buildWithOffline(_AdminKardexScreen(
+      '/admin/settings': (_) => _buildWithOffline(const AdminSettingsScreen()),
+      '/admin/inventory': (_) => _buildWithOffline(const AdminInventoryScreen()),
+      '/admin/kardex': (_) => _buildWithOffline(AdminKardexScreen(
           productId: args?['id'] as int? ?? 0)),
-      '/admin/stock-count': (_) => _buildWithOffline(const _AdminStockCountScreen()),
-      '/admin/suppliers': (_) => _buildWithOffline(const _AdminSuppliersScreen()),
-      '/admin/supplier-form': (_) => _buildWithOffline(_AdminSupplierFormScreen(
+      '/admin/stock-count': (_) => _buildWithOffline(const AdminStockCountScreen()),
+      '/admin/suppliers': (_) => _buildWithOffline(const AdminSuppliersScreen()),
+      '/admin/supplier-form': (_) => _buildWithOffline(AdminSupplierFormScreen(
           supplierId: args?['id'] as int?)),
-      '/admin/purchases': (_) => _buildWithOffline(const _AdminPurchasesScreen()),
-      '/admin/purchase-form': (_) => _buildWithOffline(_AdminPurchaseFormScreen(
+      '/admin/purchases': (_) => _buildWithOffline(const AdminPurchasesScreen()),
+      '/admin/purchase-form': (_) => _buildWithOffline(AdminPurchaseFormScreen(
           purchaseId: args?['id'] as int?)),
-      '/admin/invoices': (_) => _buildWithOffline(const _AdminInvoicesScreen()),
-      '/admin/invoice-config': (_) => _buildWithOffline(const _AdminInvoiceConfigScreen()),
-      '/admin/reports': (_) => _buildWithOffline(const _AdminReportsScreen()),
-      '/admin/promotions': (_) => _buildWithOffline(const _AdminPromotionsScreen()),
-      '/admin/promo-form': (_) => _buildWithOffline(_AdminPromoFormScreen(
+      '/admin/invoices': (_) => _buildWithOffline(const AdminInvoicesScreen()),
+      '/admin/invoice-config': (_) => _buildWithOffline(const AdminInvoiceConfigScreen()),
+      '/admin/reports': (_) => _buildWithOffline(const AdminReportsScreen()),
+      '/admin/promotions': (_) => _buildWithOffline(const AdminPromotionsScreen()),
+      '/admin/promo-form': (_) => _buildWithOffline(AdminPromoFormScreen(
           promoId: args?['id'] as int?)),
-      '/admin/workers-perf': (_) => _buildWithOffline(const _AdminWorkersPerfScreen()),
-      '/admin/audit': (_) => _buildWithOffline(const _AdminAuditScreen()),
-      '/admin/barcode-print': (_) => _buildWithOffline(const _AdminBarcodePrintScreen()),
-      '/admin/banners': (_) => _buildWithOffline(const _AdminBannersScreen()),
+      '/admin/workers-perf': (_) => _buildWithOffline(const AdminWorkersPerfScreen()),
+      '/admin/audit': (_) => _buildWithOffline(const AdminAuditScreen()),
+      '/admin/barcode-print': (_) => _buildWithOffline(const AdminBarcodePrintScreen()),
+      '/admin/banners': (_) => _buildWithOffline(const AdminBannersScreen()),
       '/server-config': (_) => const _ServerConfigScreen(),
     };
 
@@ -2176,141 +2169,6 @@ class _InvoiceScreen extends StatelessWidget {
   }
 }
 
-// ======================== WORKER SCREENS ========================
-
-class _WorkerHomeScreen extends StatelessWidget {
-  const _WorkerHomeScreen();
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    return Scaffold(
-      appBar: AppBar(backgroundColor: AppColors.primary, foregroundColor: Colors.white, title: const Text('Repartidor'), automaticallyImplyLeading: false),
-      drawer: const AppDrawer(),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          CircleAvatar(radius: 32, backgroundColor: AppColors.primary.withOpacity(0.1), child: const Icon(Icons.person, size: 40, color: AppColors.primary)),
-          const SizedBox(height: 12),
-          Text('¡Hola, ${auth.user?.name ?? ''}!', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
-          _buildActionCard(context, Icons.list, 'Pedidos Disponibles', 'Ver pedidos listos para recoger', AppColors.primary, '/worker/orders'),
-          const SizedBox(height: 12),
-          _buildActionCard(context, Icons.delivery_dining, 'Entrega Activa', 'Ver tu entrega en curso', AppColors.accent, '/worker/route'),
-          const SizedBox(height: 12),
-          _buildActionCard(context, Icons.attach_money, 'Mis Ganancias', 'Ver resumen de ganancias', AppColors.success, '/worker/earnings'),
-        ]),
-      ),
-    );
-  }
-  Widget _buildActionCard(BuildContext context, IconData icon, String title, String subtitle, Color color, String route) {
-    return Card(
-      child: InkWell(onTap: () => Navigator.pushNamed(context, route), borderRadius: BorderRadius.circular(12), child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [
-        Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)), Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))])),
-        const Icon(Icons.chevron_right, color: AppColors.gray),
-      ]))),
-    );
-  }
-}
-
-class _WorkerOrdersScreen extends StatefulWidget {
-  const _WorkerOrdersScreen();
-  @override
-  State<_WorkerOrdersScreen> createState() => _WorkerOrdersScreenState();
-}
-class _WorkerOrdersScreenState extends State<_WorkerOrdersScreen> {
-  @override
-  void initState() { super.initState(); context.read<OrderProvider>().loadAvailableOrders(); }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Pedidos Disponibles', showBack: true), body: Consumer<OrderProvider>(builder: (_, op, __) {
-      if (op.isLoading && op.orders.isEmpty) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-      if (op.orders.isEmpty) return const EmptyState(icon: Icons.inventory_2, title: 'Sin pedidos', subtitle: 'No hay pedidos disponibles en este momento');
-      return ListView.builder(padding: const EdgeInsets.all(12), itemCount: op.orders.length, itemBuilder: (_, i) {
-        final o = op.orders[i];
-        return Card(margin: const EdgeInsets.only(bottom: 10), child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(o.displayNumber, style: const TextStyle(fontWeight: FontWeight.bold)), MoneyText(amount: o.total, size: MoneySize.medium)]),
-          const SizedBox(height: 8),
-          Text('${o.items.length} productos', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          if (o.deliveryAddress != null) Text(o.deliveryAddress!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          const SizedBox(height: 12),
-          SizedBox(width: double.infinity, height: 42, child: ElevatedButton(onPressed: () async { final ok = await op.acceptOrder(o.id); if (ok && mounted) Navigator.pushNamed(context, '/worker/picking', arguments: {'id': o.id}); }, child: const Text('Aceptar Pedido', style: TextStyle(fontWeight: FontWeight.w600)))),
-        ])));
-      });
-    }));
-  }
-}
-
-class _WorkerDeliveryScreen extends StatelessWidget {
-  final int orderId;
-  const _WorkerDeliveryScreen({required this.orderId});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: CustomAppBar(title: 'Entrega #${orderId.toString().padLeft(4, '0')}', showBack: true), body: Center(child: Text('Detalles de entrega #$orderId')));
-  }
-}
-class _WorkerPickingScreen extends StatelessWidget {
-  final int orderId;
-  const _WorkerPickingScreen({required this.orderId});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: CustomAppBar(title: 'Preparar #${orderId.toString().padLeft(4, '0')}', showBack: true), body: Center(child: Text('Preparar pedido #$orderId')));
-  }
-}
-class _WorkerScannerScreen extends StatelessWidget {
-  const _WorkerScannerScreen();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Escanear', showBack: true), body: const Center(child: Text('Escáner de código de barras')));
-  }
-}
-class _WorkerSubstituteScreen extends StatelessWidget {
-  final int? orderId;
-  final int? itemId;
-  const _WorkerSubstituteScreen({this.orderId, this.itemId});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Sustituir Producto', showBack: true), body: Center(child: Text('Sustituir producto orden #$orderId')));
-  }
-}
-class _WorkerDeliveryProofScreen extends StatelessWidget {
-  final int orderId;
-  const _WorkerDeliveryProofScreen({required this.orderId});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Comprobante de Entrega', showBack: true), body: Center(child: Text('Comprobante #$orderId')));
-  }
-}
-class _WorkerRouteScreen extends StatelessWidget {
-  const _WorkerRouteScreen();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Ruta de Entrega', showBack: true), body: const EmptyState(icon: Icons.delivery_dining, title: 'Sin entrega activa', subtitle: 'Acepta un pedido para iniciar tu ruta')));
-  }
-}
-class _WorkerEarningsScreen extends StatelessWidget {
-  const _WorkerEarningsScreen();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Ganancias', showBack: true), body: const Center(child: Text('Resumen de ganancias')));
-  }
-}
-class _WorkerHistoryScreen extends StatelessWidget {
-  const _WorkerHistoryScreen();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Historial', showBack: true), body: const EmptyState(icon: Icons.history, title: 'Sin historial', subtitle: 'Tus entregas completadas aparecerán aquí')));
-  }
-}
-class _WorkerCashScreen extends StatelessWidget {
-  const _WorkerCashScreen();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(appBar: const CustomAppBar(title: 'Caja', showBack: true), body: const Center(child: Text('Resumen de caja')));
-  }
-}
-
 // ======================== ADMIN SCREENS ========================
 
 class _AdminDashboardScreen extends StatelessWidget {
@@ -2606,7 +2464,7 @@ class _AdminSettingsScreenState extends State<_AdminSettingsScreen> with SingleT
             const SizedBox(height: 12),
             const ListTile(leading: Icon(Icons.store), title: Text('Supermercados Go'), subtitle: Text('KDX 1-2B Los Mangos, Cúcuta')),
             const ListTile(leading: Icon(Icons.phone), title: Text('+57 304 401 6277')),
-            const ListTile(leading: Icon(Icons.email), title: Text('carrierjawerly@gmail.com')),
+            const ListTile(leading: Icon(Icons.email), title: Text('admin@supermercado.go')),
             const ListTile(leading: Icon(Icons.schedule), title: Text('6:00 AM - 6:00 PM')),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardado'), backgroundColor: AppColors.primary)), child: const Text('Guardar Cambios')),
