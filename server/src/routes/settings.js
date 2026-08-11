@@ -1,136 +1,89 @@
-'use strict';
+// src/routes/settings.js — Rutas de configuración del sistema
 const express = require('express');
-const router  = express.Router();
-const { adminAuth, clientAuth } = require('../middleware/auth');
-const { getDB } = require('../db/database');
-const { settingsCache } = require('../utils/memoryCache');
+const { Router } = express;
+const { db } = require('../db');
+const { nowBogota } = require('../utils/dates');
+const { authMiddleware } = require('../middleware/auth');
+const config = require('../config');
 
-// GET /api/settings/public — marca + contacto público, sin auth. Un
-// supermercado real necesita mostrar teléfono/dirección/horario a
-// cualquier visitante (es información de vidriera, no un secreto) -- lo
-// único que se sigue reservando para clientes autenticados es lo
-// realmente sensible: nequi_phone/nequi_name (cuenta de pago personal,
-// no se expone a scraping anónimo) y cualquier dato de dominio/admin.
-router.get('/public', async (req, res, next) => {
-  try {
-    const settings = await settingsCache.wrap('public', 60_000, async () => {
-      const keys = [
-        'theme_name', 'theme_primary', 'theme_accent', 'theme_logo_url',
-        'empresa_nombre', 'empresa_descripcion', 'horario_atencion',
-        'contact_phone', 'contact_email', 'contact_address',
-        'contact_instagram', 'contact_facebook',
-      ];
-      const { rows } = await getDB().query('SELECT key, value FROM settings WHERE key = ANY($1)', [keys]);
-      const out = {};
-      rows.forEach(r => { out[r.key] = r.value; });
-      return out;
-    });
-    res.json({ settings });
-  } catch (e) { next(e); }
-});
+const router = Router();
 
-// GET /api/settings — get all settings (admin) or public subset (client)
-router.get('/', clientAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    if (req.user.role === 'admin') {
-      const settings = await settingsCache.wrap('admin', 30_000, async () => {
-        const { rows } = await db.query('SELECT key, value FROM settings');
-        const out = {};
-        rows.forEach(r => { out[r.key] = r.value; });
-        return out;
-      });
-      return res.json({ settings });
-    }
-    // Clients only get nequi_phone + nequi_name + empresa_nombre + horario_atencion + contact_*
-    const settings = await settingsCache.wrap('client', 60_000, async () => {
-      const allowed = ['nequi_phone', 'nequi_name', 'empresa_nombre', 'horario_atencion', 'empresa_descripcion',
-                       'contact_phone', 'contact_email', 'contact_address', 'contact_instagram', 'contact_facebook'];
-      const { rows } = await db.query('SELECT key, value FROM settings WHERE key = ANY($1)', [allowed]);
-      const out = {};
-      rows.forEach(r => { out[r.key] = r.value; });
-      return out;
-    });
-    res.json({ settings });
-  } catch (e) { next(e); }
-});
+/**
+ * GET /api/settings — Obtener todas las configuraciones [admin]
+ */
+router.get('/', authMiddleware(['admin']), (req, res) => {
+  const settings = db.prepare('SELECT key, value, updated_at FROM settings ORDER BY key').all();
 
-const ALLOWED_SETTINGS_KEYS = [
-  'nequi_phone', 'nequi_name',
-  'empresa_nombre', 'empresa_descripcion', 'horario_atencion',
-  'theme_primary', 'theme_accent', 'theme_name',
-  'server_domain', 'extra_domains',
-  'contact_phone', 'contact_email', 'contact_address',
-  'contact_instagram', 'contact_facebook',
-];
-
-// Dominio suelto (sin protocolo), opcionalmente con :puerto. Usado tanto para
-// server_domain (uno) como cada entrada separada por coma de extra_domains.
-const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+(:[0-9]{1,5})?$/i;
-
-function validateDomainSetting(key, strVal) {
-  if (key !== 'server_domain' && key !== 'extra_domains') return null;
-  if (!strVal) return null; // vacio = quitar/deshabilitar, valido
-  const entries = strVal.split(',').map(d => d.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '')).filter(Boolean);
-  if (key === 'server_domain' && entries.length > 1) return 'server_domain acepta un solo dominio';
-  for (const d of entries) {
-    if (!DOMAIN_RE.test(d)) return `dominio inválido: "${d}" (formato esperado: midominio.com, sin protocolo ni rutas)`;
+  // Convertir a objeto
+  const obj = {};
+  for (const s of settings) {
+    obj[s.key] = s.value;
   }
-  return null;
-}
 
-// PUT /api/settings — update setting (admin only)
-router.put('/', adminAuth, async (req, res, next) => {
-  try {
-    const { key, value } = req.body;
-    if (!key || value === undefined) return res.status(400).json({ error: 'key y value requeridos' });
-    if (!ALLOWED_SETTINGS_KEYS.includes(key))
-      return res.status(400).json({ error: `key inválido. Permitidos: ${ALLOWED_SETTINGS_KEYS.join(', ')}` });
-    const strVal = String(value).trim();
-    if (strVal.length > 500) return res.status(400).json({ error: 'value máximo 500 caracteres' });
-    const domainErr = validateDomainSetting(key, strVal);
-    if (domainErr) return res.status(400).json({ error: domainErr });
-    await getDB().query(`
-      INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
-      ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
-    `, [key, strVal]);
-    settingsCache.flush();
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+  res.json({ data: obj });
 });
 
-const multer = require('multer');
-const path   = require('path');
-const fs     = require('fs');
+/**
+ * PUT /api/settings — Actualizar configuraciones [admin]
+ */
+router.put('/', authMiddleware(['admin']), (req, res) => {
+  const entries = req.body;
+  if (!entries || typeof entries !== 'object') {
+    return res.status(400).json({ error: 'Se requiere un objeto con las configuraciones a actualizar' });
+  }
 
-const LOGO_DIR = path.join(process.env.APPDATA || process.env.HOME, 'pedidos-bot', 'branding');
-if (!fs.existsSync(LOGO_DIR)) fs.mkdirSync(LOGO_DIR, { recursive: true });
+  const now = nowBogota();
+  const upsert = db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `);
 
-const logoUpload = multer({
-  dest: LOGO_DIR,
-  limits: { fileSize: 4 * 1024 * 1024 },
-  fileFilter: (_, file, cb) => cb(null, file.mimetype.startsWith('image/')),
+  const batch = db.transaction((items) => {
+    for (const [key, value] of Object.entries(items)) {
+      upsert.run(key, String(value), now);
+    }
+  });
+
+  batch(entries);
+
+  res.json({ message: 'Configuraciones actualizadas exitosamente' });
 });
 
-// POST /api/settings/logo — subir logo de marca (admin only)
-router.post('/logo', adminAuth, logoUpload.single('logo'), async (req, res, next) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
-    const ext = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
-    const filename = `logo_${Date.now()}.${ext}`;
-    fs.renameSync(req.file.path, path.join(LOGO_DIR, filename));
-    await getDB().query(`INSERT INTO settings (key, value) VALUES ('theme_logo_url', $1)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [filename]);
-    settingsCache.flush();
-    res.json({ filename });
-  } catch (e) { next(e); }
-});
+/**
+ * GET /api/settings/public — Información pública del negocio + contenido personalizable
+ * Público: no requiere autenticación
+ */
+router.get('/public', (req, res) => {
+  // Obtener settings personalizados de la tabla
+  const allSettings = db.prepare('SELECT key, value FROM settings').all();
+  const custom = {};
+  for (const s of allSettings) { custom[s.key] = s.value; }
 
-// GET /api/settings/logo/:filename — servir el logo (publico, no es dato sensible)
-router.get('/logo/:filename', (req, res) => {
-  const filepath = path.join(LOGO_DIR, path.basename(req.params.filename));
-  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Logo no encontrado' });
-  res.sendFile(filepath);
+  res.json({
+    data: {
+      business_name: config.business.name,
+      business_phone: config.business.phone,
+      business_email: config.business.email,
+      business_address: config.business.address,
+      business_city: config.business.city,
+      business_department: config.business.department,
+      business_hours: config.business.hours,
+      business_tagline: config.business.tagline,
+      brand_primary: config.brand.primary,
+      brand_accent: config.brand.accent,
+      brand_dark: config.brand.dark,
+      delivery_fee: config.delivery.feeDefault,
+      free_delivery_min: config.delivery.freeMin,
+      operating_zone: config.delivery.zone,
+      whatsapp_enabled: config.whatsapp.enabled,
+      // Contenido personalizable
+      delivery_zones: custom.delivery_zones || '["Cúcuta"]',
+      delivery_info_text: custom.delivery_info_text || 'Realizamos entregas en Cúcuta y zonas aledañas.',
+      how_to_buy_text: custom.how_to_buy_text || '',
+      app_welcome_message: custom.app_welcome_message || '',
+      help_faq: custom.help_faq || '',
+    },
+  });
 });
 
 module.exports = router;

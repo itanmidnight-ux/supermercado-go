@@ -1,135 +1,114 @@
-'use strict';
+// src/routes/payments.js — Rutas de pagos
 const express = require('express');
-const router  = express.Router();
-const { adminAuth, clientAuth } = require('../middleware/auth');
-const { getDB } = require('../db/database');
-const { encryptText, decryptText } = require('../utils/botCrypto');
-const { sanitizeText } = require('../utils/sanitize');
+const { Router } = express;
+const { db, runInTransaction } = require('../db');
+const { generateId } = require('../utils/ids');
+const { roundCOP } = require('../utils/money');
+const { nowBogota } = require('../utils/dates');
+const { authMiddleware, apiAuth } = require('../middleware/auth');
 
-// Nequi Conecta (pago push) todavia no tiene credenciales reales de API --
-// esta es la infraestructura completa (guardado cifrado, conectar/pausar/
-// reanudar/cambiar) lista para activar en cuanto lleguen. Sin api_key el
-// "conectar" solo registra la cuenta receptora para mostrarla en el
-// checkout de la app; el cobro real queda pendiente de integracion cuando
-// haya convenio con Nequi/Bancolombia.
+const router = Router();
 
-// Mismo formato usado en todo el proyecto (57 + 10 digitos) -- users.phone,
-// customers.phone, etc.
-function normalizeNequiPhone(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
-  if (digits.length === 10 && digits.startsWith('3')) return '57' + digits;
-  if (digits.length === 12 && digits.startsWith('573')) return digits;
-  return null;
-}
+/**
+ * POST /api/payments/create-intent — Crear intención de pago [client]
+ */
+router.post('/create-intent', authMiddleware(['client']), (req, res) => {
+  const { order_id, method } = req.body;
+  if (!order_id || !method) {
+    return res.status(400).json({ error: 'Los campos order_id y method son obligatorios' });
+  }
 
-// GET /api/payments/nequi — estado completo (solo admin, ve el numero real)
-router.get('/nequi', adminAuth, async (req, res, next) => {
-  try {
-    const { rows } = await getDB().query('SELECT * FROM nequi_config WHERE id=1');
-    const row = rows[0];
-    res.json({
-      status: row?.status || 'disconnected',
-      phone: row?.phone_encrypted ? decryptText(row.phone_encrypted) : null,
-      account_name: row?.account_name || null,
-      has_api_key: !!row?.api_key_encrypted,
-      connected_at: row?.connected_at || null,
-      updated_at: row?.updated_at || null,
+  const validMethods = ['efectivo', 'nequi', 'daviplata', 'tarjeta', 'pse', 'bold'];
+  if (!validMethods.includes(method)) {
+    return res.status(400).json({ error: `Método de pago no válido. Métodos permitidos: ${validMethods.join(', ')}` });
+  }
+
+  const order = db.prepare('SELECT id, total, payment_status, user_id FROM orders WHERE id = ?').get(order_id);
+  if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
+  if (order.user_id !== req.user.id) return res.status(403).json({ error: 'No tiene permisos sobre este pedido' });
+  if (order.payment_status === 'aprobado') return res.status(422).json({ error: 'Este pedido ya tiene un pago aprobado' });
+
+  const paymentId = generateId();
+  const now = nowBogota();
+
+  // Insertar registro de pago
+  db.prepare(`
+    INSERT INTO payments (id, order_id, method, amount, status, created_at)
+    VALUES (?, ?, ?, ?, 'pendiente', ?)
+  `).run(paymentId, order_id, method, order.total, now);
+
+  // Si es efectivo, aprobar inmediatamente
+  if (method === 'efectivo') {
+    db.prepare("UPDATE payments SET status = 'aprobado' WHERE id = ?").run(paymentId);
+    db.prepare("UPDATE orders SET payment_method = ?, payment_status = 'pagado', updated_at = ? WHERE id = ?").run(method, now, order_id);
+    return res.json({
+      data: { payment_id: paymentId, status: 'aprobado', message: 'Pago en efectivo registrado. Se cobrará al entregar.' },
     });
-  } catch (e) { next(e); }
+  }
+
+  // Para métodos electrónicos, simular respuesta de proveedor
+  // En producción se integraría con Bold, Wompi, etc.
+  res.json({
+    data: {
+      payment_id: paymentId,
+      status: 'pendiente',
+      amount: order.total,
+      method,
+      message: 'Intención de pago creada. Procesando...',
+      // En producción se retornaría la URL de redirección del proveedor
+    },
+  });
 });
 
-// POST /api/payments/nequi/connect — conecta (o cambia) la cuenta receptora
-router.post('/nequi/connect', adminAuth, async (req, res, next) => {
-  try {
-    const { phone, account_name, api_key } = req.body || {};
-    const normPhone = normalizeNequiPhone(phone);
-    if (!normPhone)
-      return res.status(400).json({ error: 'Número de Nequi inválido (celular colombiano de 10 dígitos)' });
-    if (!account_name || !String(account_name).trim())
-      return res.status(400).json({ error: 'Nombre de la cuenta requerido' });
+/**
+ * POST /api/payments/webhook — Webhook de proveedor de pagos (API Key)
+ */
+router.post('/webhook', apiAuth, (req, res) => {
+  const { payment_id, status, provider_ref, raw_response } = req.body;
 
-    await getDB().query(`
-      UPDATE nequi_config SET
-        phone_encrypted = $1, account_name = $2, api_key_encrypted = $3,
-        status = 'connected', connected_at = now_iso(),
-        updated_at = now_iso()
-      WHERE id = 1
-    `, [
-      encryptText(normPhone),
-      sanitizeText(account_name, 100),
-      api_key ? encryptText(String(api_key)) : null,
-    ]);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+  if (!payment_id || !status) {
+    return res.status(400).json({ error: 'Los campos payment_id y status son obligatorios' });
+  }
+
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment_id);
+  if (!payment) return res.status(404).json({ error: 'Pago no encontrado' });
+
+  const validStatuses = ['pendiente', 'aprobado', 'rechazado', 'reembolsado'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Estado de pago no válido' });
+  }
+
+  const now = nowBogota();
+  db.prepare(`
+    UPDATE payments SET status = ?, provider_ref = COALESCE(?, provider_ref), raw_response = COALESCE(?, raw_response)
+    WHERE id = ?
+  `).run(status, provider_ref, raw_response ? JSON.stringify(raw_response) : null, payment_id);
+
+  // Actualizar estado del pedido
+  if (status === 'aprobado') {
+    db.prepare("UPDATE orders SET payment_status = 'pagado', payment_method = ?, updated_at = ? WHERE id = ?").run(payment.method, now, payment.order_id);
+  } else if (status === 'rechazado') {
+    db.prepare("UPDATE orders SET payment_status = 'rechazado', updated_at = ? WHERE id = ?").run(now, payment.order_id);
+  } else if (status === 'reembolsado') {
+    db.prepare("UPDATE orders SET payment_status = 'reembolsado', updated_at = ? WHERE id = ?").run(now, payment.order_id);
+  }
+
+  res.json({ message: 'Webhook procesado exitosamente' });
 });
 
-// POST /api/payments/nequi/pause — deja de ofrecerse en el checkout sin
-// perder la configuracion (para reanudar rapido despues)
-router.post('/nequi/pause', adminAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    const { rows } = await db.query('SELECT status FROM nequi_config WHERE id=1');
-    const row = rows[0];
-    if (!row || row.status === 'disconnected')
-      return res.status(400).json({ error: 'No hay una cuenta Nequi conectada' });
-    await db.query(`UPDATE nequi_config SET status='paused', updated_at=now_iso() WHERE id=1`);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
+/**
+ * GET /api/payments/order/:order_id — Obtener pagos de un pedido [client, admin]
+ */
+router.get('/order/:order_id', authMiddleware(['client', 'admin']), (req, res) => {
+  const order = db.prepare('SELECT id, user_id FROM orders WHERE id = ?').get(req.params.order_id);
+  if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
 
-// POST /api/payments/nequi/resume
-router.post('/nequi/resume', adminAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    const { rows } = await db.query('SELECT status, phone_encrypted FROM nequi_config WHERE id=1');
-    const row = rows[0];
-    if (!row || !row.phone_encrypted)
-      return res.status(400).json({ error: 'No hay una cuenta Nequi configurada' });
-    await db.query(`UPDATE nequi_config SET status='connected', updated_at=now_iso() WHERE id=1`);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
+  if (req.user.role === 'client' && order.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'No tiene permisos para ver los pagos de este pedido' });
+  }
 
-// POST /api/payments/nequi/disconnect — borra todo (para "cambiar de cuenta"
-// se desconecta y se vuelve a conectar con los datos nuevos)
-router.post('/nequi/disconnect', adminAuth, async (req, res, next) => {
-  try {
-    await getDB().query(`
-      UPDATE nequi_config SET
-        phone_encrypted = NULL, account_name = NULL, api_key_encrypted = NULL,
-        status = 'disconnected', connected_at = NULL, updated_at = now_iso()
-      WHERE id = 1
-    `);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
-
-// GET /api/payments/methods — que opciones de pago mostrar en el checkout
-// de la app cliente. Contra entrega siempre disponible; Nequi solo si esta
-// 'connected' (no 'paused' ni 'disconnected'). El numero va completo -- es
-// la cuenta RECEPTORA del negocio, el cliente lo necesita entero para
-// poder transferir (no es un dato secreto, es como publicar una cuenta
-// bancaria para que te paguen).
-router.get('/methods', clientAuth, async (req, res, next) => {
-  try {
-    const { rows } = await getDB().query('SELECT * FROM nequi_config WHERE id=1');
-    const row = rows[0];
-    const nequiAvailable = row?.status === 'connected' && !!row.phone_encrypted;
-    res.json({
-      // Contra entrega existe siempre como método, pero el checkout la
-      // bloquea si el cliente no compartió ubicación en tiempo real (regla
-      // aplicada también en el servidor, ver POST /api/cart/checkout).
-      contra_entrega: true,
-      nequi: nequiAvailable ? {
-        available: true,
-        phone: decryptText(row.phone_encrypted),
-        account_name: row.account_name,
-      } : { available: false },
-      // Visa/tarjeta: igual que Nequi, sin pasarela real todavía -- se
-      // confirma con una referencia que el negocio concilia manualmente.
-      visa: { available: true },
-    });
-  } catch (e) { next(e); }
+  const payments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC').all(req.params.order_id);
+  res.json({ data: payments });
 });
 
 module.exports = router;

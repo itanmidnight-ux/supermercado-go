@@ -1,313 +1,221 @@
+// src/routes/products.js — Rutas de productos (CRUD + búsqueda)
 const express = require('express');
-const router = express.Router();
-const multer = require('multer');
-const { jwtAuth, adminAuth, clientAuth } = require('../middleware/auth');
-const { getDB } = require('../db/database');
-const { sanitizeText } = require('../utils/sanitize');
-const { createStore, USE_S3 } = require('../utils/storage');
-const { productsCache } = require('../utils/memoryCache');
-const { raiseAlert } = require('../utils/securityAlert');
+const { Router } = express;
+const { db, runInTransaction } = require('../db');
+const { generateId } = require('../utils/ids');
+const { roundCOP } = require('../utils/money');
+const { nowBogota } = require('../utils/dates');
+const { authMiddleware } = require('../middleware/auth');
+const config = require('../config');
 
-// Disco local o S3-compatible segun S3_BUCKET (ver utils/storage.js) -- el
-// resto de este archivo no sabe ni le importa cual de los dos es.
-const productImages = createStore('product-images');
+const router = Router();
 
-// multer en memoria (no diskStorage): el archivo pasa por productImages.save()
-// sea cual sea el backend, en vez de asumir que siempre hay disco local.
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith('image/'))
-      return cb(Object.assign(new Error('Solo imágenes (jpg, png, webp, gif)'), { status: 400 }));
-    cb(null, true);
-  },
-});
-function generatedFilename(originalname) {
-  return `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-}
+/**
+ * GET /api/products — Listar productos con paginación y filtros
+ * Público: no requiere autenticación
+ */
+router.get('/', (req, res) => {
+  const { category_id, search, offer, min_price, max_price, page = 1, limit = 30 } = req.query;
+  const offset = (Number(page) - 1) * Number(limit);
 
-function validateProduct({ name, price, aliases, category, description, sku, stock, low_stock_threshold }) {
-  if (name !== undefined) {
-    if (typeof name !== 'string' || name.trim().length === 0 || name.length > 200)
-      return 'name debe ser texto de 1-200 caracteres';
-  }
-  if (price !== undefined) {
-    if (typeof price !== 'number' || isNaN(price) || price < 0 || price > 100_000_000)
-      return 'price debe ser número positivo menor a 100,000,000';
-  }
-  if (aliases !== undefined) {
-    if (!Array.isArray(aliases) || aliases.length > 20)
-      return 'aliases debe ser array de máximo 20 elementos';
-    if (aliases.some(a => typeof a !== 'string' || a.length > 100))
-      return 'cada alias debe ser texto de máximo 100 caracteres';
-  }
-  if (category !== undefined && category !== null) {
-    if (typeof category !== 'string' || category.length > 80)
-      return 'category debe ser texto de máximo 80 caracteres';
-  }
-  if (description !== undefined && description !== null) {
-    if (typeof description !== 'string' || description.length > 2000)
-      return 'description debe ser texto de máximo 2000 caracteres';
-  }
-  if (sku !== undefined && sku !== null) {
-    if (typeof sku !== 'string' || sku.length > 60)
-      return 'sku debe ser texto de máximo 60 caracteres';
-  }
-  if (stock !== undefined && stock !== null) {
-    if (typeof stock !== 'number' || isNaN(stock) || stock < 0 || stock > 1_000_000)
-      return 'stock debe ser número positivo menor a 1,000,000';
-  }
-  if (low_stock_threshold !== undefined && low_stock_threshold !== null) {
-    if (typeof low_stock_threshold !== 'number' || isNaN(low_stock_threshold) || low_stock_threshold < 0 || low_stock_threshold > 1_000_000)
-      return 'low_stock_threshold debe ser número positivo menor a 1,000,000';
-  }
-  return null;
-}
+  let where = 'WHERE p.is_active = 1';
+  const params = [];
 
-router.get('/', clientAuth, async (req, res, next) => {
-  try {
-    const result = await productsCache.wrap('all', 15_000, async () => {
-      const { rows } = await getDB().query(`
-        SELECT p.*, string_agg(pi.filename, ',') AS image_filenames
-        FROM products p
-        LEFT JOIN product_images pi ON pi.product_id = p.id
-        GROUP BY p.id
-        ORDER BY p.favorite DESC, p.name ASC
-      `);
-      return rows.map(p => ({
-        ...p,
-        aliases: JSON.parse(p.aliases || '[]'),
-        images: p.image_filenames ? p.image_filenames.split(',') : [],
-        image_filenames: undefined,
-      }));
-    });
-    res.json(result);
-  } catch (e) { next(e); }
+  if (category_id) { where += ' AND p.category_id = ?'; params.push(category_id); }
+  if (search) { where += ' AND (p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+  if (offer === 'true' || offer === '1') { where += ' AND p.is_offer = 1 AND p.offer_price IS NOT NULL'; }
+  if (min_price) { where += ' AND p.price >= ?'; params.push(Number(min_price)); }
+  if (max_price) { where += ' AND p.price <= ?'; params.push(Number(max_price)); }
+
+  const count = db.prepare(`SELECT COUNT(*) as total FROM products p ${where}`).get(...params);
+
+  const products = db.prepare(`
+    SELECT p.id, p.name, p.description, p.price, p.compare_price, p.stock, p.unit,
+           p.sku, p.barcode, p.category_id, p.image, p.is_offer, p.offer_price, p.brand,
+           p.is_weighed, p.tax_rate, c.name as category_name
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    ${where}
+    ORDER BY p.name ASC
+    LIMIT ? OFFSET ?
+  `).all(...params, Number(limit), offset);
+
+  res.json({
+    data: products,
+    pagination: {
+      page: Number(page),
+      limit: Number(limit),
+      total: count.total,
+      pages: Math.ceil(count.total / Number(limit)),
+    },
+  });
 });
 
-// GET /api/products/public — catálogo sin autenticar, para que el sitio
-// web permita navegar y armar el carrito como invitado (el login solo se
-// pide al momento de pagar). Solo campos de catálogo -- nada de stock/sku
-// (detalle interno de inventario, sin motivo para exponerlo a anónimos).
-router.get('/public', async (req, res, next) => {
-  try {
-    const result = await productsCache.wrap('public', 15_000, async () => {
-      const { rows } = await getDB().query(`
-        SELECT p.id, p.name, p.price, p.aliases, p.available, p.favorite,
-               p.no_fiado, p.category, p.description,
-               string_agg(pi.filename, ',') AS image_filenames
-        FROM products p
-        LEFT JOIN product_images pi ON pi.product_id = p.id
-        WHERE p.available = 1
-        GROUP BY p.id
-        ORDER BY p.favorite DESC, p.name ASC
-      `);
-      return rows.map(p => ({
-        ...p,
-        aliases: JSON.parse(p.aliases || '[]'),
-        images: p.image_filenames ? p.image_filenames.split(',') : [],
-        image_filenames: undefined,
-      }));
-    });
-    res.json(result);
-  } catch (e) { next(e); }
+/**
+ * GET /api/products/:id — Obtener producto por ID
+ */
+router.get('/:id', (req, res) => {
+  const product = db.prepare(`
+    SELECT p.*, c.name as category_name
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    WHERE p.id = ?
+  `).get(req.params.id);
+
+  if (!product) {
+    return res.status(404).json({ error: 'Producto no encontrado' });
+  }
+
+  res.json({ data: product });
 });
 
-router.post('/', adminAuth, async (req, res, next) => {
-  try {
-    const { name, price, aliases, category, description, sku, stock, low_stock_threshold } = req.body;
-    if (!name || price == null) return res.status(400).json({ error: 'name y price requeridos' });
-    const err = validateProduct({ name, price, aliases, category, description, sku, stock, low_stock_threshold });
-    if (err) return res.status(400).json({ error: err });
-    const db = getDB();
-    const { rows } = await db.query(`INSERT INTO products (name, price, aliases, category, description, sku, stock, low_stock_threshold)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [
-        sanitizeText(name, 150), price, JSON.stringify(aliases || []),
-        category ? sanitizeText(category, 80) : null,
-        description ? sanitizeText(description, 2000) : null,
-        sku ? sanitizeText(sku, 60) : null,
-        stock ?? null,
-        low_stock_threshold ?? null,
-      ]);
-    const product = rows[0];
-    productsCache.flush();
-    res.json({ ...product, aliases: JSON.parse(product.aliases || '[]') });
-  } catch (e) { next(e); }
-});
+/**
+ * POST /api/products — Crear producto [admin]
+ */
+router.post('/', authMiddleware(['admin']), (req, res) => {
+  const { name, description, price, cost, compare_price, stock, stock_min, stock_max,
+    sku, barcode, category_id, image, images, unit, tax_rate, is_weighed,
+    is_offer, offer_price, brand, expiry_date, supplier_id, nit } = req.body;
 
-router.put('/:id', adminAuth, async (req, res, next) => {
+  if (!name || price === undefined || price === null) {
+    return res.status(400).json({ error: 'El nombre y el precio son obligatorios' });
+  }
+
+  const now = nowBogota();
+  const id = generateId();
+
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!id || id <= 0) return res.status(400).json({ error: 'ID inválido' });
-    const { name, price, aliases, available, favorite, no_fiado, category, description, sku, stock, low_stock_threshold } = req.body;
-    const err = validateProduct({ name, price, aliases, category, description, sku, stock, low_stock_threshold });
-    if (err) return res.status(400).json({ error: err });
-    const db = getDB();
-    const { rows: beforeRows } = await db.query('SELECT stock, low_stock_threshold FROM products WHERE id=$1', [id]);
-    const before = beforeRows[0];
-    const { rows } = await db.query(`UPDATE products SET
-      name        = COALESCE($1, name),
-      price       = COALESCE($2, price),
-      aliases     = COALESCE($3, aliases),
-      available   = COALESCE($4, available),
-      favorite    = COALESCE($5, favorite),
-      no_fiado    = COALESCE($6, no_fiado),
-      category    = COALESCE($7, category),
-      description = COALESCE($8, description),
-      sku         = COALESCE($9, sku),
-      stock       = COALESCE($10, stock),
-      low_stock_threshold = COALESCE($11, low_stock_threshold)
-      WHERE id = $12 RETURNING *`,
-      [
-        name   ? sanitizeText(name, 150) : null,
-        price  ?? null,
-        aliases ? JSON.stringify(aliases) : null,
-        available ?? null,
-        favorite  ?? null,
-        no_fiado  ?? null,
-        category !== undefined ? (category ? sanitizeText(category, 80) : null) : null,
-        description !== undefined ? (description ? sanitizeText(description, 2000) : null) : null,
-        sku !== undefined ? (sku ? sanitizeText(sku, 60) : null) : null,
-        stock ?? null,
-        low_stock_threshold ?? null,
-        id,
-      ]);
-    const product = rows[0];
-    if (!product) return res.status(404).json({ error: 'No encontrado' });
-    if (before && product.low_stock_threshold != null &&
-        before.stock > product.low_stock_threshold && product.stock <= product.low_stock_threshold) {
-      // await (no fire-and-forget): raiseAlert ya atrapa sus propios errores,
-      // nunca lanza -- esperarla solo agrega el insert a `messages`, sin riesgo
-      // de romper esta respuesta, y evita que el cliente reciba el 200 antes
-      // de que la alerta exista en la tabla.
-      await raiseAlert('low_stock', `${product.name}: quedan ${product.stock} unidades (mínimo ${product.low_stock_threshold})`);
+    db.prepare(`
+      INSERT INTO products (
+        id, name, description, price, cost, compare_price, stock, stock_min, stock_max,
+        sku, barcode, category_id, image, images, unit, tax_rate, is_weighed,
+        is_offer, offer_price, brand, expiry_date, supplier_id, nit, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, name, description || '', roundCOP(price), roundCOP(cost || 0), roundCOP(compare_price || 0),
+      stock || 0, stock_min || 0, stock_max || null,
+      sku || null, barcode || null, category_id || null, image || null, images || '[]',
+      unit || 'un', tax_rate || 0, is_weighed ? 1 : 0,
+      is_offer ? 1 : 0, offer_price ? roundCOP(offer_price) : null, brand || null,
+      expiry_date || null, supplier_id || null, nit || null, now, now
+    );
+
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    res.status(201).json({ data: product, message: 'Producto creado exitosamente' });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Ya existe un producto con ese código de barras' });
     }
-    res.json({ ...product, aliases: JSON.parse(product.aliases || '[]') });
-  } catch (e) { next(e); }
+    throw err;
+  }
 });
 
-router.delete('/:id', adminAuth, async (req, res, next) => {
+/**
+ * PUT /api/products/:id — Actualizar producto [admin]
+ */
+router.put('/:id', authMiddleware(['admin']), (req, res) => {
+  const product = db.prepare('SELECT id FROM products WHERE id = ?').get(req.params.id);
+  if (!product) {
+    return res.status(404).json({ error: 'Producto no encontrado' });
+  }
+
+  const fields = [
+    'name', 'description', 'price', 'cost', 'compare_price', 'stock', 'stock_min', 'stock_max',
+    'sku', 'barcode', 'category_id', 'image', 'images', 'unit', 'tax_rate', 'is_weighed',
+    'is_offer', 'offer_price', 'brand', 'expiry_date', 'supplier_id', 'is_active', 'nit',
+  ];
+
+  const sets = [];
+  const values = [];
+  for (const field of fields) {
+    if (req.body[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      values.push(
+        ['price', 'cost', 'compare_price', 'offer_price'].includes(field)
+          ? roundCOP(req.body[field])
+          : req.body[field]
+      );
+    }
+  }
+
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
+  }
+
+  sets.push("updated_at = ?");
+  values.push(nowBogota());
+  values.push(req.params.id);
+
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!id || id <= 0) return res.status(400).json({ error: 'ID inválido' });
-    const db = getDB();
-    // Delete associated images from storage
-    const { rows: imgs } = await db.query('SELECT filename FROM product_images WHERE product_id=$1', [id]);
-    await Promise.all(imgs.map(img => productImages.delete(img.filename)));
-    await db.query('DELETE FROM products WHERE id = $1', [id]);
-    productsCache.flush();
-    res.json({ success: true });
-  } catch (e) { next(e); }
+    db.prepare(`UPDATE products SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    res.json({ data: updated, message: 'Producto actualizado exitosamente' });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Ya existe un producto con ese código de barras' });
+    }
+    throw err;
+  }
 });
 
-// POST /api/products/:id/images — upload product image (admin only)
-router.post('/:id/images', adminAuth, upload.single('image'), async (req, res, next) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!req.file) return res.status(400).json({ error: 'No se recibió imagen' });
-    const db = getDB();
-    const { rows } = await db.query('SELECT id FROM products WHERE id=$1', [id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Producto no encontrado' });
-    const filename = generatedFilename(req.file.originalname);
-    await productImages.save(filename, req.file.buffer);
-    await db.query('INSERT INTO product_images (product_id, filename) VALUES ($1,$2)', [id, filename]);
-    res.status(201).json({ filename });
-  } catch (e) { next(e); }
+/**
+ * DELETE /api/products/:id — Desactivar producto [admin]
+ */
+router.delete('/:id', authMiddleware(['admin']), (req, res) => {
+  const product = db.prepare('SELECT id FROM products WHERE id = ?').get(req.params.id);
+  if (!product) {
+    return res.status(404).json({ error: 'Producto no encontrado' });
+  }
+
+  db.prepare("UPDATE products SET is_active = 0, updated_at = ? WHERE id = ?").run(nowBogota(), req.params.id);
+  res.json({ message: 'Producto desactivado exitosamente' });
 });
 
-// DELETE /api/products/:id/images/:filename — delete product image (admin only)
-router.delete('/:id/images/:filename', adminAuth, async (req, res, next) => {
-  try {
-    const { id, filename } = req.params;
-    const db = getDB();
-    const { rows } = await db.query('SELECT id FROM product_images WHERE product_id=$1 AND filename=$2', [id, filename]);
-    const img = rows[0];
-    if (!img) return res.status(404).json({ error: 'Imagen no encontrada' });
-    await productImages.delete(filename);
-    await db.query('DELETE FROM product_images WHERE id=$1', [img.id]);
-    res.json({ success: true });
-  } catch (e) { next(e); }
+/**
+ * GET /api/products/search — Búsqueda rápida de productos
+ */
+router.get('/search', (req, res) => {
+  const { q, category, min, max, offer } = req.query;
+  if (!q) {
+    return res.status(400).json({ error: 'El parámetro "q" es obligatorio para la búsqueda' });
+  }
+
+  let where = 'WHERE p.is_active = 1 AND (p.name LIKE ? OR p.description LIKE ? OR p.sku LIKE ?)';
+  const params = [`%${q}%`, `%${q}%`, `%${q}%`];
+
+  if (category) { where += ' AND p.category_id = ?'; params.push(category); }
+  if (min) { where += ' AND p.price >= ?'; params.push(Number(min)); }
+  if (max) { where += ' AND p.price <= ?'; params.push(Number(max)); }
+  if (offer === 'true' || offer === '1') { where += ' AND p.is_offer = 1'; }
+
+  const products = db.prepare(`
+    SELECT p.id, p.name, p.description, p.price, p.stock, p.unit, p.image, p.is_offer, p.offer_price, c.name as category_name
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    ${where}
+    ORDER BY p.name ASC
+    LIMIT 50
+  `).all(...params);
+
+  res.json({ data: products });
 });
 
-// Serve product images (authenticated)
-// Sin auth a propósito: son fotos de producto (marketing, no datos de
-// negocio), y el catálogo público (/public) las necesita para el modo
-// invitado del sitio web. filename siempre pasa por path.basename, así
-// que no hay traversal ni forma de listar archivos ajenos al store.
-router.get('/images/:filename', async (req, res, next) => {
-  try {
-    const filename = require('path').basename(req.params.filename);
-    if (!(await productImages.exists(filename))) return res.status(404).json({ error: 'No encontrado' });
-    if (USE_S3) return res.send(await productImages.read(filename));
-    res.sendFile(productImages.localPath(filename));
-  } catch (e) { next(e); }
-});
+/**
+ * GET /api/products/barcode/:code — Buscar producto por código de barras [admin, worker]
+ */
+router.get('/barcode/:code', authMiddleware(['admin', 'worker']), (req, res) => {
+  const product = db.prepare(`
+    SELECT p.*, c.name as category_name
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    WHERE p.barcode = ?
+  `).get(req.params.code);
 
-// ── Reseñas ──────────────────────────────────────────────────
-// GET /api/products/:id/reviews — solo reseñas de 3 a 5 estrellas (las
-// malas nunca se muestran públicamente, es una regla de negocio, no un
-// filtro de UI -- el servidor jamás las devuelve).
-router.get('/:id/reviews', clientAuth, async (req, res, next) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!id || id <= 0) return res.status(400).json({ error: 'ID inválido' });
-    const db = getDB();
+  if (!product) {
+    return res.status(404).json({ error: 'No se encontró ningún producto con ese código de barras' });
+  }
 
-    const { rows } = await db.query(
-      `SELECT r.id, r.rating, r.comment, r.created_at, u.display_name
-       FROM product_reviews r JOIN users u ON u.id = r.user_id
-       WHERE r.product_id = $1 AND r.rating >= 3
-       ORDER BY r.created_at DESC LIMIT 100`,
-      [id]
-    );
-    const { rows: summaryRows } = await db.query(
-      `SELECT COUNT(*)::int AS count, COALESCE(AVG(rating), 0)::float AS average
-       FROM product_reviews WHERE product_id = $1 AND rating >= 3`,
-      [id]
-    );
-
-    res.json({
-      reviews: rows.map(r => ({
-        id:         r.id,
-        rating:     r.rating,
-        comment:    r.comment,
-        created_at: r.created_at,
-        author:     (r.display_name || 'Cliente').trim().split(/\s+/)[0] || 'Cliente',
-      })),
-      count:   summaryRows[0].count,
-      average: summaryRows[0].average,
-    });
-  } catch (e) { next(e); }
-});
-
-// POST /api/products/:id/reviews — { rating, comment } -- una reseña por
-// cliente/producto (upsert: volver a enviar reemplaza la anterior).
-router.post('/:id/reviews', clientAuth, async (req, res, next) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!id || id <= 0) return res.status(400).json({ error: 'ID inválido' });
-
-    const rating = parseInt(req.body?.rating, 10);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5)
-      return res.status(400).json({ error: 'rating debe ser un número entre 1 y 5' });
-    const comment = req.body?.comment ? sanitizeText(String(req.body.comment), 500) : null;
-
-    const db = getDB();
-    const { rows: prodRows } = await db.query('SELECT id FROM products WHERE id = $1', [id]);
-    if (!prodRows[0]) return res.status(404).json({ error: 'Producto no encontrado' });
-
-    await db.query(
-      `INSERT INTO product_reviews (product_id, user_id, rating, comment)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (product_id, user_id) DO UPDATE
-       SET rating = $3, comment = $4, created_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-      [id, req.user.id, rating, comment]
-    );
-    res.status(201).json({ ok: true });
-  } catch (e) { next(e); }
+  res.json({ data: product });
 });
 
 module.exports = router;
-module.exports.productImages = productImages;

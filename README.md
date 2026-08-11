@@ -1,148 +1,198 @@
-# Supermercado GO 🛒
+<div align="center">
 
-## Identidad pública del repositorio
+# 🛒 Supermercados Go
 
-- **Nombre recomendado:** `supermercado-go` o `supermercado-go-mobile-commerce`
-- **Nombre actual:** `supermercado-go`
-- **Posicionamiento:** plataforma de supermercado con API, sitio web, app Android, panel admin y bot WhatsApp.
+### Plataforma full-stack para supermercados: app móvil, website, API, paneles operativos y automatización.
+
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=22&duration=2600&pause=700&color=16A34A&center=true&vCenter=true&width=780&lines=Delivery+de+supermercado+en+tiempo+real;Flutter+Android+%2B+Next.js+%2B+Node.js;Inventario%2C+pedidos%2C+facturas%2C+promos+y+WhatsApp)](https://git.io/typing-svg)
+
+![Node.js](https://img.shields.io/badge/Node.js-20_LTS-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express_API-000000?style=for-the-badge&logo=express&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter_Android-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite_WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
+</div>
 
 ---
 
-Sistema integral para supermercado: sitio web + app Android + panel admin + bot WhatsApp.
+## Visión
 
-## Stack
+**Supermercados Go** convierte la operación diaria de un supermercado en una plataforma digital integrada:
 
-| Capa | Tecnología |
-|------|-----------|
-| Backend | Node.js 20 + Express |
-| Base de datos | PostgreSQL 18 |
-| Sitio web | Vite + TypeScript + GSAP/ScrollTrigger + Lenis (sin framework, sin Flutter) |
-| App móvil | Flutter 3.44 (solo Android) |
-| Panel admin | EJS + Express (localhost:3002) |
-| Bot WhatsApp | @whiskeysockets/baileys v6 |
-| Parser NLU | @nlpjs/basic (sin LLM) |
+- clientes compran desde app móvil o website;
+- trabajadores preparan pedidos, gestionan rutas y registran entregas;
+- administradores controlan inventario, proveedores, promociones, facturas y reportes;
+- el backend centraliza datos, seguridad, WebSocket, archivos, mensajería y automatizaciones.
 
-El sitio web y la app Android son proyectos separados: el sitio (`website/`) es HTML/CSS/TS
-real servido directo por Express, la app (`android-app/`) es Flutter nativo solo para Android.
-Ambos consumen la misma API REST.
+> Estado técnico actual: el website compila correctamente con `next build`, el backend pasa validación sintáctica con `node --check`, y esta versión fuente no incluye tests Jest activos.
 
-## Requisitos
+## Arquitectura
 
-- Node.js 20+
-- PostgreSQL 16+
-- Flutter 3.44+ (solo para compilar la app Android)
-- Python 3.10+ (solo para dashboard.py) — `pip install -r requirements.txt`
-  (además necesita GTK3 del sistema, ver comentario en `requirements.txt`)
+```mermaid
+flowchart LR
+    C[Cliente] --> A[App Flutter Android]
+    C --> W[Website Next.js]
+    C --> WA[WhatsApp]
+    A --> API[Node.js + Express API]
+    W --> API
+    WA --> API
+    API --> DB[(SQLite WAL)]
+    API --> WS[WebSocket realtime]
+    API --> ADM[Admin / Worker panels]
+    API --> DOCS[PDF, facturas, reportes]
+```
+
+## Módulos principales
+
+| Módulo | Ruta | Rol |
+|---|---|---|
+| API principal | `server/` | Autenticación, productos, pedidos, inventario, facturas, usuarios, reportes y WebSocket. |
+| Website público | `website/` | Landing/e-commerce en Next.js 14 con Tailwind. |
+| App Android | `app/` | Cliente, trabajador y administrador en Flutter. |
+| Panel admin web | `admin-panel/` | Operación administrativa desde navegador. |
+| Panel trabajador | `worker-panel/` | Flujo operativo para preparación/entrega. |
+| Dashboard Python | `dashboard/` y `dashboard.py` | Panel operativo local. |
+| Infraestructura | `Dockerfile`, `docker-compose.yml`, `nginx.conf`, `deploy-linux.sh` | Despliegue Linux/Docker/nginx/systemd. |
+
+## Funcionalidades
+
+### Cliente
+
+- Catálogo, búsqueda, favoritos y carrito.
+- Checkout, direcciones, promociones y seguimiento de pedido.
+- Notificaciones, historial, facturas y calificación de pedidos.
+
+### Trabajador
+
+- Pedidos asignados y disponibles.
+- Picking, sustituciones, ruta, prueba de entrega y caja.
+- Panel de ganancias y estado operativo.
+
+### Administrador
+
+- Dashboard, usuarios, categorías, productos y banners.
+- Inventario, kardex, compras, proveedores y stock.
+- Facturación, reportes PDF, promociones, fidelización y auditoría.
+
+### Backend
+
+- API REST con JWT, validación, seguridad HTTP y rate limiting.
+- Base de datos SQLite en modo WAL.
+- WebSocket para eventos en tiempo real.
+- Servicios para inventario, facturas, lealtad, notificaciones, PDF y WhatsApp.
 
 ## Inicio rápido
 
-```bash
-# 1. Iniciar servidor
-bash deploy-linux.sh --start
+### Backend
 
-# 2. Abrir en navegador
-# Sitio web:   http://localhost:50000/
-# Panel admin: http://localhost:3002/login
-# API:         http://localhost:50000/api/
+```bash
+cd server
+cp .env.example .env
+npm ci
+npm run migrate
+npm run dev
 ```
 
-En entorno local, el seed inicial crea un usuario admin de desarrollo. Cambia esa contraseña antes de exponer el sistema en una red pública o entorno real.
+Servidor por defecto: `http://localhost:3777`
+
+### Website
+
+```bash
+cd website
+npm ci
+npm run build
+npm run dev
+```
+
+### App Android
+
+```bash
+cd app
+flutter pub get
+flutter build apk --release
+```
+
+También puedes usar:
+
+```bash
+./compilar-apk.sh
+```
+
+## Variables de entorno
+
+La plantilla está en [`server/.env.example`](server/.env.example). No subas `.env`, bases de datos locales ni keystores.
+
+Variables críticas:
+
+| Variable | Uso |
+|---|---|
+| `JWT_SECRET` | Firma de tokens. Debe ser fuerte y único por entorno. |
+| `API_KEY` | Clave interna/API. No usar valores de ejemplo en producción. |
+| `DB_PATH` | Ruta de SQLite. |
+| `CORS_ORIGINS` | Orígenes permitidos. No usar `*` en producción. |
+| `SMTP_*` | Correo transaccional opcional. |
+| `WA_*` | Integración WhatsApp opcional. |
+
+## Validación local
+
+Checks ejecutados sobre esta actualización:
+
+```bash
+cd website && npm ci && npm run build
+find server/src -name '*.js' -print0 | xargs -0 -n1 node --check
+```
+
+Resultado:
+
+- Website: build de producción exitoso.
+- Server: sintaxis JavaScript válida.
+- Tests: `npm test` no encuentra tests porque la carpeta fuente actual no incluye archivos `*.test.js` / `*.spec.js`.
+- Auditoría npm: durante instalación del server se reportaron 2 vulnerabilidades; revisar con `npm audit` cuando la red esté estable.
 
 ## Despliegue
 
-```bash
-./deploy-linux.sh --start    # Iniciar servidor
-./deploy-linux.sh --stop     # Detener
-./deploy-linux.sh --restart  # Reiniciar
-./deploy-linux.sh --status   # Estado
-```
-
-El script configura .env, instala dependencias, inicia PostgreSQL, libera el puerto, y verifica que el servidor responda.
-
-## Compilar app Android
+### Docker
 
 ```bash
-./compilar-apk.sh            # Compila APK desde android-app/
+docker-compose up -d
+docker-compose logs -f
 ```
 
-## Compilar sitio web
+### Linux
 
 ```bash
-./compilar-web.sh            # npm install + vite build en website/, copia a server/src/website/
+chmod +x deploy-linux.sh
+./deploy-linux.sh
 ```
 
-Desarrollo local del sitio (con hot-reload, sin pasar por Express):
-
-```bash
-cd website && npm install && npm run dev
-```
+Incluye configuración para nginx, systemd/fail2ban según los scripts del proyecto.
 
 ## Estructura
 
-```
+```text
 supermercado-go/
-├── server/            # Backend Node.js + Express
-│   ├── src/
-│   │   ├── index.js           # Entry point
-│   │   ├── app.js             # Express app (rutas API, sitio web, CORS, rate-limit)
-│   │   ├── db/                # PostgreSQL (schema, migrations, seed)
-│   │   ├── routes/            # API REST (auth, products, orders, cart...)
-│   │   ├── middleware/        # JWT, roles, rate-limit, seguridad
-│   │   ├── services/          # Lógica de negocio (bot, email, PDF)
-│   │   ├── utils/             # Cache, logger, storage, sanitize
-│   │   ├── admin-panel/       # Panel admin (EJS + Express, puerto 3002)
-│   │   └── website/           # Sitio web compilado (generado por website/, ver compilar-web.sh)
-│   └── test/                  # Tests Jest
-├── website/           # Fuente del sitio web (Vite + TS, sin framework)
-├── android-app/       # App Flutter (solo Android)
-├── deploy-linux.sh    # Script de despliegue
-├── compilar-apk.sh    # Script de compilación APK (Android)
-├── compilar-web.sh    # Script de compilación del sitio web
-└── dashboard.py       # Dashboard de control (GTK)
+├── server/              # API Express + servicios + migraciones
+├── website/             # Next.js 14 + Tailwind
+├── app/                 # Flutter Android
+├── admin-panel/         # Panel administrativo web
+├── worker-panel/        # Panel operacional
+├── dashboard/           # Dashboard Python
+├── docs/                # Planes/especificaciones internas
+├── docker-compose.yml
+├── nginx.conf
+├── deploy-linux.sh
+└── compilar-apk.sh
 ```
 
-## API endpoints principales
+## Seguridad operativa
 
-| Ruta | Método | Auth | Descripción |
-|------|--------|------|-------------|
-| `/api/auth/token` | POST | - | Login (email o username + password) |
-| `/api/auth/register` | POST | - | Registro de cliente |
-| `/api/auth/forgot-password` | POST | - | Solicitar código OTP |
-| `/api/auth/reset-password` | POST | - | Reset con código OTP |
-| `/api/products` | GET | JWT | Catálogo completo |
-| `/api/products/public` | GET | - | Catálogo público |
-| `/api/products` | POST | admin | Crear producto |
-| `/api/orders` | GET | staff | Listar pedidos |
-| `/api/orders` | POST | client | Crear pedido |
-| `/api/cart` | GET/POST/DELETE | client | Carrito de compras |
-| `/api/analytics/products` | GET | admin | Top vendidos + alertas (`low_stock`/`low_demand`) |
+- Mantén `.env`, bases de datos, backups, APKs y keystores fuera de Git.
+- Cambia `JWT_SECRET` y `API_KEY` por valores aleatorios antes de desplegar.
+- Revisa dependencias con `npm audit`.
+- Usa HTTPS, CORS explícito y backups cifrados en producción.
 
-## Alertas de stock bajo
+## Repositorio
 
-Cada producto puede tener `low_stock_threshold` (admin-panel → editar producto). Cuando
-el stock cruza ese umbral hacia abajo, el admin recibe un WhatsApp automático (mismo canal
-que las alertas de seguridad) y la alerta queda visible en:
-- Admin-panel web: `/alertas` (link en el header)
-- `dashboard.py`: badge rojo en "Ventas" + lista en el módulo
-
-## Cache
-
-El servidor usa caché en memoria para productos (TTL 15s) y settings (TTL 30-60s según el
-subset). Estadísticas en `/cache-stats`.
-
-## Tests
-
-```bash
-cd server && npm test
-# 136/141 tests pasan (5 fallos preexistentes sin relación al stock/seed, ver git log)
-```
-
-## Seguridad
-
-- JWT + refresh tokens + revoked_tokens
-- Rate limiting por endpoint (auth: 10req/15min, api: 120req/min)
-- CSRF en panel admin
-- Brute-force protection en login
-- Helmet headers (CSP, HSTS, X-Frame-Options)
-- CORS restrictivo por dominio configurable
-- Sanitización de inputs en todos los endpoints
+Repositorio público: <https://github.com/itanmidnight-ux/supermercado-go>

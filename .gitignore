@@ -1,58 +1,87 @@
-```
-# Database files
-*.db
-
-# Environment files
-.env
-.env.local
-.env.*
-*.env.backup*
-.env.backup*
-
 # Dependencies
 node_modules/
-venv/
-.venv/
-__pycache__/
-*.egg-info/
+.pnp.*
+.dart_tool/
+.flutter-plugins-dependencies
 
-# Build artifacts
+# Build outputs
+.next/
+out/
 dist/
 build/
-target/
-*.pyc
-*.pyo
-*.pyd
+.gradle/
+*.lock
 
-# Mobile app build files
-.dart_tool/
-android-app/.dart_tool/
-android-app/build/
-android-app/debug-symbols/
-.mobile_app/build/
-.mobile_app/.dart_tool/
-.mobile_app/ios/.symlinks/
-.mobile_app/android/.gradle/
-.mobile_app/android/app/build/
+# Environment variables
+.env
+.env.local
+.env.*.local
 
-# Web frontend build files
-web_frontend/dist/
-web_frontend/build/
+# Database files
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
 
-# Editors
+# Server data
+server/data/
+server/data/uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS generated files
-.DS_Store
-Thumbs.db
+# Python cache
+__pycache__/
+*.pyc
 
-# Logs
-*.log
+# Backups
+backups/
+*.backup
+*.bak
 
 # Temporary files
-*.tmp
-* (copy *).*
-```
+.tmp/
+temp/
+
+# Playwright
+.playwright-mcp/
+
+# Project-specific
+.superpowers/
+.worktrees/
+
+# Android keystore
+*.keystore
+*.jks
+
+# Flutter/Android build artifacts
+app/android/.gradle/
+app/android/app/build/
+app/android/local.properties
+app/android/gradlew
+app/android/gradlew.bat
+app/android/gradle/wrapper/gradle-wrapper.jar
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Website build
+website/.next/
+website/out/
+
+# Gradle wrapper lock files
+*.lock

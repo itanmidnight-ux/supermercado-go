@@ -1,1 +1,0 @@
-import{m as a}from"./layout-CRh1XZgP.js";/* empty css                     */a();async function n(){try{const e=await fetch("/api/settings/public");if(!e.ok)return;const{settings:t}=await e.json();if(t!=null&&t.theme_name){const o=document.getElementById("privacidad-subtitle");o.textContent=`Cómo ${t.theme_name} protege y usa tus datos personales.`}}catch{}}n();

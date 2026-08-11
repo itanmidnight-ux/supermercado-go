@@ -1,262 +1,195 @@
-'use strict';
+// src/routes/analytics.js — Rutas de análisis y estadísticas [admin]
 const express = require('express');
-const router  = express.Router();
-const { adminAuth } = require('../middleware/auth');
-const { getDB } = require('../db/database');
+const { Router } = express;
+const { db } = require('../db');
+const { authMiddleware } = require('../middleware/auth');
 
-// Colombia es UTC-5 fijo todo el año (sin horario de verano) -- se usa el
-// nombre de zona IANA explicito en vez de asumir la zona del servidor.
-const TZ = 'America/Bogota';
+const router = Router();
 
-// GET /api/analytics/summary
-router.get('/summary', adminAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    const { rows: salesRows } = await db.query(`
-      SELECT COALESCE(SUM(oi.product_price * oi.quantity), 0) AS total
-      FROM orders o
-      JOIN order_items oi ON oi.order_id = o.id
-      WHERE o.status IN ('entregado','delivered')
-        AND (o.delivered_at::timestamptz AT TIME ZONE '${TZ}')::date = (now() AT TIME ZONE '${TZ}')::date
-    `);
-    const salesToday = Number(salesRows[0].total);
+/**
+ * GET /api/analytics/dashboard — Panel principal [admin]
+ */
+router.get('/dashboard', authMiddleware(['admin']), (req, res) => {
+  // Total de pedidos
+  const totalOrders = db.prepare("SELECT COUNT(*) as value FROM orders WHERE status NOT IN ('cancelled')").get();
 
-    const { rows: avgRows } = await db.query(`
-      SELECT COALESCE(AVG(order_total), 0) AS avg FROM (
-        SELECT o.id, SUM(oi.product_price * oi.quantity) AS order_total
-        FROM orders o JOIN order_items oi ON oi.order_id = o.id
-        WHERE o.status IN ('entregado','delivered')
-        GROUP BY o.id
-      ) t
-    `);
-    const avgTicket = Number(avgRows[0].avg);
+  // Ingresos totales
+  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total), 0) as value FROM orders WHERE status NOT IN ('cancelled')").get();
 
-    const { rows: countRows } = await db.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE status IN ('entregado','delivered')) AS delivered,
-        COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
-        COUNT(*) AS total
-      FROM orders
-    `);
-    const counts = {
-      delivered: Number(countRows[0].delivered),
-      cancelled: Number(countRows[0].cancelled),
-      total: Number(countRows[0].total),
-    };
+  // Total de usuarios
+  const totalUsers = db.prepare("SELECT COUNT(*) as value FROM users WHERE is_active = 1").get();
 
-    const cancelledPct = counts.total > 0 ? Math.round((counts.cancelled / counts.total) * 100) : 0;
+  // Pedidos activos (no completados ni cancelados)
+  const activeOrders = db.prepare(`
+    SELECT COUNT(*) as value FROM orders
+    WHERE status IN ('pending','confirmed','preparing','ready','assigned','in_transit')
+  `).get();
 
-    // Pedidos activos ahora mismo -- reemplaza el "ticket promedio" en el
-    // resumen: más útil operativamente para un supermercado en el día a día
-    // (cuántos pedidos hay que atender ya) que un promedio histórico.
-    const { rows: activeRows } = await db.query(
-      `SELECT COUNT(*) AS c FROM orders WHERE status IN ('pending','claimed','en_camino')`
-    );
-    const activeOrders = Number(activeRows[0].c);
+  // Últimos 10 pedidos
+  const recentOrders = db.prepare(`
+    SELECT o.id, o.status, o.total, o.client_name, o.worker_name, o.created_at
+    FROM orders o ORDER BY o.created_at DESC LIMIT 10
+  `).all();
 
-    // Distribución por estado -- para el donut de la app/panel
-    const { rows: statusRows } = await db.query(`
-      SELECT status, COUNT(*) AS count FROM orders
-      WHERE status IN ('pending','claimed','en_camino','entregado','delivered','cancelled')
-      GROUP BY status
-    `);
-    const statusBreakdown = statusRows.map(r => ({ status: r.status, count: Number(r.count) }));
+  // Ventas por día (últimos 7 días)
+  const salesByDay = db.prepare(`
+    SELECT DATE(created_at) as date, COUNT(*) as orders, SUM(total) as revenue
+    FROM orders
+    WHERE status NOT IN ('cancelled')
+      AND DATE(created_at) >= DATE('now', '-7 days', 'localtime')
+    GROUP BY DATE(created_at)
+    ORDER BY date ASC
+  `).all();
 
-    // Ingresos por día -- últimos 7 días, para el gráfico de barras
-    const { rows: dayRows } = await db.query(`
-      SELECT (o.delivered_at::timestamptz AT TIME ZONE '${TZ}')::date AS d,
-        SUM(oi.product_price * oi.quantity) AS total
-      FROM orders o JOIN order_items oi ON oi.order_id = o.id
-      WHERE o.status IN ('entregado','delivered')
-        AND (o.delivered_at::timestamptz AT TIME ZONE '${TZ}')::date >= ((now() AT TIME ZONE '${TZ}')::date - INTERVAL '6 days')
-      GROUP BY d ORDER BY d
-    `);
-    const byDate = Object.fromEntries(dayRows.map(r => [r.d.toISOString().slice(0, 10), Number(r.total)]));
-    const dailySales = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
-      dailySales.push({ date: iso, total: byDate[iso] || 0 });
-    }
+  // Top 10 productos más vendidos
+  const topProducts = db.prepare(`
+    SELECT p.id, p.name, p.image, SUM(oi.qty) as total_qty, SUM(oi.line_total) as total_revenue
+    FROM order_items oi
+    LEFT JOIN products p ON p.id = oi.product_id
+    LEFT JOIN orders o ON o.id = oi.order_id
+    WHERE o.status NOT IN ('cancelled')
+    GROUP BY oi.product_id
+    ORDER BY total_qty DESC
+    LIMIT 10
+  `).all();
 
-    res.json({
-      sales_today: salesToday,
-      avg_ticket: Math.round(avgTicket),
-      active_orders: activeOrders,
-      cancelled_pct: cancelledPct,
-      delivered_total: counts.delivered,
-      status_breakdown: statusBreakdown,
-      daily_sales: dailySales,
-    });
-  } catch (e) { next(e); }
+  res.json({
+    data: {
+      total_orders: totalOrders.value,
+      total_revenue: totalRevenue.value,
+      total_users: totalUsers.value,
+      active_orders: activeOrders.value,
+      recent_orders: recentOrders,
+      sales_by_day: salesByDay,
+      top_products: topProducts,
+    },
+  });
 });
 
-// GET /api/analytics/products
-router.get('/products', adminAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    const { rows: topProductsRaw } = await db.query(`
-      SELECT oi.product_name AS name, SUM(oi.quantity) AS total_qty
-      FROM order_items oi
-      JOIN orders o ON o.id = oi.order_id
-      WHERE o.status IN ('entregado','delivered')
-      GROUP BY oi.product_name
-      ORDER BY total_qty DESC
-      LIMIT 10
-    `);
-    const topProducts = topProductsRaw.map(r => ({ name: r.name, total_qty: Number(r.total_qty) }));
+/**
+ * GET /api/analytics/sales — Ventas con filtros [admin]
+ */
+router.get('/sales', authMiddleware(['admin']), (req, res) => {
+  const { from, to, group_by = 'day' } = req.query;
 
-    const { rows: lowStock } = await db.query(`
-      SELECT id, name, stock, low_stock_threshold
-      FROM products
-      WHERE stock IS NOT NULL AND low_stock_threshold IS NOT NULL AND stock <= low_stock_threshold
-      ORDER BY stock ASC
-    `);
+  let where = "WHERE o.status NOT IN ('cancelled')";
+  const params = [];
+  if (from) { where += ' AND DATE(o.created_at) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(o.created_at) <= ?'; params.push(to); }
 
-    // Productos que requieren atención: poco stock, o se venden muy poco
-    // (0-2 unidades entregadas en el histórico) -- unificado en una sola
-    // lista para el panel admin, cada uno con su motivo.
-    const { rows: lowDemand } = await db.query(`
-      SELECT p.id, p.name, COALESCE(sold.qty, 0) AS total_qty
-      FROM products p
-      LEFT JOIN (
-        SELECT oi.product_id, SUM(oi.quantity) AS qty
-        FROM order_items oi JOIN orders o ON o.id = oi.order_id
-        WHERE o.status IN ('entregado','delivered')
-        GROUP BY oi.product_id
-      ) sold ON sold.product_id = p.id
-      WHERE p.available = 1 AND COALESCE(sold.qty, 0) <= 2
-      ORDER BY total_qty ASC, p.name ASC
-      LIMIT 15
-    `);
+  const groupField = group_by === 'month' ? "strftime('%Y-%m', o.created_at)" : "DATE(o.created_at)";
 
-    const lowStockIds = new Set(lowStock.map(p => p.id));
-    const needsAttention = [
-      ...lowStock.map(p => ({
-        id: p.id, name: p.name, reason: 'low_stock',
-        detail: `${p.stock} unidades (mínimo ${p.low_stock_threshold})`,
-      })),
-      ...lowDemand.filter(p => !lowStockIds.has(p.id)).map(p => ({
-        id: p.id, name: p.name, reason: 'low_demand',
-        detail: `${Number(p.total_qty)} vendidos en total`,
-      })),
-    ];
+  const data = db.prepare(`
+    SELECT ${groupField} as period,
+           COUNT(*) as orders,
+           SUM(o.subtotal) as subtotal,
+           SUM(o.delivery_fee) as delivery_fees,
+           SUM(o.discount) as discounts,
+           SUM(o.tax_total) as taxes,
+           SUM(o.total) as revenue
+    FROM orders o
+    ${where}
+    GROUP BY ${groupField}
+    ORDER BY period ASC
+  `).all(...params);
 
-    res.json({ top_products: topProducts, low_stock: lowStock, needs_attention: needsAttention });
-  } catch (e) { next(e); }
+  res.json({ data });
 });
 
-// GET /api/analytics/employees
-// Antes solo listaba a quien tuviera entregas -- un trabajador que no
-// entrego nada (ej. no inicio turno) directamente no aparecia. Ahora
-// lista TODO el staff activo, con su estado de sesion (activo ahora,
-// inicio sesion hoy) para poder detectar quien falta.
-router.get('/employees', adminAuth, async (req, res, next) => {
-  try {
-    const { rows: employees } = await getDB().query(`
-      SELECT u.id, u.username, u.display_name, u.role,
-        COALESCE(d.delivered_count, 0) AS delivered_count,
-        d.avg_minutes,
-        le.logged_in_at  AS last_login_at,
-        le.logged_out_at AS last_logout_at,
-        CASE WHEN le.logged_in_at IS NOT NULL
-          AND (le.logged_in_at::timestamptz AT TIME ZONE '${TZ}')::date = (now() AT TIME ZONE '${TZ}')::date
-          THEN 1 ELSE 0 END AS logged_in_today,
-        CASE WHEN le.logged_in_at IS NOT NULL AND le.logged_out_at IS NULL
-          THEN 1 ELSE 0 END AS is_active_now
-      FROM users u
-      LEFT JOIN (
-        SELECT claimed_by AS user_id, COUNT(*) AS delivered_count,
-          ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at::timestamptz - requested_at::timestamptz)) / 60)) AS avg_minutes
-        FROM orders WHERE status IN ('entregado','delivered') GROUP BY claimed_by
-      ) d ON d.user_id = u.id
-      LEFT JOIN (
-        SELECT le1.user_id, le1.logged_in_at, le1.logged_out_at
-        FROM login_events le1
-        WHERE le1.id = (SELECT MAX(le2.id) FROM login_events le2 WHERE le2.user_id = le1.user_id)
-      ) le ON le.user_id = u.id
-      WHERE u.role IN ('admin','worker') AND u.active = 1
-      ORDER BY is_active_now DESC, logged_in_today ASC, u.display_name ASC
-    `);
-    res.json({
-      employees: employees.map(e => ({
-        ...e,
-        delivered_count: Number(e.delivered_count),
-        avg_minutes: e.avg_minutes !== null ? Number(e.avg_minutes) : null,
-      })),
-    });
-  } catch (e) { next(e); }
+/**
+ * GET /api/analytics/products — Análisis de productos [admin]
+ */
+router.get('/products', authMiddleware(['admin']), (req, res) => {
+  const { from, to } = req.query;
+
+  let where = "WHERE o.status NOT IN ('cancelled')";
+  const params = [];
+  if (from) { where += ' AND DATE(o.created_at) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(o.created_at) <= ?'; params.push(to); }
+
+  const data = db.prepare(`
+    SELECT p.id, p.name, p.category_id, c.name as category_name,
+           SUM(oi.qty) as total_qty,
+           SUM(oi.line_total) as total_revenue,
+           COUNT(DISTINCT o.id) as order_count,
+           p.stock as current_stock
+    FROM order_items oi
+    LEFT JOIN products p ON p.id = oi.product_id
+    LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN orders o ON o.id = oi.order_id
+    ${where}
+    GROUP BY oi.product_id
+    HAVING total_qty > 0
+    ORDER BY total_revenue DESC
+    LIMIT 50
+  `).all(...params);
+
+  res.json({ data });
 });
 
-// GET /api/analytics/employees/:id — detalle: historial de sesiones
-router.get('/employees/:id', adminAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    const id = parseInt(req.params.id, 10);
-    const { rows: userRows } = await db.query(
-      `SELECT id, username, display_name, role, active FROM users WHERE id=$1 AND role IN ('admin','worker')`, [id]
-    );
-    const user = userRows[0];
-    if (!user) return res.status(404).json({ error: 'Empleado no encontrado' });
+/**
+ * GET /api/analytics/workers — Rendimiento de trabajadores [admin]
+ */
+router.get('/workers', authMiddleware(['admin']), (req, res) => {
+  const { from, to } = req.query;
 
-    const { rows: sessions } = await db.query(
-      `SELECT logged_in_at, logged_out_at FROM login_events WHERE user_id=$1 ORDER BY id DESC LIMIT 20`, [id]
-    );
+  let where = "WHERE o.status IN ('delivered','picked_up')";
+  const params = [];
+  if (from) { where += ' AND DATE(o.created_at) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(o.created_at) <= ?'; params.push(to); }
 
-    const { rows: statsRows } = await db.query(`
-      SELECT COUNT(*) AS delivered_count,
-        ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at::timestamptz - requested_at::timestamptz)) / 60)) AS avg_minutes
-      FROM orders WHERE status IN ('entregado','delivered') AND claimed_by = $1
-    `, [id]);
-    const stats = {
-      delivered_count: Number(statsRows[0].delivered_count),
-      avg_minutes: statsRows[0].avg_minutes !== null ? Number(statsRows[0].avg_minutes) : null,
-    };
+  const data = db.prepare(`
+    SELECT u.id, u.name, u.phone, u.avatar,
+           COUNT(o.id) as total_deliveries,
+           SUM(o.total) as total_revenue,
+           AVG(o.total) as avg_order_value
+    FROM users u
+    LEFT JOIN orders o ON o.worker_id = u.id
+    ${where}
+    GROUP BY u.id
+    HAVING u.role = 'worker'
+    ORDER BY total_deliveries DESC
+  `).all();
 
-    res.json({ user, sessions, stats });
-  } catch (e) { next(e); }
+  res.json({ data });
 });
 
-// GET /api/analytics/customers
-router.get('/customers', adminAuth, async (req, res, next) => {
-  try {
-    const db = getDB();
-    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+/**
+ * GET /api/analytics/export — Exportar datos [admin]
+ */
+router.get('/export', authMiddleware(['admin']), (req, res) => {
+  const { format = 'json' } = req.query;
 
-    const { rows: newRows } = await db.query(`
-      SELECT COUNT(*) AS c FROM customers
-      WHERE created_at::timestamptz >= now() - ($1 * INTERVAL '1 day')
-    `, [days]);
-    const newCustomers = Number(newRows[0].c);
+  if (format === 'json') {
+    const orders = db.prepare(`
+      SELECT o.id, o.status, o.subtotal, o.delivery_fee, o.discount, o.tax_total, o.total,
+             o.payment_method, o.client_name, o.worker_name, o.created_at,
+             (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as items_count
+      FROM orders o ORDER BY o.created_at DESC LIMIT 500
+    `).all();
 
-    const { rows: returningRows } = await db.query(`
-      SELECT COUNT(*) AS c FROM (
-        SELECT customer_id FROM orders
-        WHERE customer_id IS NOT NULL
-        GROUP BY customer_id HAVING COUNT(*) > 1
-      ) t
-    `);
-    const returning = Number(returningRows[0].c);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=pedidos_export.json');
+    return res.json({ data: orders, exported_at: new Date().toISOString() });
+  }
 
-    // email viene de users.phone (mismo numero que customers.phone para
-    // clientes registrados en la app) -- clientes que solo escriben por
-    // WhatsApp sin cuenta en la app simplemente no tienen email.
-    const { rows: topCustomersRaw } = await db.query(`
-      SELECT c.name, c.phone, c.created_at AS customer_since, u.email,
-        COUNT(*) AS order_count
-      FROM orders o
-      JOIN customers c ON c.id = o.customer_id
-      LEFT JOIN users u ON u.phone = c.phone
-      WHERE o.status IN ('entregado','delivered')
-      GROUP BY o.customer_id, c.name, c.phone, c.created_at, u.email
-      ORDER BY order_count DESC
-      LIMIT 10
-    `);
-    const topCustomers = topCustomersRaw.map(r => ({ ...r, order_count: Number(r.order_count) }));
+  if (format === 'csv') {
+    const orders = db.prepare(`
+      SELECT id, status, subtotal, delivery_fee, discount, tax_total, total,
+             payment_method, client_name, worker_name, created_at
+      FROM orders ORDER BY created_at DESC LIMIT 500
+    `).all();
 
-    res.json({ new_customers: newCustomers, returning_customers: returning, top_customers: topCustomers });
-  } catch (e) { next(e); }
+    const headers = Object.keys(orders[0] || {}).join(',');
+    const rows = orders.map(o => Object.values(o).map(v => `"${v}"`).join(','));
+    const csv = [headers, ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=pedidos_export.csv');
+    return res.send(csv);
+  }
+
+  res.status(400).json({ error: 'Formato de exportación no válido. Use "json" o "csv"' });
 });
 
 module.exports = router;

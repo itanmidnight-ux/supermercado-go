@@ -1,271 +1,198 @@
-'use strict';
+// src/routes/users.js — Rutas de gestión de usuarios [admin]
 const express = require('express');
-const router  = express.Router();
-const bcrypt  = require('bcrypt');
-const multer  = require('multer');
-const fs      = require('fs');
-const path    = require('path');
-const { getDB }     = require('../db/database');
-const { adminAuth, clientAuth } = require('../middleware/auth');
-const { sanitizeText } = require('../utils/sanitize');
-const { normalizeAndValidatePhone } = require('../utils/phone');
+const { Router } = express;
+const { db } = require('../db');
+const { nowBogota } = require('../utils/dates');
+const { authMiddleware } = require('../middleware/auth');
+const { hashPassword } = require('../utils/passwords');
+const { v4: uuidv4 } = require('uuid');
 
-const PICS_DIR = path.join(process.env.APPDATA || process.env.HOME, 'pedidos-bot', 'profile-pics');
-fs.mkdirSync(PICS_DIR, { recursive: true });
-const picUpload = multer({
-  dest: PICS_DIR,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_, f, cb) => cb(null, f.mimetype.startsWith('image/')),
+const router = Router();
+
+/**
+ * GET /api/users — Listar usuarios [admin]
+ */
+router.get('/', authMiddleware(['admin']), (req, res) => {
+  const { role, search, page = 1, limit = 20 } = req.query;
+  const offset = (Number(page) - 1) * Number(limit);
+
+  let where = 'WHERE 1=1';
+  const params = [];
+
+  if (role) { where += ' AND u.role = ?'; params.push(role); }
+  if (search) { where += ' AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+
+  const count = db.prepare(`SELECT COUNT(*) as total FROM users u ${where}`).get(...params);
+  const users = db.prepare(`
+    SELECT id, name, email, phone, role, avatar, is_active, earnings,
+           doc_type, doc_number, last_login_at, created_at
+    FROM users u
+    ${where}
+    ORDER BY u.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, Number(limit), offset);
+
+  res.json({
+    data: users,
+    pagination: { page: Number(page), limit: Number(limit), total: count.total, pages: Math.ceil(count.total / Number(limit)) },
+  });
 });
 
-const SALT = 10;
-const SAFE_FIELDS = 'id, username, display_name, role, active, address, created_at';
+/**
+ * POST /api/users — Crear usuario [admin]
+ */
+router.post('/', authMiddleware(['admin']), async (req, res) => {
+  const { name, email, phone, password, role, avatar } = req.body;
 
-// GET /api/users — list all (admin only)
-router.get('/', adminAuth, async (req, res, next) => {
-  try {
-    const { rows: users } = await getDB().query(`SELECT ${SAFE_FIELDS} FROM users ORDER BY id`);
-    res.json({ users });
-  } catch (e) { next(e); }
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Nombre, email y contraseña son obligatorios' });
+  }
+
+  const validRoles = ['admin', 'worker', 'client'];
+  const userRole = validRoles.includes(role) ? role : 'client';
+
+  // Check if email already exists
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existing) {
+    return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
+  }
+
+  const hashedPassword = await hashPassword(password);
+  const id = uuidv4();
+  const now = nowBogota();
+
+  db.prepare(`
+    INSERT INTO users (id, name, email, phone, password, role, avatar, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(id, name, email, phone || null, hashedPassword, userRole, avatar || null, now, now);
+
+  const user = db.prepare(`
+    SELECT id, name, email, phone, role, avatar, is_active, created_at
+    FROM users WHERE id = ?
+  `).get(id);
+
+  res.status(201).json({ data: user, message: 'Usuario creado exitosamente' });
 });
 
-// POST /api/users — create user (admin only)
-router.post('/', adminAuth, async (req, res, next) => {
-  try {
-    const { username, pin, password, display_name, address, role = 'worker' } = req.body;
-    const credential = password !== undefined ? String(password) : (pin !== undefined ? String(pin) : '');
+/**
+ * GET /api/users/:id — Obtener usuario por ID [admin]
+ */
+router.get('/:id', authMiddleware(['admin']), (req, res) => {
+  const user = db.prepare(`
+    SELECT id, name, email, phone, role, avatar, is_active, earnings,
+           doc_type, doc_number, must_change_password, accepted_privacy_at,
+           last_login_at, fcm_token, created_at, updated_at
+    FROM users WHERE id = ?
+  `).get(req.params.id);
 
-    if (!username || typeof username !== 'string' || username.trim().length < 2)
-      return res.status(400).json({ error: 'username requerido (mín 2 chars)' });
-    if (!credential.length)
-      return res.status(400).json({ error: 'contraseña requerida' });
-    if (!['admin', 'worker', 'client'].includes(role))
-      return res.status(400).json({ error: 'role debe ser admin, worker o client' });
+  if (!user) {
+    return res.status(404).json({ error: 'Usuario no encontrado' });
+  }
 
-    const db   = getDB();
-    const name = username.trim().toLowerCase();
-
-    const { rows: existing } = await db.query('SELECT id FROM users WHERE username = $1', [name]);
-    if (existing[0]) return res.status(409).json({ error: 'Usuario ya existe' });
-
-    const credHash = await bcrypt.hash(credential, SALT);
-
-    const { rows } = await db.query(
-      'INSERT INTO users (username, password_hash, pin, display_name, role, address) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-      [name, credHash, credHash, display_name ? sanitizeText(display_name, 100) : name, role, address ? sanitizeText(address, 300) : null]
-    );
-
-    const { rows: userRows } = await db.query(`SELECT ${SAFE_FIELDS} FROM users WHERE id = $1`, [rows[0].id]);
-    res.status(201).json({ user: userRows[0] });
-  } catch (e) { next(e); }
+  res.json({ data: user });
 });
 
-// GET /api/users/me — datos propios para la pestaña de perfil. No es una
-// red social: el cliente no puede editar nombre/apodo/dirección/bio (por
-// eso ni siquiera se devuelven para edición), solo ve lo esencial.
-// IMPORTANTE: debe registrarse ANTES de PUT/DELETE /:id -- Express matchea
-// rutas en orden de registro y "/me" calza con el patrón "/:id" (id="me"),
-// lo que forzaría adminAuth sobre cualquier cliente que solo quiere ver o
-// editar su propio perfil.
-router.get('/me', clientAuth, async (req, res, next) => {
-  try {
-    const { rows } = await getDB().query(
-      'SELECT id, username, display_name, role, email, phone, profile_pic FROM users WHERE id=$1', [req.user.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json({ user: rows[0] });
-  } catch (e) { next(e); }
-});
+/**
+ * PUT /api/users/:id — Actualizar usuario [admin]
+ */
+router.put('/:id', authMiddleware(['admin']), (req, res) => {
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Usuario no encontrado' });
+  }
 
-// PUT /api/users/me — SOLO permite cambiar el correo, y únicamente si se
-// confirma la contraseña actual (evita que un token robado baste para
-// secuestrar la cuenta cambiando el correo de recuperación). Nombre,
-// apodo, dirección y descripción no son editables -- no es una red social.
-router.put('/me', clientAuth, async (req, res, next) => {
-  try {
-    const { email, current_password } = req.body;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim()))
-      return res.status(400).json({ error: 'Correo inválido' });
-    if (!current_password)
-      return res.status(400).json({ error: 'Confirma tu contraseña actual para cambiar el correo' });
+  const allowed = ['name', 'email', 'phone', 'role', 'avatar', 'is_active', 'earnings', 'doc_type', 'doc_number'];
+  const sets = [];
+  const values = [];
 
-    const db = getDB();
-    const { rows } = await db.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
-    const user = rows[0];
-    const match = await bcrypt.compare(String(current_password), user.password_hash);
-    if (!match) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
-
-    const newEmail = String(email).trim().toLowerCase().slice(0, 200);
-    try {
-      await db.query('UPDATE users SET email=$1 WHERE id=$2', [newEmail, req.user.id]);
-    } catch (e) {
-      if (e.code === '23505') return res.status(409).json({ error: 'Ese correo ya está en uso por otra cuenta' });
-      throw e;
+  for (const field of allowed) {
+    if (req.body[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      values.push(req.body[field]);
     }
-    res.json({ ok: true, email: newEmail });
-  } catch (e) { next(e); }
-});
+  }
 
-// PUT /api/users/:id — update display_name, password, role, active, address (admin only)
-router.put('/:id', adminAuth, async (req, res, next) => {
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
+  }
+
+  sets.push('updated_at = ?');
+  values.push(nowBogota());
+  values.push(req.params.id);
+
   try {
-    const db   = getDB();
-    const id   = parseInt(req.params.id, 10);
-    const { rows: userRows } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-    const user = userRows[0];
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    if (req.user.id === id && req.body.active === 0)
-      return res.status(400).json({ error: 'No puedes desactivar tu propio usuario' });
-
-    const updates = [];
-    const vals    = [];
-
-    if (req.body.display_name !== undefined) { vals.push(sanitizeText(req.body.display_name, 100)); updates.push(`display_name=$${vals.length}`); }
-    if (req.body.role !== undefined) {
-      if (!['admin', 'worker', 'client'].includes(req.body.role))
-        return res.status(400).json({ error: 'role debe ser admin, worker o client' });
-      vals.push(req.body.role); updates.push(`role=$${vals.length}`);
+    db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    const updated = db.prepare(`
+      SELECT id, name, email, phone, role, avatar, is_active, earnings,
+             doc_type, doc_number, updated_at
+      FROM users WHERE id = ?
+    `).get(req.params.id);
+    res.json({ data: updated, message: 'Usuario actualizado exitosamente' });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Ya existe un usuario con ese correo o teléfono' });
     }
-    if (req.body.active       !== undefined) { vals.push(req.body.active ? 1 : 0); updates.push(`active=$${vals.length}`); }
-    if (req.body.address      !== undefined) { vals.push(req.body.address?.trim() || null); updates.push(`address=$${vals.length}`); }
-    const newCredential = req.body.password !== undefined ? String(req.body.password)
-                        : req.body.pin      !== undefined ? String(req.body.pin) : undefined;
-    if (newCredential !== undefined) {
-      const credHash = await bcrypt.hash(newCredential, SALT);
-      vals.push(credHash); updates.push(`password_hash=$${vals.length}`);
-      vals.push(credHash); updates.push(`pin=$${vals.length}`);
+    throw err;
+  }
+});
+
+/**
+ * DELETE /api/users/:id — Desactivar usuario [admin]
+ */
+router.delete('/:id', authMiddleware(['admin']), (req, res) => {
+  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Usuario no encontrado' });
+  }
+
+  // No permitir desactivar al último admin
+  if (user.role === 'admin') {
+    const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND is_active = 1").get();
+    if (adminCount.count <= 1) {
+      return res.status(409).json({ error: 'No se puede desactivar al último administrador del sistema' });
     }
+  }
 
-    if (!updates.length) return res.status(400).json({ error: 'Nada que actualizar' });
-
-    vals.push(id);
-    await db.query(`UPDATE users SET ${updates.join(',')} WHERE id=$${vals.length}`, vals);
-    const { rows: updatedRows } = await db.query(`SELECT ${SAFE_FIELDS} FROM users WHERE id=$1`, [id]);
-    res.json({ user: updatedRows[0] });
-  } catch (e) { next(e); }
+  db.prepare('UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?').run(nowBogota(), req.params.id);
+  res.json({ message: 'Usuario desactivado exitosamente' });
 });
 
-// DELETE /api/users/:id — hard delete (admin only, cannot delete self)
-router.delete('/:id', adminAuth, async (req, res, next) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (req.user.id === id) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
-    const db = getDB();
-    try {
-      const result = await db.query('DELETE FROM users WHERE id=$1', [id]);
-      if (!result.rowCount) return res.status(404).json({ error: 'Usuario no encontrado' });
-      res.json({ ok: true });
-    } catch (e) {
-      // FK (orders.claimed_by, login_events.user_id, etc) impide borrar un
-      // usuario con historial -- es el comportamiento correcto (preservar
-      // trazabilidad de pedidos/sesiones), no un error real del servidor.
-      // codigo 23503 = foreign_key_violation (estandar SQLSTATE de Postgres).
-      if (e.code === '23503') {
-        return res.status(409).json({ error: 'No se puede eliminar: el usuario tiene pedidos o sesiones registradas. Desactívalo en su lugar.' });
-      }
-      throw e;
+/**
+ * PUT /api/users/profile — Actualizar perfil propio
+ */
+router.put('/profile', authMiddleware(), (req, res) => {
+  const allowed = ['name', 'email', 'phone', 'avatar', 'doc_type', 'doc_number', 'fcm_token'];
+  const sets = [];
+  const values = [];
+
+  for (const field of allowed) {
+    if (req.body[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      values.push(req.body[field]);
     }
-  } catch (e) { next(e); }
-});
+  }
 
-// GET /api/users/clients — list client users (admin only). Incluye
-// order_count (via customers.phone) para la ficha de detalle del panel.
-router.get('/clients', adminAuth, async (req, res, next) => {
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
+  }
+
+  sets.push('updated_at = ?');
+  values.push(nowBogota());
+  values.push(req.user.id);
+
   try {
-    const { rows: clients } = await getDB().query(`
-      SELECT u.id, u.username, u.display_name, u.email, u.phone, u.address,
-        u.profile_pic, u.active, u.created_at, COALESCE(oc.order_count, 0) AS order_count
-      FROM users u
-      LEFT JOIN (
-        SELECT c.phone, COUNT(*) AS order_count
-        FROM orders o JOIN customers c ON c.id = o.customer_id
-        GROUP BY c.phone
-      ) oc ON oc.phone = u.phone
-      WHERE u.role = 'client'
-      ORDER BY u.created_at DESC
-    `);
-    res.json({ clients: clients.map(c => ({ ...c, order_count: Number(c.order_count) })) });
-  } catch (e) { next(e); }
-});
-
-// PUT /api/users/me/phone — igual que el correo: exige contraseña actual.
-router.put('/me/phone', clientAuth, async (req, res, next) => {
-  try {
-    const { phone, current_password } = req.body;
-    const normalized = normalizeAndValidatePhone(phone);
-    if (!normalized)
-      return res.status(400).json({ error: 'Número de celular inválido (celular colombiano de 10 dígitos)' });
-    if (!current_password)
-      return res.status(400).json({ error: 'Confirma tu contraseña actual para cambiar el número' });
-
-    const db = getDB();
-    const { rows } = await db.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
-    const user = rows[0];
-    const match = await bcrypt.compare(String(current_password), user.password_hash);
-    if (!match) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
-
-    try {
-      await db.query('UPDATE users SET phone=$1 WHERE id=$2', [normalized, req.user.id]);
-    } catch (e) {
-      if (e.code === '23505') return res.status(409).json({ error: 'Ese número ya está en uso por otra cuenta' });
-      throw e;
+    db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    const updated = db.prepare(`
+      SELECT id, name, email, phone, role, avatar, is_active, doc_type, doc_number, created_at
+      FROM users WHERE id = ?
+    `).get(req.user.id);
+    res.json({ data: updated, message: 'Perfil actualizado exitosamente' });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Ya existe un usuario con ese correo o teléfono' });
     }
-    res.json({ ok: true, phone: normalized });
-  } catch (e) { next(e); }
-});
-
-// PUT /api/users/me/password — change own password
-router.put('/me/password', clientAuth, async (req, res, next) => {
-  try {
-    const { current_password, new_password } = req.body;
-    if (!current_password || !new_password)
-      return res.status(400).json({ error: 'current_password y new_password requeridos' });
-    if (String(new_password).length < 8)
-      return res.status(400).json({ error: 'La nueva contraseña debe tener mínimo 8 caracteres' });
-    const db   = getDB();
-    const { rows } = await db.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
-    const user = rows[0];
-    const match = await bcrypt.compare(String(current_password), user.password_hash);
-    if (!match) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
-    const hash = await bcrypt.hash(String(new_password), 10);
-    await db.query('UPDATE users SET password_hash=$1, pin=$2 WHERE id=$3', [hash, hash, req.user.id]);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
-
-// POST /api/users/me/profile-pic — upload profile photo
-router.post('/me/profile-pic', clientAuth, picUpload.single('photo'), async (req, res, next) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'Imagen requerida' });
-    const ext     = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
-    const newName = `${req.user.username}_${Date.now()}.${ext}`;
-    const newPath = path.join(PICS_DIR, newName);
-    try { fs.renameSync(req.file.path, newPath); } catch { fs.copyFileSync(req.file.path, newPath); fs.unlinkSync(req.file.path); }
-    await getDB().query('UPDATE users SET profile_pic=$1 WHERE id=$2', [newName, req.user.id]);
-    res.json({ filename: newName });
-  } catch (e) { next(e); }
-});
-
-// GET /api/users/profile-pic/:filename — serve profile pic
-router.get('/profile-pic/:filename', clientAuth, (req, res) => {
-  const fp = path.join(PICS_DIR, path.basename(req.params.filename));
-  if (!fs.existsSync(fp)) return res.status(404).end();
-  res.sendFile(fp);
-});
-
-// DELETE /api/users/me/profile-pic — delete own profile pic
-router.delete('/me/profile-pic', clientAuth, async (req, res, next) => {
-  try {
-    const db   = getDB();
-    const { rows } = await db.query('SELECT profile_pic FROM users WHERE id=$1', [req.user.id]);
-    const user = rows[0];
-    if (user?.profile_pic) {
-      try { fs.unlinkSync(path.join(PICS_DIR, user.profile_pic)); } catch {}
-    }
-    await db.query('UPDATE users SET profile_pic=NULL WHERE id=$1', [req.user.id]);
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+    throw err;
+  }
 });
 
 module.exports = router;
