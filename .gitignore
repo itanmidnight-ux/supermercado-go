@@ -6,6 +6,8 @@
 .env
 .env.local
 .env.*
+*.env.backup*
+.env.backup*
 
 # Dependencies
 node_modules/
@@ -23,6 +25,10 @@ target/
 *.pyd
 
 # Mobile app build files
+.dart_tool/
+android-app/.dart_tool/
+android-app/build/
+android-app/debug-symbols/
 .mobile_app/build/
 .mobile_app/.dart_tool/
 .mobile_app/ios/.symlinks/
@@ -48,4 +54,5 @@ Thumbs.db
 
 # Temporary files
 *.tmp
+* (copy *).*
 ```

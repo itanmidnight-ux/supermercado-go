@@ -1,5 +1,13 @@
 # Supermercado GO 🛒
 
+## Identidad pública del repositorio
+
+- **Nombre recomendado:** `supermercado-go` o `supermercado-go-mobile-commerce`
+- **Nombre actual:** `supermercado-go`
+- **Posicionamiento:** plataforma de supermercado con API, sitio web, app Android, panel admin y bot WhatsApp.
+
+---
+
 Sistema integral para supermercado: sitio web + app Android + panel admin + bot WhatsApp.
 
 ## Stack
@@ -38,7 +46,7 @@ bash deploy-linux.sh --start
 # API:         http://localhost:50000/api/
 ```
 
-Acceder al panel admin con: `admin@supermercado.go` / `admin123`
+En entorno local, el seed inicial crea un usuario admin de desarrollo. Cambia esa contraseña antes de exponer el sistema en una red pública o entorno real.
 
 ## Despliegue
 
