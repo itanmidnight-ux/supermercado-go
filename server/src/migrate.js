@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
 const config = require('./config');
@@ -598,11 +599,11 @@ migrations.push({
     const adminExists = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
     if (!adminExists) {
       const adminId = uuidv4();
-      // Generate random 12-char password — admin MUST change on first login
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
-      let adminPassword = '';
-      for (let i = 0; i < 12; i++) adminPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-      const hash = require('crypto').createHash('sha256').update(adminPassword).digest('hex');
+      const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+      if (!adminPassword || adminPassword.length < 12) {
+        throw new Error('INITIAL_ADMIN_PASSWORD debe tener al menos 12 caracteres para crear el administrador inicial.');
+      }
+      const hash = bcrypt.hashSync(adminPassword, 12);
       const now = new Date().toISOString();
 
       db.prepare(`
@@ -619,8 +620,7 @@ migrations.push({
       );
 
       console.log('[MIGRATE] Admin creado: admin@supermercado.go');
-      console.log(`[MIGRATE] ⚠️  Contraseña temporal: ${adminPassword}`);
-      console.log('[MIGRATE] ⚠️  DEBE cambiar la contraseña en el primer inicio de sesión.');
+      console.log('[MIGRATE] Contraseña inicial aplicada desde variable de entorno; no se imprime por seguridad.');
     }
   }
 });
@@ -865,10 +865,15 @@ migrations.push({
       db.exec(`ALTER TABLE users ADD COLUMN pin_verified INTEGER DEFAULT 0`);
     }
 
-    // Asignar PIN por defecto al admin existente
-    db.exec(`UPDATE users SET pin_code = '9703' WHERE email = 'admin@supermercado.go'`);
-
     console.log('[MIGRATE] 021: Columnas pin_code, pin_attempts, pin_blocked_until, pin_verified agregadas');
+  }
+});
+
+// ─── Migración 022: Invalidar PIN histórico conocido ────────────
+migrations.push({
+  version: 22,
+  up() {
+    db.prepare("UPDATE users SET pin_code = NULL, pin_verified = 0 WHERE pin_code = '9703'").run();
   }
 });
 

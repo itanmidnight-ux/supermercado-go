@@ -36,7 +36,7 @@ router.post('/register', validateBody({
   required: ['name', 'email', 'phone', 'password'],
   rules: {
     email: (v) => !/\S+@\S+\.\S+/.test(v) ? 'El formato del correo electrónico es inválido' : null,
-    password: (v) => v.length < 6 ? 'La contraseña debe tener al menos 6 caracteres' : null,
+    password: (v) => typeof v !== 'string' || v.length < 12 ? 'La contraseña debe tener al menos 12 caracteres' : null,
     role: (v) => v && !['client', 'worker'].includes(v) ? 'Rol no válido para registro público' : null,
   }
 }), async (req, res) => {
@@ -69,7 +69,7 @@ router.post('/register', validateBody({
     const token = jwt.sign(
       { id: userId, role, email: email.toLowerCase().trim() },
       config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn }
+      { expiresIn: config.jwtExpiresIn, algorithm: 'HS256', issuer: config.jwtIssuer, audience: config.jwtAudience }
     );
 
     const user = db.prepare('SELECT id, name, email, phone, role, avatar, is_active, created_at FROM users WHERE id = ?').get(userId);
@@ -126,7 +126,7 @@ router.post('/login', loginLimiter, validateBody({
     const token = jwt.sign(
       { id: user.id, role: user.role, email: user.email },
       config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn }
+      { expiresIn: config.jwtExpiresIn, algorithm: 'HS256', issuer: config.jwtIssuer, audience: config.jwtAudience }
     );
 
     res.json({
@@ -153,7 +153,7 @@ router.post('/login', loginLimiter, validateBody({
 router.post('/change-password', authMiddleware(), validateBody({
   required: ['old_password', 'new_password'],
   rules: {
-    new_password: (v) => v.length < 6 ? 'La nueva contraseña debe tener al menos 6 caracteres' : null,
+    new_password: (v) => typeof v !== 'string' || v.length < 12 ? 'La nueva contraseña debe tener al menos 12 caracteres' : null,
   }
 }), async (req, res) => {
   const { old_password, new_password } = req.body;
@@ -206,7 +206,7 @@ router.post('/verify-pin', authMiddleware(), (req, res) => {
   const { pin } = req.body;
   const userId = req.user.id;
 
-  if (!pin || pin.length !== 4) {
+  if (typeof pin !== 'string' || !/^\d{4}$/.test(pin)) {
     return res.status(400).json({ error: 'El código PIN debe tener 4 dígitos' });
   }
 
@@ -243,10 +243,10 @@ router.post('/verify-pin', authMiddleware(), (req, res) => {
   }
 
   // Verificar PIN con comparación de tiempo constante (timing-safe)
-  const pinMatch = crypto.timingSafeEqual(
-    Buffer.from(pin, 'utf8'),
-    Buffer.from(user.pin_code, 'utf8')
-  );
+  const pinBuffer = Buffer.from(pin, 'utf8');
+  const storedPinBuffer = Buffer.from(String(user.pin_code), 'utf8');
+  const pinMatch = pinBuffer.length === storedPinBuffer.length
+    && crypto.timingSafeEqual(pinBuffer, storedPinBuffer);
 
   if (pinMatch) {
     // PIN correcto: resetear intentos y marcar verificado
@@ -363,7 +363,7 @@ router.post('/reset-password', validateBody({
   rules: {
     email: (v) => !/\S+@\S+\.\S+/.test(v) ? 'El formato del correo electrónico es inválido' : null,
     code: (v) => !/^\d{6}$/.test(v) ? 'El código debe ser de 6 dígitos' : null,
-    new_password: (v) => v.length < 6 ? 'La nueva contraseña debe tener al menos 6 caracteres' : null,
+    new_password: (v) => typeof v !== 'string' || v.length < 12 ? 'La nueva contraseña debe tener al menos 12 caracteres' : null,
   }
 }), async (req, res) => {
   const { email, code, new_password } = req.body;

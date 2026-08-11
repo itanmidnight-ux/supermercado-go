@@ -17,7 +17,11 @@ function authMiddleware(roles) {
 
     const token = authHeader.substring(7);
     try {
-      const decoded = jwt.verify(token, config.jwtSecret);
+      const decoded = jwt.verify(token, config.jwtSecret, {
+        algorithms: ['HS256'],
+        issuer: config.jwtIssuer,
+        audience: config.jwtAudience,
+      });
       req.user = {
         id: decoded.id,
         role: decoded.role,
@@ -48,7 +52,10 @@ function apiAuth(req, res, next) {
     return res.status(401).json({ error: 'API Key requerida' });
   }
 
-  if (apiKey !== config.apiKey) {
+  const crypto = require('crypto');
+  const provided = Buffer.from(String(apiKey));
+  const expected = Buffer.from(config.apiKey);
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
     return res.status(403).json({ error: 'API Key inválida' });
   }
 

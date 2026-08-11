@@ -7,8 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: supermercados-go-server
     restart: unless-stopped
-    ports:
-      - "3777:3777"
+    expose:
+      - "3777"
     volumes:
       - server-data:/app/data
       - wa-session:/app/data/wa-session
@@ -18,7 +18,10 @@ services:
       - HOST=0.0.0.0
       - JWT_SECRET=${JWT_SECRET}
       - API_KEY=${API_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - TRUST_PROXY=${TRUST_PROXY:-loopback}
+      - JWT_ISSUER=${JWT_ISSUER:-supermercados-go-api}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-supermercados-go-client}
       - WA_ENABLED=${WA_ENABLED:-false}
       - WA_BUSINESS_NUMBER=${WA_BUSINESS_NUMBER:-}
       - WA_ACCESS_TOKEN=${WA_ACCESS_TOKEN:-}

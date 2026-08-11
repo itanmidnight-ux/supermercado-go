@@ -36,7 +36,11 @@ class WsService {
       }
 
       try {
-        const decoded = jwt.verify(token, config.jwtSecret);
+        const decoded = jwt.verify(token, config.jwtSecret, {
+          algorithms: ['HS256'],
+          issuer: config.jwtIssuer,
+          audience: config.jwtAudience,
+        });
         const userId = decoded.id;
         const role = decoded.role;
 
@@ -100,7 +104,10 @@ class WsService {
     switch (event) {
       case 'worker_location':
         // Solo trabajadores pueden enviar ubicación
-        if (role === 'worker' && data) {
+        if (role === 'worker' && data && Number.isFinite(Number(data.lat)) && Number.isFinite(Number(data.lng))
+          && Number(data.lat) >= -90 && Number(data.lat) <= 90
+          && Number(data.lng) >= -180 && Number(data.lng) <= 180
+          && (!data.order_id || typeof data.order_id === 'string')) {
           this.broadcastWorkerLocation(userId, data.lat, data.lng, data.order_id);
         }
         break;

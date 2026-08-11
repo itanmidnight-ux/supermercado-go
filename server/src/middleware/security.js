@@ -9,7 +9,9 @@ const config = require('../config');
 function sanitizeInput(req, res, next) {
   if (req.body && typeof req.body === 'object') {
     for (const key of Object.keys(req.body)) {
-      if (typeof req.body[key] === 'string') {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) {
+        delete req.body[key];
+      } else if (typeof req.body[key] === 'string') {
         // Eliminar caracteres nulos
         req.body[key] = req.body[key].replace(/\0/g, '');
         // Trim whitespace
@@ -19,7 +21,9 @@ function sanitizeInput(req, res, next) {
   }
   if (req.query && typeof req.query === 'object') {
     for (const key of Object.keys(req.query)) {
-      if (typeof req.query[key] === 'string') {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) {
+        delete req.query[key];
+      } else if (typeof req.query[key] === 'string') {
         req.query[key] = req.query[key].replace(/\0/g, '').trim();
       }
     }
@@ -37,7 +41,7 @@ function requestLogger(req, res, next) {
     const level = res.statusCode >= 400 ? 'WARN' : 'INFO';
     if (res.statusCode >= 400 || req.method !== 'GET') {
       console.log(
-        `[${new Date().toISOString()}] ${level} ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms - ${req.ip}`
+        `[${new Date().toISOString()}] ${level} ${req.method} ${req.path} ${res.statusCode} ${duration}ms - ${req.ip}`
       );
     }
   });

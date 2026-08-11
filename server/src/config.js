@@ -30,18 +30,28 @@ function boolDefault(name, def) {
   return val.trim() === 'true' || val.trim() === '1';
 }
 
+function listDefault(name, def = []) {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === '') return def;
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
 const nodeEnv = strDefault('NODE_ENV', 'development');
 
 // Validación crítica en producción
 if (nodeEnv === 'production') {
   const jwtSecret = required('JWT_SECRET');
   const apiKey = required('API_KEY');
-  if (!jwtSecret) {
-    console.error('[CONFIG] ERROR: JWT_SECRET es obligatorio en producción.');
+  if (!jwtSecret || jwtSecret.length < 32) {
+    console.error('[CONFIG] ERROR: JWT_SECRET debe tener al menos 32 caracteres en producción.');
     process.exit(1);
   }
-  if (!apiKey) {
-    console.error('[CONFIG] ERROR: API_KEY es obligatorio en producción.');
+  if (!apiKey || apiKey.length < 32) {
+    console.error('[CONFIG] ERROR: API_KEY debe tener al menos 32 caracteres en producción.');
+    process.exit(1);
+  }
+  if (listDefault('CORS_ORIGINS').length === 0 || listDefault('CORS_ORIGINS').includes('*')) {
+    console.error('[CONFIG] ERROR: CORS_ORIGINS explícito es obligatorio en producción; no se permite *.');
     process.exit(1);
   }
 }
@@ -57,11 +67,14 @@ const config = {
   // JWT — OBLIGATORIO en cualquier entorno (no hay fallback predecible)
   jwtSecret: required('JWT_SECRET') || (() => { throw new Error('JWT_SECRET es obligatorio. Define la variable de entorno JWT_SECRET.'); })(),
   // 7 días: reduce la frecuencia de "sesión expirada" en paneles sin sacrificar seguridad
-  jwtExpiresIn: strDefault('JWT_EXPIRES_IN', '7d'),
+  jwtExpiresIn: strDefault('JWT_EXPIRES_IN', '2h'),
+  jwtIssuer: strDefault('JWT_ISSUER', 'supermercados-go-api'),
+  jwtAudience: strDefault('JWT_AUDIENCE', 'supermercados-go-client'),
 
   // API — OBLIGATORIO en cualquier entorno
   apiKey: required('API_KEY') || (() => { throw new Error('API_KEY es obligatorio. Define la variable de entorno API_KEY.'); })(),
-  corsOrigins: strDefault('CORS_ORIGINS', '*'),
+  corsOrigins: listDefault('CORS_ORIGINS', ['http://localhost:3777']),
+  trustProxy: strDefault('TRUST_PROXY', 'loopback'),
 
   // Datos del negocio
   business: {
@@ -94,6 +107,7 @@ const config = {
     enabled: boolDefault('WA_ENABLED', false),
     businessNumber: strDefault('WA_BUSINESS_NUMBER', ''),
     verifyToken: strDefault('WA_VERIFY_TOKEN', ''),
+    appSecret: strDefault('WA_APP_SECRET', ''),
     accessToken: strDefault('WA_ACCESS_TOKEN', ''),
     phoneId: strDefault('WA_PHONE_ID', ''),
   },

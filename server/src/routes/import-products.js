@@ -248,7 +248,13 @@ router.post('/import-excel', authMiddleware(['admin']), upload.single('file'), f
   }
 
   try {
-    var workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    var workbook = XLSX.read(req.file.buffer, {
+      type: 'buffer',
+      cellFormula: false,
+      cellHTML: false,
+      cellNF: false,
+      sheetRows: 10001,
+    });
     var sheetName = workbook.SheetNames[0];
     var sheet = workbook.Sheets[sheetName];
     var data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
@@ -261,6 +267,10 @@ router.post('/import-excel', authMiddleware(['admin']), upload.single('file'), f
     var rows = data.slice(1).filter(function (r) {
       return r.some(function (cell) { return String(cell).trim() !== ''; });
     });
+
+    if (rows.length > 10000) {
+      return res.status(400).json({ error: 'El archivo no puede superar las 10.000 filas' });
+    }
 
     if (!rows.length) {
       return res.status(400).json({ error: 'No se encontraron datos en el archivo' });

@@ -13,13 +13,19 @@
 function validateBody(schema) {
   return (req, res, next) => {
     const body = req.body;
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.getPrototypeOf(body) !== Object.prototype) {
       return res.status(400).json({ error: 'El cuerpo de la petición debe ser un objeto JSON' });
     }
 
     const errors = [];
     const { required = [], optional = [], rules = {}, allowExtra = false } = schema;
     const allowedFields = [...required, ...optional];
+
+    for (const key of Object.keys(body)) {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) {
+        errors.push(`El campo "${key}" no es válido`);
+      }
+    }
 
     // Verificar campos obligatorios
     for (const field of required) {

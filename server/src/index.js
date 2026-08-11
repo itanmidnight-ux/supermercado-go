@@ -24,7 +24,7 @@ runMigrations();
 const app = express();
 
 // Trust proxy (for rate limiting behind nginx)
-app.set('trust proxy', 1);
+app.set('trust proxy', config.trustProxy);
 
 // Seguridad
 app.use(helmet({
@@ -33,26 +33,21 @@ app.use(helmet({
 }));
 
 // CORS — Seguro: solo permitir orígenes explícitos
-const allowedOrigins = config.corsOrigins === '*'
-  ? false // No wildcard — must be explicit in production
-  : config.corsOrigins.split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = config.corsOrigins;
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, server-to-server, same-origin)
+    // Native clients/server-to-server requests do not send Origin. Browser
+    // requests still require an exact allowlisted origin below.
     if (!origin) return callback(null, true);
-    // If CORS_ORIGINS is empty or not set, allow same-origin only
-    if (allowedOrigins.length === 0) {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     callback(new Error('Origen no permitido por CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  credentials: true,
+  credentials: false,
   maxAge: 86400,
 };
 app.use(cors(corsOptions));
@@ -61,7 +56,11 @@ app.use(cors(corsOptions));
 app.use(compression());
 
 // Parsear JSON (máximo 1MB)
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, _res, buf) => { req.rawBody = Buffer.from(buf); },
+}));
+app.use(express.urlencoded({ extended: false, limit: '100kb', parameterLimit: 100 }));
 
 // Middleware de seguridad
 app.use(securityHeaders);
@@ -156,7 +155,16 @@ app.use('/api/webhooks/whatsapp', (req, res) => {
   }
 
   if (req.method === 'POST') {
-    // Los mensajes entrantes se procesan sin auth pero con validación de firma en producción
+    if (config.whatsapp.appSecret) {
+      const signature = req.get('x-hub-signature-256') || '';
+      const expected = `sha256=${require('crypto').createHmac('sha256', config.whatsapp.appSecret).update(req.rawBody || Buffer.alloc(0)).digest('hex')}`;
+      const valid = signature.length === expected.length
+        && require('crypto').timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+      if (!valid) return res.status(401).json({ error: 'Firma de webhook inválida' });
+    } else if (config.nodeEnv === 'production') {
+      return res.status(503).json({ error: 'Webhook no configurado de forma segura' });
+    }
+
     whatsappService.handleIncomingMessage(
       req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from,
       req.body

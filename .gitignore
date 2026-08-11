@@ -32,6 +32,7 @@ server/data/uploads/
 # Logs
 *.log
 npm-debug.log*
+coverage/
 
 # OS files
 .DS_Store
