@@ -11,6 +11,17 @@
 # ============================================================================
 set -euo pipefail
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'HELP'
+Uso: ./compilar-apk.sh
+
+Resuelve dependencias y compila el APK localmente. El APK y build/ están
+ignorados por Git para mantener liviano el repositorio.
+  -h,--help   muestra esta ayuda sin descargar dependencias ni compilar.
+HELP
+  exit 0
+fi
+
 # ── Colores y formato ──────────────────────────────────────────────────────
 V='\033[0;32m'    # verde
 Y='\033[1;33m'    # amarillo brillante
