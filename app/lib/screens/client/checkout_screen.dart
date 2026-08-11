@@ -27,7 +27,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _submitOrder() async {
     setState(() => _submitting = true);
     final op = context.read<OrderProvider>();
-    final ok = await op.createOrder(fulfillmentType: _fulfillmentType, paymentMethod: _paymentMethod, notes: _notesCtrl.text.trim());
+    final cart = context.read<CartProvider>();
+    final ok = await op.createOrder(
+      items: cart.items.map((item) => {
+        'product_id': item.product.id,
+        'quantity': item.quantity,
+      }).toList(),
+      address: const {'address': '', 'lat': null, 'lng': null, 'neighborhood': null, 'detail': null},
+      fulfillmentType: _fulfillmentType,
+      notes: '${_paymentMethod}: ${_notesCtrl.text.trim()}'.trim(),
+    );
     if (!mounted) return;
     setState(() => _submitting = false);
     if (ok && op.orders.isNotEmpty) {
@@ -85,7 +94,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (cart.discount > 0) _buildSummaryRow('Descuento', '-${formatCOP(cart.discount)}', color: AppColors.success),
         const Divider(height: 20),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), MoneyText(amount: cart.total, size: MoneySize.large)]),
-      ])),
+      ]))),
       const SizedBox(height: 20),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
         onPressed: _submitting ? null : _submitOrder,

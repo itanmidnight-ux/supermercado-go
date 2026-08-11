@@ -161,7 +161,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> with SingleTi
                   padding: const EdgeInsets.all(16),
                   children: [
                     Row(children: const [
-                      Icon(Icons.banner, color: AppColors.primary),
+                      Icon(Icons.image, color: AppColors.primary),
                       SizedBox(width: 8),
                       Text('Banners del Carrusel', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
                       Expanded(child: SizedBox()),

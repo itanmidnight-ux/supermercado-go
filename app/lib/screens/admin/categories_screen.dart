@@ -58,7 +58,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     setState(() {});
     try {
       final orderData = _categories.asMap().entries.map((e) => {
-            return {'id': e.value.id, 'sort_order': e.key};
+            'id': e.value.id,
+            'sort_order': e.key,
           }).toList();
       await apiService.post('${ApiEndpoints.adminCategories}/reorder', {'categories': orderData});
     } catch (e) {

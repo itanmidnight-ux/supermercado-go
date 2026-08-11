@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../providers/product_provider.dart';
@@ -30,26 +29,10 @@ class _AdminBarcodePrintScreenState extends State<AdminBarcodePrintScreen> {
   }
 
   Future<void> _scanBarcode() async {
-    try {
-      final result = await FlutterBarcodeScanner.scanBarcode('#00B860', 'Cancelar', true, ScanMode.BARCODE);
-      if (result != '-1' && mounted) {
-        final products = context.read<ProductProvider>().products;
-        final match = products.where((p) => p.barcode == result).toList();
-        if (match.isNotEmpty) {
-          _addProduct(match.first);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Código $result no encontrado'), backgroundColor: AppColors.accent),
-          );
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al escanear'), backgroundColor: AppColors.error),
-        );
-      }
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('El escáner estará disponible en una próxima versión')),
+    );
   }
 
   void _addProduct(Product product) {
@@ -227,7 +210,7 @@ class _AdminBarcodePrintScreenState extends State<AdminBarcodePrintScreen> {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                            child: const Icon(Icons.barcode, color: AppColors.primary),
+                            child: const Icon(Icons.qr_code, color: AppColors.primary),
                           ),
                           title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                           subtitle: Text(item.product.barcode ?? 'Sin código', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),

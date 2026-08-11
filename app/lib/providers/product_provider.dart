@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/category.dart';
 import '../services/api_service.dart';
+import '../utils/constants.dart';
 
 class ProductProvider extends ChangeNotifier {
   List<Product> _products = [];

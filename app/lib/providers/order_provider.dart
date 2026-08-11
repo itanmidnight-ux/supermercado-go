@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
+import '../utils/constants.dart';
 
 class OrderProvider extends ChangeNotifier {
   List<Order> _orders = [];
@@ -246,7 +247,7 @@ class OrderProvider extends ChangeNotifier {
       final response = await apiService.get(ApiEndpoints.workerOrders, queryParams: {'status': 'active'});
       final data = response['data'] ?? response;
       if (data is Map) {
-        _currentOrder = Order.fromJson(data);
+        _currentOrder = Order.fromJson(Map<String, dynamic>.from(data));
       } else if (data is List && data.isNotEmpty) {
         _currentOrder = Order.fromJson(data.first as Map<String, dynamic>);
       } else {

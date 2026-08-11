@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../utils/constants.dart';
 
 class SettingsProvider extends ChangeNotifier {
   String _businessName = 'Supermercados Go';

@@ -305,9 +305,11 @@ class LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin 
                             final offset = _bounceAnim.value;
                             return Transform.translate(
                               offset: Offset(0, offset < 0 ? offset : 0),
-                              child: Opacity(opacity: _bounceCtrl.isCompleted ? 1.0 : (_bounceCtrl.value * 2).clamp(0.0, 1.0)),
+                              child: Opacity(
+                                opacity: _bounceCtrl.isCompleted ? 1.0 : (_bounceCtrl.value * 2).clamp(0.0, 1.0),
                                 child: Container(
-                                  width: 90, height: 90,
+                                  width: 90,
+                                  height: 90,
                                   decoration: const BoxDecoration(
                                     color: Colors.white,
                                     shape: BoxShape.circle,

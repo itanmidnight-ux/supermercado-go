@@ -31,7 +31,7 @@ class AdminDashboardScreen extends StatelessWidget {
             _buildDashCard(context, Icons.receipt, 'Facturación', '/admin/invoices', AppColors.primaryDark),
             _buildDashCard(context, Icons.bar_chart, 'Reportes', '/admin/reports', AppColors.error),
             _buildDashCard(context, Icons.local_offer, 'Promociones', '/admin/promotions', AppColors.accent),
-            _buildDashCard(context, Icons.banner, 'Banners', '/admin/banners', Colors.deepOrange),
+            _buildDashCard(context, Icons.image, 'Banners', '/admin/banners', Colors.deepOrange),
             _buildDashCard(context, Icons.verified_user, 'Auditoría', '/admin/audit', Colors.blueGrey),
           ],
         ),

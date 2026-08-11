@@ -114,7 +114,7 @@ class _WorkersPerformanceScreenState extends State<WorkersPerformanceScreen> {
               const SizedBox(height: 10),
               _buildDetailMetric('Calificación promedio', '${(worker['avg_rating'] ?? 0) as num}/5', Icons.star, AppColors.gold),
               const SizedBox(height: 10),
-              _buildDetailMetric('Ganancias totales', formatCOP((worker['total_earnings'] ?? 0) as num? ?? 0), Icons.payments, AppColors.primaryDark),
+              _buildDetailMetric('Ganancias totales', formatCOP(((worker['total_earnings'] ?? 0) as num).round()), Icons.payments, AppColors.primaryDark),
               const SizedBox(height: 20),
               const Text('Historial reciente', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),

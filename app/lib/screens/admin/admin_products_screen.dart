@@ -217,7 +217,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                 }
                 final filtered = pp.products.where((p) => p.name.toLowerCase().contains(_search)).toList();
-                if (filtered.isEmpty) return const EmptyState(icon: Icons.inventory_2, title: 'Sin productos');
+                if (filtered.isEmpty) return const EmptyState(icon: Icons.inventory_2, title: 'Sin productos', subtitle: 'No hay productos para mostrar');
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   itemCount: filtered.length,

@@ -167,7 +167,7 @@ class AppDrawer extends StatelessWidget {
       _drawerItem(context, icon: Icons.receipt, label: 'Facturación', route: '/admin/invoices'),
       _drawerItem(context, icon: Icons.bar_chart, label: 'Reportes', route: '/admin/reports'),
       _drawerItem(context, icon: Icons.local_offer, label: 'Promociones', route: '/admin/promotions'),
-      _drawerItem(context, icon: Icons.banner, label: 'Banners / Carrusel', route: '/admin/banners'),
+      _drawerItem(context, icon: Icons.image, label: 'Banners / Carrusel', route: '/admin/banners'),
       _drawerItem(context, icon: Icons.verified_user, label: 'Auditoría', route: '/admin/audit'),
       _drawerItem(context, icon: Icons.settings_ethernet, label: 'Configurar Servidor', route: '/server-config'),
     ];

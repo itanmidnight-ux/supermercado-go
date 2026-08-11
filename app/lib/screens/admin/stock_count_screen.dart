@@ -124,12 +124,10 @@ class _StockCountScreenState extends State<StockCountScreen> {
     setState(() => _isSubmitting = true);
     try {
       final countData = _items.map((item) => {
-        return {
           'product_id': item.product.id,
           'system_stock': item.systemStock,
           'counted_stock': item.countedStock,
           'difference': item.difference,
-        };
       }).toList();
 
       await apiService.post(ApiEndpoints.adminStockCount, {

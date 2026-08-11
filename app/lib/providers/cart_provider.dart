@@ -5,6 +5,7 @@ import '../models/cart_item.dart';
 import '../models/promotion.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../utils/constants.dart';
 
 class CartProvider extends ChangeNotifier {
   List<CartItem> _items = [];

@@ -240,7 +240,7 @@ class _AdminBannersScreenState extends State<AdminBannersScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : _banners.isEmpty
-              ? const EmptyState(icon: Icons.banner_outlined, title: 'Sin banners', subtitle: 'Agrega banners para el carrusel principal')
+              ? const EmptyState(icon: Icons.image_outlined, title: 'Sin banners', subtitle: 'Agrega banners para el carrusel principal')
               : RefreshIndicator(
                   onRefresh: _loadBanners,
                   child: ListView.builder(

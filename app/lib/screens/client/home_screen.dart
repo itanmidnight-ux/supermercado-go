@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../models/category.dart';
+import '../../models/app_banner.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/settings_provider.dart';
@@ -14,7 +15,6 @@ import '../../widgets/loading_shimmer.dart';
 import '../../widgets/product_card.dart';
 import '../../utils/constants.dart';
 import '../../utils/formatters.dart';
-import '../../main.dart' show Banner;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,7 +26,7 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   int _currentNav = 0;
   String _searchQuery = '';
-  List<Banner> _banners = [];
+  List<AppBanner> _banners = [];
   int _bannerPage = 0;
   Timer? _bannerTimer;
   bool _loadingBanners = true;
@@ -84,7 +84,7 @@ class HomeScreenState extends State<HomeScreen> {
       final resp = await http.get(Uri.parse('$baseUrl/api/banners'), headers: {'Content-Type': 'application/json'});
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        if (mounted) setState(() { _banners = (data['banners'] as List).map((j) => Banner.fromJson(j)).toList(); _loadingBanners = false; });
+        if (mounted) setState(() { _banners = (data['banners'] as List).map((j) => AppBanner.fromJson(j as Map<String, dynamic>)).toList(); _loadingBanners = false; });
       } else { if (mounted) setState(() => _loadingBanners = false); }
     } catch (_) { if (mounted) setState(() => _loadingBanners = false); }
   }
@@ -223,7 +223,7 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategoriesRow(List<Category> categories) {
-    if (categories.isEmpty) return const SliverToBoxAdapter.shrink();
+    if (categories.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
     return SliverToBoxAdapter(
       child: SizedBox(
         height: 100,

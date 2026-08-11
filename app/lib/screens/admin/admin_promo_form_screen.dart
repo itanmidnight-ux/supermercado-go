@@ -151,7 +151,7 @@ class _AdminPromoFormScreenState extends State<AdminPromoFormScreen> {
                             controller: _valueCtrl,
                             keyboardType: TextInputType.number,
                             decoration: InputDecoration(
-                              labelText: type == 'free_delivery' ? '(No aplica)' : 'Valor',
+                              labelText: _type == 'free_delivery' ? '(No aplica)' : 'Valor',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                               enabled: _type != 'free_delivery',
                             ),

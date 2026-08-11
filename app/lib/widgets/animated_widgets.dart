@@ -5,7 +5,7 @@ import 'dart:math' as math;
 class FadeInWidget extends StatefulWidget {
   final Widget child;
   final Duration duration;
-  final double delay;
+  final Duration delay;
 
   const FadeInWidget({
     super.key,
@@ -61,7 +61,7 @@ class _FadeInWidgetState extends State<FadeInWidget>
 class ScaleInWidget extends StatefulWidget {
   final Widget child;
   final Duration duration;
-  final double delay;
+  final Duration delay;
 
   const ScaleInWidget({
     super.key,
@@ -114,7 +114,7 @@ class _ScaleInWidgetState extends State<ScaleInWidget>
 class SlideInLeftWidget extends StatefulWidget {
   final Widget child;
   final Duration duration;
-  final double delay;
+  final Duration delay;
 
   const SlideInLeftWidget({
     super.key,
@@ -170,7 +170,7 @@ class _SlideInLeftWidgetState extends State<SlideInLeftWidget>
 class SlideInUpWidget extends StatefulWidget {
   final Widget child;
   final Duration duration;
-  final double delay;
+  final Duration delay;
 
   const SlideInUpWidget({
     super.key,
